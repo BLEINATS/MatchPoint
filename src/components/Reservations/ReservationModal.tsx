@@ -12,8 +12,8 @@
 */}
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, Calendar, Clock, User, Phone, Repeat, Tag, DollarSign, Info, AlertTriangle, CreditCard, ShoppingBag } from 'lucide-react';
-import { Aluno, Quadra, Reserva, PricingRule, DurationDiscount, ReservationType, RentalItem, Profile } from '../../types';
+import { X, Save, Calendar, Clock, User, Phone, Repeat, Tag, DollarSign, Info, AlertTriangle, CreditCard, ShoppingBag, Handshake } from 'lucide-react';
+import { Aluno, Quadra, Reserva, PricingRule, DurationDiscount, ReservationType, RentalItem, Profile, ProfissionalAluguel } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { useToast } from '../../context/ToastContext';
@@ -24,6 +24,7 @@ import { maskPhone } from '../../utils/masks';
 import { hasTimeConflict, expandRecurringReservations } from '../../utils/reservationUtils';
 import { localApi } from '../../lib/localApi';
 import { v4 as uuidv4 } from 'uuid';
+import { formatCurrency } from '../../utils/formatters';
 
 interface ReservationModalProps {
   isOpen: boolean;
@@ -40,6 +41,7 @@ interface ReservationModalProps {
   isClientBooking?: boolean;
   userProfile?: Profile | null;
   clientProfile?: Aluno | null;
+  profissionais: ProfissionalAluguel[];
 }
 
 const ALL_SPORTS = ['Beach Tennis', 'Futevôlei', 'Vôlei de Praia', 'Tênis', 'Padel', 'Futebol Society', 'Outro'];
@@ -55,7 +57,7 @@ const timeToMinutes = (timeStr: string): number => {
   }
 };
 
-const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, onSave, onCancelReservation, reservation, newReservationSlot, quadras, alunos, allReservations, arenaId, selectedDate, isClientBooking = false, userProfile, clientProfile }) => {
+const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, onSave, onCancelReservation, reservation, newReservationSlot, quadras, alunos, allReservations, arenaId, selectedDate, isClientBooking = false, userProfile, clientProfile, profissionais }) => {
   const { addToast } = useToast();
   const [durationDiscounts, setDurationDiscounts] = useState<DurationDiscount[]>([]);
   const [rentalItems, setRentalItems] = useState<RentalItem[]>([]);
@@ -73,6 +75,9 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   const [selectedItems, setSelectedItems] = useState<Record<string, number>>({});
   const [operatingHoursWarning, setOperatingHoursWarning] = useState<string | null>(null);
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+  
+  const [showHirePlayer, setShowHirePlayer] = useState(false);
+  const [selectedProfissionalId, setSelectedProfissionalId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     date: format(selectedDate, 'yyyy-MM-dd'),
@@ -94,6 +99,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     notes: '',
     created_by_name: '',
     created_at: '',
+    profissional_aluguel_id: null as string | null,
   });
 
   const isEditing = !!reservation;
@@ -110,6 +116,14 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   const availableCredit = useMemo(() => {
     return selectedClient?.credit_balance || 0;
   }, [selectedClient]);
+
+  const availableProfessionals = useMemo(() => {
+    if (!profissionais) return [];
+    return profissionais.filter(p =>
+      p.status === 'disponivel' &&
+      p.esportes.some(e => e.sport === formData.sport_type)
+    );
+  }, [profissionais, formData.sport_type]);
 
   const availableStock = useMemo(() => {
     const stock: Record<string, number> = {};
@@ -223,6 +237,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
           notes: reservation.notes || '',
           created_by_name: reservation.created_by_name || '',
           created_at: reservation.created_at || '',
+          profissional_aluguel_id: reservation.profissional_aluguel_id || null,
         });
         setOriginalCreditUsed(creditAlreadyUsed);
         const initialSelectedItems: Record<string, number> = {};
@@ -421,12 +436,21 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         }
       }
 
-      const priceWithItems = priceAfterDiscount + rentalCost;
+      // Professional cost
+      let professionalCost = 0;
+      if (selectedProfissionalId) {
+        const prof = profissionais.find(p => p.id === selectedProfissionalId);
+        if (prof) {
+            professionalCost = prof.taxa_hora;
+        }
+      }
+
+      const priceWithItemsAndProf = priceAfterDiscount + rentalCost + professionalCost;
 
       // Credit logic
       let creditToApplyNow = 0;
       if (useCredit && availableCredit > 0) {
-        const remainingCost = priceWithItems - originalCreditUsed;
+        const remainingCost = priceWithItemsAndProf - originalCreditUsed;
         if (remainingCost > 0) {
           creditToApplyNow = Math.min(remainingCost, availableCredit);
         }
@@ -437,10 +461,11 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
       
       setFormData(prev => ({ 
         ...prev, 
-        total_price: priceWithItems,
+        total_price: priceWithItemsAndProf,
         credit_used: totalCreditOnReservation,
         rented_items: rentedItemsDetails,
-        payment_status: (priceWithItems - totalCreditOnReservation) <= 0 ? 'pago' : 'pendente',
+        payment_status: (priceWithItemsAndProf - totalCreditOnReservation) <= 0 ? 'pago' : 'pendente',
+        profissional_aluguel_id: selectedProfissionalId,
       }));
     };
 
@@ -448,7 +473,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   }, [
     formData.quadra_id, formData.sport_type, formData.date, formData.start_time, formData.end_time, 
     selectedClient, quadras, durationDiscounts, useCredit, availableCredit, isEditing, 
-    originalCreditUsed, selectedItems, rentalItems, addToast
+    originalCreditUsed, selectedItems, rentalItems, addToast, profissionais, selectedProfissionalId
   ]);
 
   // Conflict checking logic
@@ -497,6 +522,19 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     }
 
   }, [formData.quadra_id, formData.date, formData.start_time, formData.end_time, formData.isRecurring, formData.recurringEndDate, allReservations, quadras, isEditing, reservation, isOpen, formData.type, formData.clientName, arenaId]);
+  
+  // FIX: Update sport_type when quadra changes
+  useEffect(() => {
+    if (formData.quadra_id) {
+      const selectedQuadra = quadras.find(q => q.id === formData.quadra_id);
+      if (selectedQuadra && selectedQuadra.sports && selectedQuadra.sports.length > 0) {
+        const primarySport = selectedQuadra.sports[0];
+        if (primarySport !== formData.sport_type) {
+          setFormData(prev => ({ ...prev, sport_type: primarySport }));
+        }
+      }
+    }
+  }, [formData.quadra_id, quadras]);
 
   const handleSaveClick = () => {
     if (!isEditing) {
@@ -548,9 +586,15 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   const rentalCost = useMemo(() => {
     return formData.rented_items?.reduce((acc, item) => acc + item.price * item.quantity, 0) || 0;
   }, [formData.rented_items]);
+
+  const professionalCost = useMemo(() => {
+    if (!selectedProfissionalId) return 0;
+    const prof = profissionais.find(p => p.id === selectedProfissionalId);
+    return prof ? prof.taxa_hora : 0;
+  }, [selectedProfissionalId, profissionais]);
   
   const totalBruto = reservationPrice;
-  const valorAPagar = totalBruto - discountAmount - (formData.credit_used || 0) + rentalCost;
+  const valorAPagar = totalBruto - discountAmount + rentalCost + professionalCost - (formData.credit_used || 0);
 
   return (
     <AnimatePresence>
@@ -625,7 +669,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                       <div>
                         <p className="font-semibold text-gray-800 dark:text-gray-200">Crédito Já Aplicado</p>
                         <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Esta reserva já utilizou <strong className="text-green-600 dark:text-green-400">{originalCreditUsed.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong> de crédito.
+                          Esta reserva já utilizou <strong className="text-green-600 dark:text-green-400">{formatCurrency(originalCreditUsed)}</strong> de crédito.
                         </p>
                       </div>
                     </div>
@@ -638,7 +682,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                         <div>
                           <p className="font-semibold text-blue-800 dark:text-blue-200">Saldo de Crédito do Cliente</p>
                           <p className="text-sm text-blue-600 dark:text-blue-300 font-bold">
-                            {availableCredit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            {formatCurrency(availableCredit)}
                           </p>
                         </div>
                       </div>
@@ -675,6 +719,41 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                     <Input label="Fim" name="end_time" type="time" value={formData.end_time} onChange={handleChange} icon={<Clock className="h-4 w-4 text-brand-gray-400"/>} />
                   </div>
 
+                  <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox h-4 w-4 rounded text-brand-blue-600"
+                        checked={showHirePlayer}
+                        onChange={(e) => setShowHirePlayer(e.target.checked)}
+                      />
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <Handshake className="h-4 w-4 text-brand-gray-500" />
+                        Deseja contratar um Jogador Profissional?
+                      </span>
+                    </label>
+                    {showHirePlayer && (
+                      <div className="mt-4 p-4 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg">
+                        {availableProfessionals.length > 0 ? (
+                          <div className="space-y-3 max-h-48 overflow-y-auto">
+                            {availableProfessionals.map(prof => (
+                              <button key={prof.id} onClick={() => setSelectedProfissionalId(prev => prev === prof.id ? null : prof.id)} className={`w-full p-3 border-2 rounded-lg text-left flex items-center gap-3 transition-all ${selectedProfissionalId === prof.id ? 'border-brand-blue-500 bg-blue-50 dark:bg-brand-blue-900/50' : 'border-brand-gray-200 dark:border-brand-gray-700 hover:border-brand-blue-400'}`}>
+                                <img src={prof.avatar_url || `https://avatar.vercel.sh/${prof.id}.svg`} alt={prof.name} className="w-12 h-12 rounded-full object-cover" />
+                                <div className="flex-1">
+                                  <p className="font-bold text-sm">{prof.name}</p>
+                                  <p className="text-xs text-brand-gray-500">{prof.nivel_tecnico}</p>
+                                </div>
+                                <p className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(prof.taxa_hora)}</p>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-center text-sm text-brand-gray-500 py-4">Nenhum profissional disponível para este esporte no momento.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {rentalItems.length > 0 && (
                     <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
                       <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center">
@@ -690,7 +769,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                               <div>
                                 <p className="font-medium text-sm">{item.name} <span className="text-xs text-brand-gray-500">({stock} disponíveis)</span></p>
                                 <p className="text-xs text-green-600 dark:text-green-400 font-semibold">
-                                  {item.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} / reserva
+                                  {formatCurrency(item.price)} / reserva
                                 </p>
                               </div>
                               <div className="flex items-center gap-2">
@@ -714,7 +793,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                         <Tag className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"/>
                         <p className="text-xs">
                             {activeRule.is_default ? 'Aplicada regra padrão: ' : 'Promoção aplicada: '}
-                            <strong>"{activeRule.sport_type}"</strong> das {activeRule.start_time} às {activeRule.end_time}. Preço: <strong>{(customerType === 'Mensalista' ? activeRule.price_monthly : activeRule.price_single).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/h</strong>.
+                            <strong>"{activeRule.sport_type}"</strong> das {activeRule.start_time} às {activeRule.end_time}. Preço: <strong>{formatCurrency(customerType === 'Mensalista' ? activeRule.price_monthly : activeRule.price_single)}/h</strong>.
                         </p>
                     </div>
                   )}
@@ -725,35 +804,42 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                       {priceBreakdown.map((item, index) => (
                         <div key={index} className="flex justify-between items-center text-sm">
                           <span className="text-brand-gray-600 dark:text-brand-gray-400">{item.description}</span>
-                          <span className="font-medium text-brand-gray-800 dark:text-white">{item.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                          <span className="font-medium text-brand-gray-800 dark:text-white">{formatCurrency(item.subtotal)}</span>
                         </div>
                       ))}
 
                       {discountAmount > 0 && (
                         <div className="flex justify-between items-center text-sm">
                           <span className="text-green-600 dark:text-green-400">Desconto por Duração ({discountInfo?.duration}h - {discountInfo?.percentage}%)</span>
-                          <span className="font-medium text-green-600 dark:text-green-400">- {discountAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                          <span className="font-medium text-green-600 dark:text-green-400">- {formatCurrency(discountAmount)}</span>
                         </div>
                       )}
                       
                       {rentalCost > 0 && (
                         <div className="flex justify-between items-center text-sm">
                           <span className="text-brand-gray-600 dark:text-brand-gray-400">Itens Alugados</span>
-                          <span className="font-medium text-brand-gray-800 dark:text-white">+ {rentalCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                          <span className="font-medium text-brand-gray-800 dark:text-white">+ {formatCurrency(rentalCost)}</span>
+                        </div>
+                      )}
+
+                      {professionalCost > 0 && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-brand-gray-600 dark:text-brand-gray-400">Taxa do Profissional</span>
+                          <span className="font-medium text-brand-gray-800 dark:text-white">+ {formatCurrency(professionalCost)}</span>
                         </div>
                       )}
 
                       {(formData.credit_used || 0) > 0 && (
                         <div className="flex justify-between items-center text-sm">
                           <span className="text-blue-600 dark:text-blue-400">Crédito Utilizado</span>
-                          <span className="font-medium text-blue-600 dark:text-blue-400">- {(formData.credit_used || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                          <span className="font-medium text-blue-600 dark:text-blue-400">- {formatCurrency(formData.credit_used)}</span>
                         </div>
                       )}
 
                       <div className="flex justify-between text-lg font-bold border-t-2 border-brand-gray-300 dark:border-brand-gray-600 pt-2 mt-2">
                           <span className="text-brand-gray-800 dark:text-white">Valor a Pagar</span>
                           <span className="text-brand-blue-600 dark:text-brand-blue-300">
-                            {valorAPagar.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            {formatCurrency(valorAPagar)}
                           </span>
                       </div>
                   </div>

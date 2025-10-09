@@ -192,7 +192,7 @@ const Header: React.FC = () => {
                 </div>
 
                 <div className="relative" ref={profileMenuRef}>
-                  <button onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} className="flex items-center gap-2 p-2 rounded-full hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
+                  <button onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
                     <div className="w-8 h-8 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center overflow-hidden">
                       {profile.avatar_url ? (
                         <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
@@ -200,6 +200,11 @@ const Header: React.FC = () => {
                         <UserIcon className="h-5 w-5 text-brand-gray-500" />
                       )}
                     </div>
+                    {!isAdminView && (
+                      <span className="font-semibold text-sm text-brand-gray-800 dark:text-brand-gray-200 hidden sm:block">
+                        {profile.name}
+                      </span>
+                    )}
                     <ChevronDown className="h-4 w-4 text-brand-gray-500 hidden sm:block" />
                   </button>
                   <AnimatePresence>

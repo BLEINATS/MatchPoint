@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, User, Shield, GraduationCap, LogIn, Mail, Key } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Calendar, User, Shield, GraduationCap, LogIn, Mail, Key, ArrowLeft } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 import Layout from '../components/Layout/Layout';
 import Button from '../components/Forms/Button';
 import Input from '../components/Forms/Input';
@@ -77,9 +77,8 @@ const AuthPortal: React.FC = () => {
         <AuthCard
           icon={GraduationCap}
           title="Professor / Jogador de Aluguel"
-          description="Ofereça seus serviços e encontre jogadores."
-          onClick={() => {}}
-          disabled
+          description="Crie sua conta para ser vinculado a uma arena."
+          onClick={handleClientSignup}
         />
       </div>
     </motion.div>
@@ -94,7 +93,7 @@ const AuthPortal: React.FC = () => {
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <h3 className="text-xl font-semibold text-center text-brand-gray-800 dark:text-white">
-          {mode === 'login' ? 'Bem-vindo de volta!' : 'Crie sua conta de Cliente'}
+          {mode === 'login' ? 'Bem-vindo de volta!' : 'Crie sua conta'}
         </h3>
         {mode === 'signup' && isClientSignup && (
           <Input

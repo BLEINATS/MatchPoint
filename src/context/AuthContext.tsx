@@ -40,13 +40,13 @@ const getMockAdminProfile = (): Profile => ({
   created_at: new Date().toISOString(),
 });
 
-const getMockClientProfile = (email: string): Profile => ({
-    id: `client_${uuidv4()}`,
-    name: 'Cliente Teste',
-    email: email,
-    role: 'cliente',
-    avatar_url: null,
-    created_at: new Date().toISOString(),
+const getMockClientProfile = (email: string, name?: string): Profile => ({
+  id: `client_profile_${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
+  name: name || `Cliente ${email.split('@')[0]}`,
+  email: email,
+  role: 'cliente',
+  avatar_url: null,
+  created_at: new Date().toISOString(),
 });
 
 const getMockArena = (): Arena => ({
@@ -73,7 +73,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
   const { addToast } = useToast();
 
-  // Effect for one-time session initialization
   useEffect(() => {
     const initializeSession = async () => {
       setIsLoading(true);
@@ -81,7 +80,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data: existingArenas } = await localApi.select<Arena>('arenas', 'all');
         let currentArenas = existingArenas || [];
         if (currentArenas.length === 0) {
-            console.log("Seeding initial mock data to localStorage...");
             const mockArena = getMockArena();
             await localApi.upsert<Arena>('arenas', [mockArena], 'all');
             currentArenas = [mockArena];
@@ -121,25 +119,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
     initializeSession();
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []);
 
-  // Effect to refresh the student profile whenever the user or selected arena changes
-  useEffect(() => {
-    const refresh = async () => {
-        if (profile?.role === 'cliente' && selectedArenaContext) {
-            const { data: alunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
-            const alunoProfile = alunos.find(a => a.profile_id === profile.id);
-            setAlunoProfileForSelectedArena(alunoProfile || null);
-        } else {
-            setAlunoProfileForSelectedArena(null); // Clear profile if not applicable
-        }
-    };
-    if (!isLoading) { // Avoid running on initial load before session is ready
-        refresh();
-    }
-  }, [profile, selectedArenaContext, isLoading]);
-
-  // A manual refresh function, wrapped in useCallback for stability
   const refreshAlunoProfile = useCallback(async () => {
     if (profile?.role === 'cliente' && selectedArenaContext) {
         const { data: alunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
@@ -148,6 +129,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [profile, selectedArenaContext]);
 
+  useEffect(() => {
+    if (!isLoading) {
+        refreshAlunoProfile();
+    }
+  }, [profile, selectedArenaContext, isLoading, refreshAlunoProfile]);
+
+
   const signUp = async (email: string, password: string, name?: string, role: 'cliente' | 'admin_arena' = 'cliente') => {
     return Promise.resolve();
   };
@@ -155,12 +143,55 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const signIn = async (email: string, password: string) => {
     setIsLoading(true);
     let userProfile: Profile;
+    let alunoForArena: Aluno | null = null;
+    const { data: arenas } = await localApi.select<Arena>('arenas', 'all');
+    const defaultArena = arenas[0];
 
     if (email.toLowerCase() === 'admin@matchplay.com') {
         userProfile = getMockAdminProfile();
+        const userArena = arenas.find(a => a.owner_id === userProfile.id);
+        setArena(userArena || null);
+        setSelectedArenaContext(userArena || null);
     } else {
-        userProfile = getMockClientProfile(email);
-        if (name) userProfile.name = name;
+        if (!defaultArena) {
+            setIsLoading(false);
+            throw new Error("Nenhuma arena configurada no sistema.");
+        }
+
+        const { data: allAlunos } = await localApi.select<Aluno>('alunos', defaultArena.id);
+        const existingAluno = allAlunos.find(a => a.email?.toLowerCase() === email.toLowerCase());
+
+        if (existingAluno) {
+            alunoForArena = existingAluno;
+            userProfile = {
+                id: existingAluno.profile_id || `client_profile_${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
+                name: existingAluno.name,
+                email: existingAluno.email!,
+                role: 'cliente',
+                avatar_url: existingAluno.avatar_url || null,
+                phone: existingAluno.phone || null,
+                created_at: existingAluno.created_at,
+            };
+        } else {
+            userProfile = getMockClientProfile(email, 'Cliente Teste');
+            const newAlunoPayload: Omit<Aluno, 'id' | 'created_at'> = {
+                arena_id: defaultArena.id,
+                profile_id: userProfile.id,
+                name: userProfile.name,
+                email: userProfile.email,
+                phone: null,
+                status: 'ativo',
+                plan_name: 'Avulso',
+                join_date: new Date().toISOString().split('T')[0],
+                credit_balance: 0,
+                gamification_points: 0,
+            };
+            const { data: createdAlunos } = await localApi.upsert('alunos', [newAlunoPayload], defaultArena.id);
+            alunoForArena = createdAlunos[0];
+        }
+        
+        setSelectedArenaContext(defaultArena);
+        setMemberships([{ profile_id: userProfile.id, arena_id: defaultArena.id }]);
     }
     
     const loggedInUser: User = { id: userProfile.id, email: userProfile.email, created_at: userProfile.created_at };
@@ -168,20 +199,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem('loggedInUser', JSON.stringify(userProfile));
     setUser(loggedInUser);
     setProfile(userProfile);
-
-    const { data: arenas } = await localApi.select<Arena>('arenas', 'all');
-    if (userProfile.role === 'admin_arena') {
-        const userArena = arenas.find(a => a.owner_id === userProfile.id);
-        setArena(userArena || null);
-        setSelectedArenaContext(userArena || null);
-    } else {
-        const defaultArena = arenas[0];
-        if (defaultArena) {
-            setSelectedArenaContext(defaultArena);
-            setMemberships([{ profile_id: userProfile.id, arena_id: defaultArena.id }]);
-            // The useEffect will handle refreshing the aluno profile
-        }
-    }
+    setAlunoProfileForSelectedArena(alunoForArena);
+    
     setIsLoading(false);
   };
 
@@ -221,7 +240,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addToast({ message: 'Você deixou de seguir a arena.', type: 'info' });
   };
 
-  // Simplified switch function
   const switchArenaContext = (arena: Arena | null) => {
     setSelectedArenaContext(arena);
   };

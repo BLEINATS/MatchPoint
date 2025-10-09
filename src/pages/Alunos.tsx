@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, GraduationCap, BookOpen, Plus, Search, BadgeCheck, BadgeX, BadgeHelp, Briefcase, Loader2, Phone, Star, Edit, Trash2, Calendar, MessageSquare, UserCheck, Handshake } from 'lucide-react';
+import { ArrowLeft, Users, GraduationCap, BookOpen, Plus, Search, BadgeCheck, BadgeX, Briefcase, Loader2, MessageSquare, MoreVertical, Handshake, UserCheck, BadgeHelp, Star, Edit, Trash2, Phone, Calendar } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { localApi } from '../lib/localApi';
-import { Aluno, Professor, Quadra, Turma, Reserva, ProfissionalAluguel } from '../types';
+import { Aluno, Professor, Quadra, Turma, Reserva, AtletaAluguel } from '../types';
 import Button from '../components/Forms/Button';
 import Input from '../components/Forms/Input';
 import AlunoModal from '../components/Alunos/AlunoModal';
@@ -17,9 +17,10 @@ import ConfirmationModal from '../components/Shared/ConfirmationModal';
 import { format } from 'date-fns';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
 import { formatCurrency } from '../utils/formatters';
-import ProfissionalAluguelModal from '../components/Alunos/ProfissionalAluguelModal';
+import AtletaAluguelModal from '../components/Alunos/AtletaAluguelModal';
+import { localUploadPhoto } from '../lib/localApi';
 
-type TabType = 'clientes' | 'alunos' | 'professores' | 'profissionais' | 'turmas';
+type TabType = 'clientes' | 'alunos' | 'professores' | 'atletas' | 'turmas';
 
 const getNextDateForDay = (startDate: Date, dayOfWeek: number): Date => {
   const date = new Date(startDate.getTime());
@@ -38,7 +39,7 @@ const Alunos: React.FC = () => {
   
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [professores, setProfessores] = useState<Professor[]>([]);
-  const [profissionaisAluguel, setProfissionaisAluguel] = useState<ProfissionalAluguel[]>([]);
+  const [atletasAluguel, setAtletasAluguel] = useState<AtletaAluguel[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [quadras, setQuadras] = useState<Quadra[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,31 +51,31 @@ const Alunos: React.FC = () => {
   const [isProfessorModalOpen, setIsProfessorModalOpen] = useState(false);
   const [editingProfessor, setEditingProfessor] = useState<Professor | null>(null);
 
-  const [isProfissionalAluguelModalOpen, setIsProfissionalAluguelModalOpen] = useState(false);
-  const [editingProfissionalAluguel, setEditingProfissionalAluguel] = useState<ProfissionalAluguel | null>(null);
+  const [isAtletaAluguelModalOpen, setIsAtletaAluguelModalOpen] = useState(false);
+  const [editingAtletaAluguel, setEditingAtletaAluguel] = useState<AtletaAluguel | null>(null);
 
   const [isTurmaModalOpen, setIsTurmaModalOpen] = useState(false);
   const [editingTurma, setEditingTurma] = useState<Turma | null>(null);
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'aluno' | 'professor' | 'profissional' | 'turma' } | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'aluno' | 'professor' | 'atleta' | 'turma' } | null>(null);
 
   const loadData = useCallback(async () => {
     if (!arena) return;
     setIsLoading(true);
     try {
-      const [alunosRes, professoresRes, turmasRes, quadrasRes, profissionaisRes] = await Promise.all([
+      const [alunosRes, professoresRes, turmasRes, quadrasRes, atletasRes] = await Promise.all([
         localApi.select<Aluno>('alunos', arena.id),
         localApi.select<Professor>('professores', arena.id),
         localApi.select<Turma>('turmas', arena.id),
         localApi.select<Quadra>('quadras', arena.id),
-        localApi.select<ProfissionalAluguel>('profissionais_aluguel', arena.id),
+        localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
       ]);
       setAlunos(alunosRes.data || []);
       setProfessores(professoresRes.data || []);
       setTurmas(turmasRes.data || []);
       setQuadras(quadrasRes.data || []);
-      setProfissionaisAluguel(profissionaisRes.data || []);
+      setAtletasAluguel(atletasRes.data || []);
     } catch (error: any) {
       addToast({ message: `Erro ao carregar dados: ${error.message}`, type: 'error' });
     } finally {
@@ -115,24 +116,24 @@ const Alunos: React.FC = () => {
     }
   };
 
-  const handleDeleteRequest = (id: string, name: string, type: 'aluno' | 'professor' | 'profissional' | 'turma') => {
+  const handleDeleteRequest = (id: string, name: string, type: 'aluno' | 'professor' | 'atleta' | 'turma') => {
     setItemToDelete({ id, name, type });
     setIsDeleteModalOpen(true);
     setIsAlunoModalOpen(false);
     setIsProfessorModalOpen(false);
     setIsTurmaModalOpen(false);
-    setIsProfissionalAluguelModalOpen(false);
+    setIsAtletaAluguelModalOpen(false);
   };
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete || !arena) return;
     const { id, type } = itemToDelete;
-    const tableName = type === 'turma' ? 'turmas' : type === 'professor' ? 'professores' : type === 'profissional' ? 'profissionais_aluguel' : 'alunos';
+    const tableName = type === 'turma' ? 'turmas' : type === 'professor' ? 'professores' : type === 'atleta' ? 'atletas_aluguel' : 'alunos';
     try {
       if (type === 'turma') {
         const { data: allReservas } = await localApi.select<Reserva>('reservas', arena.id);
         const otherReservas = allReservas.filter(r => r.turma_id !== id);
-        await localApi.upsert('reservas', otherReservas, arena.id, true); // Overwrite with filtered list
+        await localApi.upsert('reservas', otherReservas, arena.id, true);
       }
       await localApi.delete(tableName, [id], arena.id);
       addToast({ message: `${type.charAt(0).toUpperCase() + type.slice(1)} excluído(a) com sucesso.`, type: 'success' });
@@ -149,6 +150,12 @@ const Alunos: React.FC = () => {
     if (!arena) return;
     try {
         await localApi.upsert('professores', [{ ...professorData, arena_id: arena.id }], arena.id);
+        if (professorData.profile_id) {
+          const alunoToRemove = alunos.find(a => a.profile_id === professorData.profile_id);
+          if (alunoToRemove) {
+            await localApi.delete('alunos', [alunoToRemove.id], arena.id);
+          }
+        }
         addToast({ message: `Professor salvo com sucesso!`, type: 'success' });
         await loadData();
         setIsProfessorModalOpen(false);
@@ -158,21 +165,27 @@ const Alunos: React.FC = () => {
     }
   };
   
-  const handleSaveProfissionalAluguel = async (profissionalData: Omit<ProfissionalAluguel, 'id' | 'arena_id' | 'created_at'> | ProfissionalAluguel, photoFile?: File | null) => {
+  const handleSaveAtletaAluguel = async (atletaData: Omit<AtletaAluguel, 'id' | 'arena_id' | 'created_at'> | AtletaAluguel, photoFile?: File | null) => {
     if (!arena) return;
     try {
-        let finalAvatarUrl = profissionalData.avatar_url;
+        let finalAvatarUrl = atletaData.avatar_url;
         if (photoFile) {
             const { publicUrl } = await localUploadPhoto(photoFile);
             finalAvatarUrl = publicUrl;
         }
-        await localApi.upsert('profissionais_aluguel', [{ ...profissionalData, arena_id: arena.id, avatar_url: finalAvatarUrl }], arena.id);
-        addToast({ message: `Profissional salvo com sucesso!`, type: 'success' });
+        await localApi.upsert('atletas_aluguel', [{ ...atletaData, arena_id: arena.id, avatar_url: finalAvatarUrl }], arena.id);
+        if (atletaData.profile_id) {
+          const alunoToRemove = alunos.find(a => a.profile_id === atletaData.profile_id);
+          if (alunoToRemove) {
+            await localApi.delete('alunos', [alunoToRemove.id], arena.id);
+          }
+        }
+        addToast({ message: `Atleta salvo com sucesso!`, type: 'success' });
         await loadData();
-        setIsProfissionalAluguelModalOpen(false);
-        setEditingProfissionalAluguel(null);
+        setIsAtletaAluguelModalOpen(false);
+        setEditingAtletaAluguel(null);
     } catch (error: any) {
-        addToast({ message: `Erro ao salvar profissional: ${error.message}`, type: 'error' });
+        addToast({ message: `Erro ao salvar atleta: ${error.message}`, type: 'error' });
     }
   };
 
@@ -219,34 +232,96 @@ const Alunos: React.FC = () => {
   };
 
   const isAluno = (aluno: Aluno): boolean => !!(aluno.plan_name && aluno.plan_name.toLowerCase() !== 'avulso' && aluno.plan_name.toLowerCase() !== 'paga por uso');
-  const filteredClientes = useMemo(() => alunos.filter(a => !isAluno(a) && a.name.toLowerCase().includes(searchTerm.toLowerCase())), [alunos, searchTerm]);
-  const filteredAlunos = useMemo(() => alunos.filter(a => isAluno(a) && a.name.toLowerCase().includes(searchTerm.toLowerCase())), [alunos, searchTerm]);
+
+  const linkedProfileIds = useMemo(() => {
+    const profProfileIds = professores.map(p => p.profile_id).filter(Boolean);
+    const atletaAluguelProfileIds = atletasAluguel.map(p => p.profile_id).filter(Boolean);
+    return new Set([...profProfileIds, ...atletaAluguelProfileIds]);
+  }, [professores, atletasAluguel]);
+
+  const unlinkedAlunos = useMemo(() => {
+    return alunos.filter(a => !linkedProfileIds.has(a.profile_id));
+  }, [alunos, linkedProfileIds]);
+
+  const filteredClientes = useMemo(() => 
+    unlinkedAlunos.filter(a => !isAluno(a) && a.name.toLowerCase().includes(searchTerm.toLowerCase())), 
+    [unlinkedAlunos, searchTerm]
+  );
+  
+  const filteredAlunos = useMemo(() => 
+    unlinkedAlunos.filter(a => isAluno(a) && a.name.toLowerCase().includes(searchTerm.toLowerCase())), 
+    [unlinkedAlunos, searchTerm]
+  );
+
   const filteredProfessores = useMemo(() => professores.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())), [professores, searchTerm]);
-  const filteredProfissionaisAluguel = useMemo(() => profissionaisAluguel.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())), [profissionaisAluguel, searchTerm]);
+  const filteredAtletasAluguel = useMemo(() => atletasAluguel.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())), [atletasAluguel, searchTerm]);
   const filteredTurmas = useMemo(() => turmas.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase())), [turmas, searchTerm]);
   
   const availableSports = useMemo(() => [...new Set(quadras.flatMap(q => q.sports || []).filter(Boolean))], [quadras]);
   const availablePlans = useMemo(() => [...new Set(alunos.map(a => a.plan_name).filter(Boolean))], [alunos]);
+  
+  const linkableAlunosForModal = useMemo(() => {
+    const currentEditingProfessorId = editingProfessor?.profile_id;
+    const currentEditingAtletaId = editingAtletaAluguel?.profile_id;
+    
+    return alunos.filter(a => {
+      if (!a.profile_id) return false;
+      if (a.profile_id === currentEditingProfessorId || a.profile_id === currentEditingAtletaId) return true;
+      return !linkedProfileIds.has(a.profile_id);
+    });
+  }, [alunos, linkedProfileIds, editingProfessor, editingAtletaAluguel]);
+
+  const handlePromoteToProfessor = (aluno: Aluno) => {
+    const newProfessorData: Partial<Professor> = {
+      profile_id: aluno.profile_id,
+      name: aluno.name,
+      email: aluno.email || '',
+      phone: aluno.phone || '',
+      specialties: [],
+    };
+    setEditingProfessor(newProfessorData as Professor);
+    setIsProfessorModalOpen(true);
+  };
+
+  const handlePromoteToAtleta = (aluno: Aluno) => {
+    const newAtletaData: Partial<AtletaAluguel> = {
+      profile_id: aluno.profile_id,
+      name: aluno.name,
+      email: aluno.email || '',
+      phone: aluno.phone || '',
+      avatar_url: aluno.avatar_url,
+      status: 'disponivel',
+    };
+    setEditingAtletaAluguel(newAtletaData as AtletaAluguel);
+    setIsAtletaAluguelModalOpen(true);
+  };
 
   const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
     { id: 'clientes', label: 'Clientes', icon: Users }, { id: 'alunos', label: 'Alunos', icon: GraduationCap },
     { id: 'professores', label: 'Professores', icon: Briefcase },
-    { id: 'profissionais', label: 'Profissionais', icon: Handshake },
+    { id: 'atletas', label: 'Atletas', icon: Handshake },
     { id: 'turmas', label: 'Turmas', icon: BookOpen },
   ];
+  
   const addButtonLabel = useMemo(() => {
-    if (activeTab === 'profissionais') return 'Adicionar Profissional';
+    if (activeTab === 'atletas') return 'Adicionar Atleta';
+    if (activeTab === 'professores') return 'Adicionar Professor';
     return `Adicionar ${activeTab.slice(0, -1)}`;
   }, [activeTab]);
-  const searchPlaceholder = useMemo(() => `Buscar por ${activeTab.slice(0, -1)}...`, [activeTab]);
+
+  const searchPlaceholder = useMemo(() => {
+    if (activeTab === 'atletas') return 'Buscar por atleta...';
+    if (activeTab === 'professores') return 'Buscar por professor...';
+    return `Buscar por ${activeTab.slice(0, -1)}...`;
+  }, [activeTab]);
 
   const renderContent = () => {
     if (isLoading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>;
     switch (activeTab) {
-      case 'clientes': return <AlunosList alunos={filteredClientes} onEdit={setEditingAluno} />;
-      case 'alunos': return <AlunosList alunos={filteredAlunos} onEdit={setEditingAluno} />;
+      case 'clientes': return <AlunosList alunos={filteredClientes} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToProfissional={handlePromoteToAtleta} />;
+      case 'alunos': return <AlunosList alunos={filteredAlunos} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToProfissional={handlePromoteToAtleta} />;
       case 'professores': return <ProfessoresList professores={filteredProfessores} onEdit={setEditingProfessor} onDelete={(id, name) => handleDeleteRequest(id, name, 'professor')} />;
-      case 'profissionais': return <ProfissionaisAluguelList profissionais={filteredProfissionaisAluguel} onEdit={setEditingProfissionalAluguel} onDelete={(id, name) => handleDeleteRequest(id, name, 'profissional')} />;
+      case 'atletas': return <AtletasAluguelList atletas={filteredAtletasAluguel} onEdit={setEditingAtletaAluguel} onDelete={(id, name) => handleDeleteRequest(id, name, 'atleta')} />;
       case 'turmas': return <TurmasList turmas={filteredTurmas} professores={professores} quadras={quadras} onEdit={setEditingTurma} onDelete={(id, name) => handleDeleteRequest(id, name, 'turma')} />;
       default: return null;
     }
@@ -256,8 +331,8 @@ const Alunos: React.FC = () => {
   useEffect(() => { if (!isAlunoModalOpen) setEditingAluno(null); }, [isAlunoModalOpen]);
   useEffect(() => { if (editingProfessor) setIsProfessorModalOpen(true); }, [editingProfessor]);
   useEffect(() => { if (!isProfessorModalOpen) setEditingProfessor(null); }, [isProfessorModalOpen]);
-  useEffect(() => { if (editingProfissionalAluguel) setIsProfissionalAluguelModalOpen(true); }, [editingProfissionalAluguel]);
-  useEffect(() => { if (!isProfissionalAluguelModalOpen) setEditingProfissionalAluguel(null); }, [isProfissionalAluguelModalOpen]);
+  useEffect(() => { if (editingAtletaAluguel) setIsAtletaAluguelModalOpen(true); }, [editingAtletaAluguel]);
+  useEffect(() => { if (!isAtletaAluguelModalOpen) setEditingAtletaAluguel(null); }, [isAtletaAluguelModalOpen]);
   useEffect(() => { if (editingTurma) setIsTurmaModalOpen(true); }, [editingTurma]);
   useEffect(() => { if (!isTurmaModalOpen) setEditingTurma(null); }, [isTurmaModalOpen]);
 
@@ -277,21 +352,58 @@ const Alunos: React.FC = () => {
         <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-4 mb-8 border border-brand-gray-200 dark:border-brand-gray-700">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="w-full sm:w-auto sm:flex-1"><Input placeholder={searchPlaceholder} icon={<Search className="h-4 w-4 text-brand-gray-400" />} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-            <Button onClick={() => { if (activeTab.startsWith('cliente') || activeTab.startsWith('aluno')) setIsAlunoModalOpen(true); else if (activeTab === 'professores') setIsProfessorModalOpen(true); else if (activeTab === 'profissionais') setIsProfissionalAluguelModalOpen(true); else setIsTurmaModalOpen(true); }}><Plus className="h-4 w-4 mr-2" />{addButtonLabel}</Button>
+            <Button onClick={() => { if (activeTab.startsWith('cliente') || activeTab.startsWith('aluno')) setIsAlunoModalOpen(true); else if (activeTab === 'professores') setIsProfessorModalOpen(true); else if (activeTab === 'atletas') setIsAtletaAluguelModalOpen(true); else setIsTurmaModalOpen(true); }}><Plus className="h-4 w-4 mr-2" />{addButtonLabel}</Button>
           </div>
         </div>
         <AnimatePresence mode="wait"><motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>{renderContent()}</motion.div></AnimatePresence>
       </div>
       <AlunoModal isOpen={isAlunoModalOpen} onClose={() => setIsAlunoModalOpen(false)} onSave={handleSaveAluno} onDelete={(id) => handleDeleteRequest(id, editingAluno?.name || '', 'aluno')} initialData={editingAluno} availableSports={availableSports} availablePlans={availablePlans} modalType={activeTab === 'clientes' ? 'Cliente' : 'Aluno'} allAlunos={alunos} onDataChange={handleDataChange} />
-      <ProfessorModal isOpen={isProfessorModalOpen} onClose={() => setIsProfessorModalOpen(false)} onSave={handleSaveProfessor} onDelete={(id) => handleDeleteRequest(id, editingProfessor?.name || '', 'professor')} initialData={editingProfessor} />
-      <ProfissionalAluguelModal isOpen={isProfissionalAluguelModalOpen} onClose={() => setIsProfissionalAluguelModalOpen(false)} onSave={handleSaveProfissionalAluguel} onDelete={(id) => handleDeleteRequest(id, editingProfissionalAluguel?.name || '', 'profissional')} initialData={editingProfissionalAluguel} alunos={alunos} />
+      <ProfessorModal isOpen={isProfessorModalOpen} onClose={() => setIsProfessorModalOpen(false)} onSave={handleSaveProfessor} onDelete={(id) => handleDeleteRequest(id, editingProfessor?.name || '', 'professor')} initialData={editingProfessor} alunos={linkableAlunosForModal} />
+      <AtletaAluguelModal isOpen={isAtletaAluguelModalOpen} onClose={() => setIsAtletaAluguelModalOpen(false)} onSave={handleSaveAtletaAluguel} onDelete={(id) => handleDeleteRequest(id, editingAtletaAluguel?.name || '', 'atleta')} initialData={editingAtletaAluguel} alunos={linkableAlunosForModal} />
       <TurmaModal isOpen={isTurmaModalOpen} onClose={() => setIsTurmaModalOpen(false)} onSave={handleSaveTurma} initialData={editingTurma} professores={professores} quadras={quadras} />
       <ConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleConfirmDelete} title="Confirmar Exclusão" message={<><p>Tem certeza que deseja excluir <strong>{itemToDelete?.name}</strong>?</p><p className="mt-2 text-xs text-red-500 dark:text-red-400">Esta ação é irreversível.</p></>} confirmText="Sim, Excluir" />
     </Layout>
   );
 };
 
-const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void }> = ({ alunos, onEdit }) => {
+const ActionMenu: React.FC<{ aluno: Aluno; onPromoteToProfessor: () => void; onPromoteToProfissional: () => void }> = ({ aluno, onPromoteToProfessor, onPromoteToProfissional }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} className="p-2">
+        <MoreVertical className="h-4 w-4" />
+      </Button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute right-0 mt-1 w-56 origin-top-right bg-white dark:bg-brand-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-10">
+            <div className="py-1">
+              <button onClick={(e) => { e.stopPropagation(); onPromoteToProfessor(); setIsOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
+                <Briefcase className="h-4 w-4 mr-3" /> Promover a Professor
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); onPromoteToProfissional(); setIsOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
+                <Handshake className="h-4 w-4 mr-3" /> Promover a Atleta
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, onPromoteToProfessor: (aluno: Aluno) => void, onPromoteToProfissional: (aluno: Aluno) => void }> = ({ alunos, onEdit, onPromoteToProfessor, onPromoteToProfissional }) => {
   if (alunos.length === 0) return <PlaceholderTab title="Nenhum cliente/aluno encontrado" description="Cadastre novos clientes ou alunos para vê-los aqui." />;
   
   const getStatusProps = (status: Aluno['status']) => ({
@@ -313,10 +425,10 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void }> 
             <tr>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Cliente/Aluno</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Status</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Conta</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Crédito</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Nível / Pontos</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Plano</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Membro Desde</th>
               <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Ações</th>
             </tr>
           </thead>
@@ -327,16 +439,24 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void }> 
               return (
                 <motion.tr key={aluno.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05 }} onClick={() => onEdit(aluno)} className="hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer">
                   <td className="px-6 py-4 whitespace-nowrap"><div className="flex items-center"><div className="flex-shrink-0 h-10 w-10">{aluno.avatar_url ? (<img className="h-10 w-10 rounded-full object-cover" src={aluno.avatar_url} alt={aluno.name} />) : (<div className="h-10 w-10 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center text-brand-gray-500 font-bold">{aluno.name ? aluno.name.charAt(0).toUpperCase() : '?'}</div>)}</div><div className="ml-4"><div className="text-sm font-medium text-brand-gray-900 dark:text-white">{aluno.name}</div><div className="text-sm text-brand-gray-500 dark:text-brand-gray-400">{aluno.email}</div></div></div></td>
-                  <td className="px-6 py-4 whitespace-nowrap"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusProps.color.replace('text-','bg-').replace('-500','-100')} dark:${statusProps.color.replace('text-','bg-').replace('-500','-900/50')} ${statusProps.color}`}><statusProps.icon className="h-3 w-3 mr-1.5" />{statusProps.label}</span></td>
+                  <td className="px-6 py-4 whitespace-nowrap"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusProps.color.replace('text-','bg-').replace('-500','-100')} dark:${statusProps.color.replace('text-','bg-').replace('-500','-900/50')} ${statusProps.color}`}><statusProps.icon className="h-3 w-3 mr-1.5" />{aluno.status.charAt(0).toUpperCase() + aluno.status.slice(1)}</span></td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {aluno.profile_id ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                        <UserCheck className="h-3 w-3 mr-1.5" /> Verificada
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-gray-100 text-brand-gray-700 dark:bg-brand-gray-700 dark:text-brand-gray-300">
+                        Manual
+                      </span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600 dark:text-green-400">{formatCurrency(aluno.credit_balance)}</td>
                   <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-brand-gray-900 dark:text-white flex items-center"><Star className="h-4 w-4 mr-1 text-yellow-400" />{levelName}</div><div className="text-sm text-brand-gray-500">{aluno.gamification_points || 0} pontos</div></td>
                   <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-brand-gray-900 dark:text-white">{aluno.plan_name}</div></td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500 dark:text-brand-gray-400">{format(parseDateStringAsLocal(aluno.join_date), 'dd/MM/yyyy')}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {aluno.profile_id ? (
-                      <div className="flex justify-end items-center h-9 w-9" title="Este cliente já possui uma conta na plataforma.">
-                        <UserCheck className="h-5 w-5 text-green-500" />
-                      </div>
+                      <ActionMenu aluno={aluno} onPromoteToProfessor={() => onPromoteToProfessor(aluno)} onPromoteToProfissional={() => onPromoteToAtleta(aluno)} />
                     ) : aluno.phone ? (
                       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleInvite(aluno.phone!, aluno.name); }} title="Convidar cliente via WhatsApp" className="text-green-500 hover:bg-green-100 dark:hover:bg-green-900/50 p-2">
                         <MessageSquare className="h-5 w-5" />
@@ -360,40 +480,38 @@ const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Profe
   return (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{professores.map((prof, index) => (<motion.div key={prof.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col justify-between"><div><div className="flex justify-between items-start mb-4"><div className="flex items-center gap-4"><div className="flex-shrink-0 h-16 w-16">{prof.avatar_url ? (<img src={prof.avatar_url} alt={prof.name} className="w-16 h-16 rounded-full object-cover border-2 border-brand-gray-200 dark:border-brand-gray-600" />) : (<div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600"><span className="text-2xl text-brand-gray-500 font-bold">{prof.name ? prof.name.charAt(0).toUpperCase() : '?'}</span></div>)}</div><div><h3 className="font-bold text-lg text-brand-gray-900 dark:text-white">{prof.name}</h3><p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{prof.email}</p></div></div><div className="flex space-x-1"><Button variant="ghost" size="sm" onClick={() => onEdit(prof)} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button><Button variant="ghost" size="sm" onClick={() => onDelete(prof.id, prof.name)} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button></div></div><div className="space-y-2 text-sm mb-4 border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">{prof.phone && (<div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><Phone className="h-4 w-4 mr-2 text-brand-gray-400" /><span>{prof.phone}</span></div>)}<div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><Calendar className="h-4 w-4 mr-2 text-brand-gray-400" /><span>Incluso em: {format(new Date(prof.created_at), 'dd/MM/yyyy')}</span></div></div></div><div className="mt-auto"><h4 className="text-sm font-medium text-brand-gray-800 dark:text-brand-gray-200 mb-2">Especialidades:</h4><div className="flex flex-wrap gap-2">{prof.specialties.map(spec => (<span key={spec} className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{spec}</span>))}</div></div></motion.div>))}</div>);
 };
 
-const ProfissionaisAluguelList: React.FC<{ profissionais: ProfissionalAluguel[], onEdit: (prof: ProfissionalAluguel) => void, onDelete: (id: string, name: string) => void }> = ({ profissionais, onEdit, onDelete }) => {
-  if (profissionais.length === 0) return <PlaceholderTab title="Nenhum profissional encontrado" description="Cadastre jogadores que podem ser contratados por seus clientes." />;
+const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: AtletaAluguel) => void, onDelete: (id: string, name: string) => void }> = ({ atletas, onEdit, onDelete }) => {
+  if (atletas.length === 0) return <PlaceholderTab title="Nenhum atleta encontrado" description="Cadastre jogadores que podem ser contratados por seus clientes." />;
   
-  const getStatusProps = (status: ProfissionalAluguel['status']) => ({
+  const getStatusProps = (status: AtletaAluguel['status']) => ({
     'disponivel': { icon: BadgeCheck, color: 'text-green-500', label: 'Disponível' },
     'indisponivel': { icon: BadgeX, color: 'text-red-500', label: 'Indisponível' },
   }[status]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {profissionais.map((prof, index) => {
-        const statusProps = getStatusProps(prof.status);
-        const specialtiesString = prof.esportes.map(e => e.position ? `${e.sport} (${e.position})` : e.sport).join(', ');
+      {atletas.map((atleta, index) => {
+        const statusProps = getStatusProps(atleta.status);
+        const specialtiesString = atleta.esportes.map(e => e.position ? `${e.sport} (${e.position})` : e.sport).join(', ');
         return (
-          <motion.div key={prof.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col">
+          <motion.div key={atleta.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col">
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-4">
                 <div className="flex-shrink-0 h-16 w-16">
-                  {prof.avatar_url ? (
-                    <img src={prof.avatar_url} alt={prof.name} className="w-16 h-16 rounded-full object-cover border-2 border-brand-gray-200 dark:border-brand-gray-600" />
+                  {atleta.avatar_url ? (
+                    <img src={atleta.avatar_url} alt={atleta.name} className="w-16 h-16 rounded-full object-cover border-2 border-brand-gray-200 dark:border-brand-gray-600" />
                   ) : (
-                    <div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600">
-                      <span className="text-2xl text-brand-gray-500 font-bold">{prof.name ? prof.name.charAt(0).toUpperCase() : '?'}</span>
-                    </div>
+                    <div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600"><span className="text-2xl text-brand-gray-500 font-bold">{atleta.name ? atleta.name.charAt(0).toUpperCase() : '?'}</span></div>
                   )}
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg text-brand-gray-900 dark:text-white">{prof.name}</h3>
-                  <p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{prof.phone}</p>
+                  <h3 className="font-bold text-lg text-brand-gray-900 dark:text-white">{atleta.name}</h3>
+                  <p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{atleta.phone}</p>
                 </div>
               </div>
               <div className="flex space-x-1">
-                <Button variant="ghost" size="sm" onClick={() => onEdit(prof)} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => onDelete(prof.id, prof.name)} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => onEdit(atleta)} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => onDelete(atleta.id, atleta.name)} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
               </div>
             </div>
             <div className="mb-4">
@@ -403,11 +521,11 @@ const ProfissionaisAluguelList: React.FC<{ profissionais: ProfissionalAluguel[],
             <div className="mt-auto pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Valor/Partida</p>
-                <p className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(prof.taxa_hora)}</p>
+                <p className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(atleta.taxa_hora)}</p>
               </div>
               <div>
                 <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Comissão Arena</p>
-                <p className="font-semibold text-brand-gray-800 dark:text-white">{prof.comissao_arena}%</p>
+                <p className="font-semibold text-brand-gray-800 dark:text-white">{atleta.comissao_arena}%</p>
               </div>
               <div className="col-span-2">
                 <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Status</p>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Clock } from 'lucide-react';
-import { ProfissionalAluguel, Reserva, Quadra } from '../../types';
+import { AtletaAluguel, Reserva, Quadra } from '../../types';
 import Button from '../Forms/Button';
 import { format } from 'date-fns';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
@@ -10,7 +10,7 @@ interface AssignToReservationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (reservaId: string) => void;
-  profissional: ProfissionalAluguel;
+  profissional: AtletaAluguel;
   minhasReservas: Reserva[];
   quadras: Quadra[];
 }
@@ -29,7 +29,7 @@ const AssignToReservationModal: React.FC<AssignToReservationModalProps> = ({ isO
   const filteredReservas = minhasReservas.filter(r => 
     r.status === 'confirmada' && 
     r.type === 'avulsa' &&
-    !r.profissional_aluguel_id &&
+    !r.atleta_aluguel_id &&
     profissional.esportes.some(e => e.sport === r.sport_type)
   );
 
@@ -49,7 +49,7 @@ const AssignToReservationModal: React.FC<AssignToReservationModalProps> = ({ isO
               <Button variant="ghost" size="sm" onClick={onClose}><X className="h-5 w-5" /></Button>
             </div>
             <div className="p-6 space-y-4 overflow-y-auto">
-              <p className="text-sm text-brand-gray-500">Selecione para qual de suas próximas reservas você deseja contratar este profissional.</p>
+              <p className="text-sm text-brand-gray-500">Selecione para qual de suas próximas reservas você deseja contratar este atleta.</p>
               {filteredReservas.length > 0 ? (
                 <div className="space-y-3">
                   {filteredReservas.map(reserva => (
@@ -67,7 +67,7 @@ const AssignToReservationModal: React.FC<AssignToReservationModalProps> = ({ isO
                   ))}
                 </div>
               ) : (
-                <p className="text-center text-brand-gray-500 py-8">Você não tem nenhuma reserva futura compatível para contratar este profissional.</p>
+                <p className="text-center text-brand-gray-500 py-8">Você não tem nenhuma reserva futura compatível para contratar este atleta.</p>
               )}
             </div>
             <div className="p-6 mt-auto border-t border-brand-gray-200 dark:border-brand-gray-700 flex justify-end gap-3">

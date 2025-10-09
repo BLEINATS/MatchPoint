@@ -127,6 +127,7 @@ export interface Aluno {
 export interface Professor {
   id: string;
   arena_id: string;
+  profile_id?: string | null;
   name: string;
   email: string;
   phone: string | null;
@@ -135,7 +136,7 @@ export interface Professor {
   avatar_url?: string;
 }
 
-export interface ProfissionalAluguel {
+export interface AtletaAluguel {
   id: string;
   arena_id: string;
   name: string;
@@ -154,6 +155,7 @@ export interface ProfissionalAluguel {
   palavras_chave?: string[];
   status: 'disponivel' | 'indisponivel';
   created_at: string;
+  partidas_jogadas?: number;
 }
 
 export interface Turma {
@@ -209,8 +211,8 @@ export interface Reservation {
     quantity: number;
     price: number;
   }[] | null;
-  profissional_aluguel_id?: string | null;
-  profissional_aceite_status?: 'pendente' | 'aceito' | 'recusado' | null;
+  atleta_aluguel_id?: string | null;
+  atleta_aceite_status?: 'pendente' | 'aceito' | 'recusado' | null;
 }
 
 // Alias para compatibilidade

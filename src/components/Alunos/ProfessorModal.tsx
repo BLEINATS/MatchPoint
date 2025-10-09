@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Mail, Phone, Sparkles, Trash2 } from 'lucide-react';
-import { Professor } from '../../types';
+import { X, Save, User, Mail, Phone, Sparkles, Trash2, Link as LinkIcon } from 'lucide-react';
+import { Professor, Aluno } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { maskPhone } from '../../utils/masks';
@@ -12,14 +12,16 @@ interface ProfessorModalProps {
   onSave: (professor: Omit<Professor, 'id' | 'arena_id' | 'created_at'> | Professor) => void;
   onDelete: (id: string) => void;
   initialData: Professor | null;
+  alunos: Aluno[];
 }
 
-const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave, onDelete, initialData }) => {
+const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave, onDelete, initialData, alunos }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
     specialties: [] as string[],
+    profile_id: null as string | null,
   });
 
   const isEditing = !!initialData;
@@ -33,9 +35,10 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
         email: initialData.email,
         phone: initialData.phone || '',
         specialties: initialData.specialties || [],
+        profile_id: initialData.profile_id || null,
       });
     } else {
-      setFormData({ name: '', email: '', phone: '', specialties: [] });
+      setFormData({ name: '', email: '', phone: '', specialties: [], profile_id: null });
     }
   }, [initialData, isOpen]);
 
@@ -66,6 +69,20 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
     }
     setFormData(prev => ({ ...prev, [name]: finalValue }));
   };
+  
+  const handleProfileLinkChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedProfileId = e.target.value || null;
+    const selectedAluno = alunos.find(a => a.profile_id === selectedProfileId);
+    
+    setFormData(prev => ({
+      ...prev,
+      profile_id: selectedProfileId,
+      // Se um aluno for selecionado, preenche os dados. Se "Nenhum" for selecionado, mantém os dados atuais para edição manual.
+      name: selectedAluno ? selectedAluno.name : prev.name,
+      email: selectedAluno ? selectedAluno.email || '' : prev.email,
+      phone: selectedAluno ? selectedAluno.phone || '' : prev.phone,
+    }));
+  };
 
   return (
     <AnimatePresence>
@@ -88,10 +105,29 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
             </div>
 
             <div className="p-6 space-y-4 overflow-y-auto">
-              <Input label="Nome Completo" name="name" value={formData.name} onChange={handleChange} icon={<User className="h-4 w-4 text-brand-gray-400"/>} required />
+              <div>
+                <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1 flex items-center">
+                  <LinkIcon className="h-4 w-4 mr-2 text-brand-gray-400"/>
+                  Vincular Conta de Usuário (Opcional)
+                </label>
+                <select
+                  name="profile_id"
+                  value={formData.profile_id || ''}
+                  onChange={handleProfileLinkChange}
+                  className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600"
+                >
+                  <option value="">Nenhum (Cadastro Manual)</option>
+                  {alunos.filter(a => a.profile_id).map(aluno => (
+                    <option key={aluno.id} value={aluno.profile_id!}>{aluno.name} ({aluno.email})</option>
+                  ))}
+                </select>
+                <p className="text-xs text-brand-gray-500 mt-1">Vincule a um usuário para que ele possa acessar o painel de professor.</p>
+              </div>
+
+              <Input label="Nome Completo" name="name" value={formData.name} onChange={handleChange} icon={<User className="h-4 w-4 text-brand-gray-400"/>} required disabled={!!formData.profile_id} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input label="E-mail" name="email" type="email" value={formData.email} onChange={handleChange} icon={<Mail className="h-4 w-4 text-brand-gray-400"/>} required />
-                <Input label="Telefone" name="phone" value={formData.phone} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} />
+                <Input label="E-mail" name="email" type="email" value={formData.email} onChange={handleChange} icon={<Mail className="h-4 w-4 text-brand-gray-400"/>} required disabled={!!formData.profile_id} />
+                <Input label="Telefone" name="phone" value={formData.phone} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} disabled={!!formData.profile_id} />
               </div>
               <Input 
                 label="Especialidades" 
