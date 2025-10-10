@@ -21,6 +21,8 @@ import Eventos from './pages/Eventos';
 import EventoDetail from './pages/EventoDetail';
 import Gamification from './pages/Gamification';
 import TorneioPublico from './pages/TorneioPublico.tsx';
+import Financeiro from './pages/Financeiro.tsx';
+import ProfessorProfilePage from './pages/ProfessorProfilePage.tsx';
 import { useAuth } from './context/AuthContext';
 import React from 'react';
 
@@ -68,6 +70,10 @@ const router = createBrowserRouter([
         element: <ProtectedRoute><Alunos /></ProtectedRoute>,
       },
       {
+        path: 'professores/:id',
+        element: <ProtectedRoute><ProfessorProfilePage /></ProtectedRoute>,
+      },
+      {
         path: 'torneios',
         element: <ProtectedRoute><Torneios /></ProtectedRoute>,
       },
@@ -90,6 +96,10 @@ const router = createBrowserRouter([
       {
         path: 'gamification',
         element: <ProtectedRoute><Gamification /></ProtectedRoute>,
+      },
+       {
+        path: 'financeiro',
+        element: <ProtectedRoute><Financeiro /></ProtectedRoute>,
       },
       {
         path: 'perfil',

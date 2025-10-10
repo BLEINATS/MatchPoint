@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Turma, Professor, Quadra } from '../../types';
 import Button from '../Forms/Button';
@@ -16,7 +16,15 @@ interface TurmaCardProps {
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const TurmaCard: React.FC<TurmaCardProps> = ({ turma, professor, quadra, onEdit, onDelete, index }) => {
+  if (!turma) return null;
+
   const scheduleString = turma.daysOfWeek.map(d => weekDays[d]).join(' & ');
+  
+  const totalUniqueStudents = useMemo(() => {
+    // Defensive check to prevent crash if matriculas is undefined
+    const studentIds = (turma.matriculas || []).flatMap(m => m?.student_ids || []);
+    return new Set(studentIds).size;
+  }, [turma]);
 
   return (
     <motion.div
@@ -62,15 +70,9 @@ const TurmaCard: React.FC<TurmaCardProps> = ({ turma, professor, quadra, onEdit,
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300">
             <Users className="h-4 w-4 mr-2" />
-            Alunos
+            Alunos Matriculados
           </div>
-          <span className="font-bold text-brand-gray-900 dark:text-white">{turma.student_ids.length} / {turma.capacity}</span>
-        </div>
-        <div className="w-full bg-brand-gray-200 dark:bg-brand-gray-700 rounded-full h-2.5">
-          <div 
-            className="bg-brand-blue-500 h-2.5 rounded-full" 
-            style={{ width: `${(turma.student_ids.length / turma.capacity) * 100}%` }}
-          ></div>
+          <span className="font-bold text-brand-gray-900 dark:text-white">{totalUniqueStudents}</span>
         </div>
       </div>
     </motion.div>

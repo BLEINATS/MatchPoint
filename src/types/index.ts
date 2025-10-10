@@ -20,7 +20,7 @@ export interface Profile {
   name: string;
   email: string;
   avatar_url: string | null;
-  role: 'cliente' | 'admin_arena';
+  role: 'cliente' | 'admin_arena' | 'professor' | 'atleta';
   phone?: string | null;
   clientType?: 'cliente' | 'aluno' | 'mensalista';
   birth_date?: string;
@@ -49,6 +49,7 @@ export interface Arena {
   cancellation_policy?: string;
   terms_of_use?: string;
   created_at: string;
+  asaas_api_key?: string;
 }
 
 export interface ArenaMembership {
@@ -112,8 +113,11 @@ export interface Aluno {
   phone: string | null;
   status: 'ativo' | 'inativo' | 'experimental';
   sport: string | null;
+  plan_id: string | null;
   plan_name: string;
   monthly_fee: number | null;
+  aulas_restantes: number;
+  aulas_agendadas: { turma_id: string; date: string; time: string }[];
   join_date: string;
   created_at: string;
   avatar_url?: string;
@@ -131,9 +135,14 @@ export interface Professor {
   name: string;
   email: string;
   phone: string | null;
+  avatar_url?: string | null;
   specialties: string[];
+  status: 'ativo' | 'inativo';
+  nivel_experiencia?: 'Júnior' | 'Pleno' | 'Sênior' | null;
+  valor_hora_aula?: number | null;
+  metodologia?: string | null;
+  portfolio_url?: string | null;
   created_at: string;
-  avatar_url?: string;
 }
 
 export interface AtletaAluguel {
@@ -158,6 +167,24 @@ export interface AtletaAluguel {
   partidas_jogadas?: number;
 }
 
+export interface PlanoAula {
+  id: string;
+  arena_id: string;
+  name: string;
+  duration_type: 'avulso' | 'mensal' | 'trimestral' | 'semestral' | 'anual';
+  price: number;
+  num_aulas: number | null;
+  description: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface Matricula {
+  dayOfWeek: number;
+  time: string; // e.g., "18:00"
+  student_ids: string[];
+}
+
 export interface Turma {
   id: string;
   arena_id: string;
@@ -170,8 +197,8 @@ export interface Turma {
   end_time: string;
   start_date: string;
   end_date?: string | null;
-  capacity: number;
-  student_ids: string[];
+  alunos_por_horario: number;
+  matriculas: Matricula[];
   created_at: string;
 }
 
@@ -405,6 +432,16 @@ export interface GamificationPointTransaction {
   created_at: string;
 }
 
+export interface FinanceTransaction {
+  id: string;
+  arena_id: string;
+  description: string;
+  amount: number;
+  type: 'receita' | 'despesa';
+  category: string;
+  date: string;
+  created_at: string;
+}
 
 export type SupabaseData<T> = {
   data: T[] | null;

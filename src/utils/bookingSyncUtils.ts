@@ -1,5 +1,5 @@
-import { Reserva, Torneio, Evento, Quadra } from '../types';
-import { eachDayOfInterval, format, parse, addMinutes } from 'date-fns';
+import { Reserva, Torneio, Evento, Quadra, Turma } from '../types';
+import { eachDayOfInterval, format, parse, addMinutes, getDay, isWithinInterval, startOfDay, endOfDay, addYears } from 'date-fns';
 import { parseDateStringAsLocal } from './dateUtils';
 
 /**
@@ -11,15 +11,12 @@ export const syncTournamentReservations = (
   allReservas: Reserva[],
   quadras: Quadra[]
 ): Reserva[] => {
-  // 1. Remove todas as reservas antigas associadas a este torneio
   const otherReservas = allReservas.filter(r => r.torneio_id !== torneio.id);
 
-  // 2. Se o torneio foi cancelado ou voltou para planejamento, não cria novos bloqueios
   if (torneio.status === 'cancelado' || torneio.status === 'planejado') {
     return otherReservas;
   }
 
-  // 3. Cria novos bloqueios para cada partida agendada
   const newReservationsForTournament: Reserva[] = torneio.matches
     .filter(match => match.date && match.start_time && match.quadra_id)
     .map(match => {
@@ -49,28 +46,23 @@ export const syncTournamentReservations = (
       } as Reserva;
     });
 
-  // 4. Retorna a lista combinada
   return [...otherReservas, ...newReservationsForTournament];
 };
 
 
 /**
  * Sincroniza as reservas de um evento privado com a agenda principal.
- * Remove os bloqueios antigos e cria novos com base nos dados atuais do evento.
  */
 export const syncEventReservations = (
   evento: Evento,
   allReservas: Reserva[]
 ): Reserva[] => {
-  // 1. Remove todas as reservas antigas associadas a este evento
   const otherReservas = allReservas.filter(r => r.evento_id !== evento.id);
 
-  // 2. Se o evento não estiver confirmado, não cria novos bloqueios
   if (evento.status !== 'confirmado' && evento.status !== 'realizado') {
     return otherReservas;
   }
 
-  // 3. Cria novos bloqueios para o período do evento
   const newReservationsForEvent: Reserva[] = [];
   if (evento.quadras_ids.length > 0) {
     const eventDays = eachDayOfInterval({
@@ -98,6 +90,46 @@ export const syncEventReservations = (
     }
   }
   
-  // 4. Retorna a lista combinada
   return [...otherReservas, ...newReservationsForEvent];
+};
+
+/**
+ * Sincroniza as reservas de uma turma com a agenda principal.
+ */
+export const syncTurmaReservations = (
+  turma: Turma,
+  allReservas: Reserva[]
+): Reserva[] => {
+  // 1. Remove todas as reservas antigas associadas a esta turma
+  const otherReservas = allReservas.filter(r => r.turma_id !== turma.id);
+
+  // 2. Cria novas reservas recorrentes para a turma
+  const newReservationsForTurma: Reserva[] = [];
+  const loopStartDate = parseDateStringAsLocal(turma.start_date);
+  const loopEndDate = turma.end_date ? parseDateStringAsLocal(turma.end_date) : addYears(loopStartDate, 1);
+  
+  const classDays = eachDayOfInterval({ start: loopStartDate, end: loopEndDate });
+
+  for (const day of classDays) {
+    if (turma.daysOfWeek.includes(getDay(day))) {
+      newReservationsForTurma.push({
+        id: `reserva_turma_${turma.id}_${format(day, 'yyyyMMdd')}`,
+        arena_id: turma.arena_id,
+        quadra_id: turma.quadra_id,
+        turma_id: turma.id,
+        date: format(day, 'yyyy-MM-dd'),
+        start_time: turma.start_time,
+        end_time: turma.end_time,
+        type: 'aula',
+        status: 'confirmada',
+        clientName: `Aula: ${turma.name}`,
+        isRecurring: true,
+        master_id: `turma_${turma.id}`,
+        created_at: new Date().toISOString(),
+      } as Reserva);
+    }
+  }
+
+  // 3. Retorna a lista combinada
+  return [...otherReservas, ...newReservationsForTurma];
 };

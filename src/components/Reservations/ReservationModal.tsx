@@ -13,11 +13,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, Calendar, Clock, User, Phone, Repeat, Tag, DollarSign, Info, AlertTriangle, CreditCard, ShoppingBag, Handshake } from 'lucide-react';
-import { Aluno, Quadra, Reserva, PricingRule, DurationDiscount, ReservationType, RentalItem, Profile, ProfissionalAluguel } from '../../types';
+import { Aluno, Quadra, Reserva, PricingRule, DurationDiscount, ReservationType, RentalItem, Profile, AtletaAluguel } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { useToast } from '../../context/ToastContext';
-import { format, parse, getDay, addDays, addMinutes, isBefore, isAfter, startOfDay, endOfDay } from 'date-fns';
+import { format, parse, getDay, addDays, addMinutes, isBefore, startOfDay, endOfDay } from 'date-fns';
 import CreatableClientSelect from '../Forms/CreatableClientSelect';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { maskPhone } from '../../utils/masks';
@@ -41,7 +41,7 @@ interface ReservationModalProps {
   isClientBooking?: boolean;
   userProfile?: Profile | null;
   clientProfile?: Aluno | null;
-  profissionais: ProfissionalAluguel[];
+  profissionais?: AtletaAluguel[];
 }
 
 const ALL_SPORTS = ['Beach Tennis', 'Futevôlei', 'Vôlei de Praia', 'Tênis', 'Padel', 'Futebol Society', 'Outro'];
@@ -57,7 +57,7 @@ const timeToMinutes = (timeStr: string): number => {
   }
 };
 
-const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, onSave, onCancelReservation, reservation, newReservationSlot, quadras, alunos, allReservations, arenaId, selectedDate, isClientBooking = false, userProfile, clientProfile, profissionais }) => {
+const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, onSave, onCancelReservation, reservation, newReservationSlot, quadras, alunos, allReservations, arenaId, selectedDate, isClientBooking = false, userProfile, clientProfile, profissionais = [] }) => {
   const { addToast } = useToast();
   const [durationDiscounts, setDurationDiscounts] = useState<DurationDiscount[]>([]);
   const [rentalItems, setRentalItems] = useState<RentalItem[]>([]);
@@ -99,7 +99,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     notes: '',
     created_by_name: '',
     created_at: '',
-    profissional_aluguel_id: null as string | null,
+    atleta_aluguel_id: null as string | null,
   });
 
   const isEditing = !!reservation;
@@ -215,30 +215,36 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
   useEffect(() => {
     if (isOpen) {
+      let baseData: any = {
+        date: format(selectedDate, 'yyyy-MM-dd'),
+        start_time: '09:00',
+        end_time: '10:00',
+        quadra_id: quadras.length > 0 ? quadras[0].id : '',
+        clientName: '',
+        clientPhone: '',
+        status: 'confirmada',
+        type: 'avulsa',
+        sport_type: 'Beach Tennis',
+        total_price: 0,
+        credit_used: 0,
+        isRecurring: false,
+        recurringType: 'weekly',
+        recurringEndDate: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
+        rented_items: [],
+        payment_status: 'pendente',
+        notes: '',
+        atleta_aluguel_id: null,
+      };
+
       if (reservation) {
         const creditAlreadyUsed = reservation.credit_used || 0;
-        setFormData({
-          date: reservation.date,
+        baseData = {
+          ...baseData,
+          ...reservation,
           start_time: reservation.start_time.slice(0, 5),
           end_time: reservation.end_time.slice(0, 5),
-          quadra_id: reservation.quadra_id,
-          clientName: reservation.clientName || '',
-          clientPhone: reservation.clientPhone || '',
-          status: reservation.status,
-          type: reservation.type,
-          sport_type: reservation.sport_type || 'Outro',
-          total_price: reservation.total_price || 0,
           credit_used: creditAlreadyUsed,
-          isRecurring: reservation.isRecurring || false,
-          recurringType: reservation.recurringType || 'weekly',
-          recurringEndDate: reservation.recurringEndDate || format(addDays(new Date(), 30), 'yyyy-MM-dd'),
-          rented_items: reservation.rented_items || [],
-          payment_status: reservation.payment_status || 'pendente',
-          notes: reservation.notes || '',
-          created_by_name: reservation.created_by_name || '',
-          created_at: reservation.created_at || '',
-          profissional_aluguel_id: reservation.profissional_aluguel_id || null,
-        });
+        };
         setOriginalCreditUsed(creditAlreadyUsed);
         const initialSelectedItems: Record<string, number> = {};
         if (reservation.rented_items) {
@@ -256,37 +262,27 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         const endTimeDate = addMinutes(startTimeDate, duration);
         const endTime = format(endTimeDate, 'HH:mm');
         
-        let clientData = {};
-        if (isClientBooking) {
-            if (userProfile) {
-                clientData = {
-                    clientName: userProfile.name,
-                    clientPhone: userProfile.phone || '',
-                };
-            }
-        }
-
-        setFormData(prev => ({
-          ...prev,
-          date: format(selectedDate, 'yyyy-MM-dd'),
+        baseData = {
+          ...baseData,
           quadra_id: quadraId,
           start_time: startTime,
           end_time: endTime,
           type: newReservationSlot.type || 'avulsa',
           sport_type: selectedQuadra?.sports?.[0] || 'Beach Tennis',
-          ...clientData,
-        }));
-        setOriginalCreditUsed(0);
-        setSelectedItems({});
-      } else {
-         setFormData(prev => ({
-          ...prev,
-          date: format(selectedDate, 'yyyy-MM-dd'),
-          quadra_id: quadras.length > 0 ? quadras[0].id : '',
-        }));
+        };
+        
+        if (newReservationSlot.type === 'bloqueio') {
+          baseData.clientName = 'Horário Bloqueado';
+        }
+
+        if (isClientBooking && userProfile) {
+            baseData.clientName = userProfile.name;
+            baseData.clientPhone = userProfile.phone || '';
+        }
         setOriginalCreditUsed(0);
         setSelectedItems({});
       }
+      setFormData(prev => ({...prev, ...baseData}));
     }
   }, [reservation, newReservationSlot, isOpen, selectedDate, quadras, clientProfile, userProfile, isClientBooking]);
 
@@ -329,11 +325,10 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   };
 
   useEffect(() => {
-    // This effect recalculates the price whenever relevant form data changes.
     const calculatePrice = () => {
       setActiveRule(null);
-      const { quadra_id, sport_type, date, start_time, end_time } = formData;
-      if (!quadra_id || !date || !start_time || !end_time) {
+      const { quadra_id, sport_type, date, start_time, end_time, type } = formData;
+      if (!quadra_id || !date || !start_time || !end_time || type === 'bloqueio') {
         setOperatingHoursWarning(null);
         setPriceBreakdown([]); setReservationPrice(0); setDiscountAmount(0); setDiscountInfo(null);
         return;
@@ -344,7 +339,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
       const rulesForQuadra = selectedQuadra.pricing_rules || [];
 
-      // Operating hours check
       if (!selectedQuadra.horarios) {
         setOperatingHoursWarning('Horário de funcionamento da quadra não definido.');
         return;
@@ -379,7 +373,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
       }
       setOperatingHoursWarning(null);
       
-      // --- NEW SIMPLIFIED PRICING LOGIC ---
       const reservationBaseDate = parseDateStringAsLocal(date);
       const start = parse(start_time, 'HH:mm', reservationBaseDate);
       let end = parse(end_time, 'HH:mm', reservationBaseDate);
@@ -409,7 +402,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         setPriceBreakdown([]);
       }
 
-      // Discount logic
       const matchingDiscount = durationDiscounts.filter(d => d.is_active && totalDurationHours >= d.duration_hours).sort((a, b) => b.duration_hours - a.duration_hours)[0];
       let finalDiscountAmount = 0;
       if (matchingDiscount) {
@@ -422,7 +414,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
       const priceAfterDiscount = totalCalculatedPrice - finalDiscountAmount;
       
-      // Rental items cost
       let rentalCost = 0;
       const rentedItemsDetails: { itemId: string; name: string; quantity: number; price: number }[] = [];
       for (const itemId in selectedItems) {
@@ -436,7 +427,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         }
       }
 
-      // Professional cost
       let professionalCost = 0;
       if (selectedProfissionalId) {
         const prof = profissionais.find(p => p.id === selectedProfissionalId);
@@ -447,7 +437,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
       const priceWithItemsAndProf = priceAfterDiscount + rentalCost + professionalCost;
 
-      // Credit logic
       let creditToApplyNow = 0;
       if (useCredit && availableCredit > 0) {
         const remainingCost = priceWithItemsAndProf - originalCreditUsed;
@@ -465,18 +454,16 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         credit_used: totalCreditOnReservation,
         rented_items: rentedItemsDetails,
         payment_status: (priceWithItemsAndProf - totalCreditOnReservation) <= 0 ? 'pago' : 'pendente',
-        profissional_aluguel_id: selectedProfissionalId,
+        atleta_aluguel_id: selectedProfissionalId,
       }));
     };
-
     calculatePrice();
   }, [
-    formData.quadra_id, formData.sport_type, formData.date, formData.start_time, formData.end_time, 
+    formData.quadra_id, formData.sport_type, formData.date, formData.start_time, formData.end_time, formData.type,
     selectedClient, quadras, durationDiscounts, useCredit, availableCredit, isEditing, 
     originalCreditUsed, selectedItems, rentalItems, addToast, profissionais, selectedProfissionalId
   ]);
 
-  // Conflict checking logic
   useEffect(() => {
     if (!isOpen) return;
 
@@ -523,7 +510,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
   }, [formData.quadra_id, formData.date, formData.start_time, formData.end_time, formData.isRecurring, formData.recurringEndDate, allReservations, quadras, isEditing, reservation, isOpen, formData.type, formData.clientName, arenaId]);
   
-  // FIX: Update sport_type when quadra changes
   useEffect(() => {
     if (formData.quadra_id) {
       const selectedQuadra = quadras.find(q => q.id === formData.quadra_id);
@@ -537,7 +523,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   }, [formData.quadra_id, quadras]);
 
   const handleSaveClick = () => {
-    if (!isEditing) {
+    if (!isEditing && formData.type !== 'bloqueio') {
       const reservationDateTime = parse(formData.start_time, 'HH:mm', parseDateStringAsLocal(formData.date));
       if (isBefore(reservationDateTime, new Date())) {
         addToast({ message: "Não é possível criar reservas para horários que já passaram.", type: 'error' });
@@ -552,11 +538,18 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
       addToast({ message: operatingHoursWarning, type: 'error' });
       return;
     }
-    const dataToSave = { ...formData, originalCreditUsed: originalCreditUsed };
+    
+    let dataToSave = { ...formData, originalCreditUsed: originalCreditUsed };
+    if (formData.type === 'bloqueio') {
+      dataToSave.clientName = formData.notes || 'Horário Bloqueado';
+      dataToSave.total_price = 0;
+      dataToSave.credit_used = 0;
+    }
+
     onSave(isEditing ? { ...reservation, ...dataToSave } as Reserva : dataToSave);
   };
   
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     let finalValue = value;
     if (name === 'clientPhone') {
@@ -595,6 +588,8 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   
   const totalBruto = reservationPrice;
   const valorAPagar = totalBruto - discountAmount + rentalCost + professionalCost - (formData.credit_used || 0);
+  
+  const isBlockMode = formData.type === 'bloqueio';
 
   return (
     <AnimatePresence>
@@ -609,7 +604,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
           >
             <div className="flex justify-between items-center p-6 border-b border-brand-gray-200 dark:border-brand-gray-700">
               <h3 className="text-xl font-semibold text-brand-gray-900 dark:text-white">
-                {isEditing ? 'Editar Reserva' : 'Nova Reserva'}
+                {isEditing ? 'Editar Reserva' : isBlockMode ? 'Bloquear Horário' : 'Nova Reserva'}
               </h3>
               <button onClick={onClose} className="p-1 rounded-full hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
                 <X className="h-5 w-5 text-brand-gray-500" />
@@ -618,100 +613,39 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
             <div className="p-6 space-y-6 overflow-y-auto">
               {isLoading ? (
-                <div className="flex justify-center items-center h-32">
-                  <div className="w-6 h-6 border-4 border-brand-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                </div>
+                <div className="flex justify-center items-center h-32"><Loader2 className="w-6 h-6 border-4 border-brand-blue-500 border-t-transparent rounded-full animate-spin"/></div>
               ) : (
                 <>
-                  {isClientBooking ? (
-                    <div className="p-4 rounded-lg bg-brand-gray-100 dark:bg-brand-gray-800">
-                      <div className="flex items-center">
-                        <User className="h-5 w-5 mr-3 text-brand-gray-500" />
-                        <div>
-                          <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">Reserva em nome de:</p>
-                          <p className="font-semibold text-brand-gray-900 dark:text-white">{formData.clientName}</p>
-                        </div>
-                      </div>
-                    </div>
+                  {isBlockMode ? (
+                    <Input label="Motivo do Bloqueio" name="notes" value={formData.notes} onChange={handleChange} icon={<Info className="h-4 w-4 text-brand-gray-400"/>} placeholder="Ex: Manutenção, Uso Interno" />
+                  ) : isClientBooking ? (
+                    <div className="p-4 rounded-lg bg-brand-gray-100 dark:bg-brand-gray-800"><div className="flex items-center"><User className="h-5 w-5 mr-3 text-brand-gray-500" /><div><p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">Reserva em nome de:</p><p className="font-semibold text-brand-gray-900 dark:text-white">{formData.clientName}</p></div></div></div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <CreatableClientSelect
-                        alunos={alunos}
-                        value={{ id: selectedClientId, name: formData.clientName }}
-                        onChange={(selection) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            clientName: selection.name,
-                            clientPhone: selection.phone || '',
-                          }));
-                          const selectedAluno = alunos.find(a => a.id === selection.id);
-                          setCustomerType(selectedAluno?.monthly_fee && selectedAluno.monthly_fee > 0 ? 'Mensalista' : 'Avulso');
-                        }}
-                        placeholder="Digite ou selecione o cliente"
-                      />
+                      <CreatableClientSelect alunos={alunos} value={{ id: selectedClientId, name: formData.clientName }} onChange={(selection) => { setFormData(prev => ({ ...prev, clientName: selection.name, clientPhone: selection.phone || '' })); const selectedAluno = alunos.find(a => a.id === selection.id); setCustomerType(selectedAluno?.monthly_fee && selectedAluno.monthly_fee > 0 ? 'Mensalista' : 'Avulso'); }} placeholder="Digite ou selecione o cliente" />
                       <Input label="Telefone do Cliente" name="clientPhone" value={formData.clientPhone} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} />
                     </div>
                   )}
 
-                  {customerType && !isClientBooking && <span className={`text-xs -mt-4 block font-semibold ${customerType === 'Mensalista' ? 'text-green-600' : 'text-blue-600'}`}>{customerType}</span>}
+                  {!isBlockMode && customerType && !isClientBooking && <span className={`text-xs -mt-4 block font-semibold ${customerType === 'Mensalista' ? 'text-green-600' : 'text-blue-600'}`}>{customerType}</span>}
                   
                   {isEditing && formData.created_by_name && (
-                    <div className="mt-4 p-3 rounded-md bg-brand-gray-50 dark:bg-brand-gray-800/50 border dark:border-brand-gray-700">
-                        <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">
-                            Reserva criada por <strong className="text-brand-gray-700 dark:text-brand-gray-300">{formData.created_by_name}</strong> em {formData.created_at ? format(new Date(formData.created_at), "dd/MM/yyyy 'às' HH:mm") : 'data indisponível'}
-                        </p>
-                    </div>
-                  )}
-
-                  {isEditing && originalCreditUsed > 0 && (
-                    <div className="p-3 rounded-md bg-gray-100 dark:bg-gray-700/50 flex items-center gap-3">
-                      <Info className="h-5 w-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
-                      <div>
-                        <p className="font-semibold text-gray-800 dark:text-gray-200">Crédito Já Aplicado</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Esta reserva já utilizou <strong className="text-green-600 dark:text-green-400">{formatCurrency(originalCreditUsed)}</strong> de crédito.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {availableCredit > 0 && (
-                    <div className="p-3 rounded-md bg-blue-50 dark:bg-blue-900/50 flex items-center justify-between">
-                      <div className="flex items-center">
-                        <CreditCard className="h-5 w-5 mr-3 text-blue-500" />
-                        <div>
-                          <p className="font-semibold text-blue-800 dark:text-blue-200">Saldo de Crédito do Cliente</p>
-                          <p className="text-sm text-blue-600 dark:text-blue-300 font-bold">
-                            {formatCurrency(availableCredit)}
-                          </p>
-                        </div>
-                      </div>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={useCredit} 
-                          onChange={e => setUseCredit(e.target.checked)} 
-                          className="form-checkbox h-5 w-5 rounded text-brand-blue-600"
-                        />
-                        <span className="text-sm font-medium">Usar Saldo</span>
-                      </label>
-                    </div>
+                    <div className="mt-4 p-3 rounded-md bg-brand-gray-50 dark:bg-brand-gray-800/50 border dark:border-brand-gray-700"><p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Reserva criada por <strong className="text-brand-gray-700 dark:text-brand-gray-300">{formData.created_by_name}</strong> em {formData.created_at ? format(new Date(formData.created_at), "dd/MM/yyyy 'às' HH:mm") : 'data indisponível'}</p></div>
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Quadra</label>
-                      <select name="quadra_id" value={formData.quadra_id} onChange={handleChange} className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600">
-                        <option value="">Selecione a quadra</option>
-                        {quadras.map(q => <option key={q.id} value={q.id}>{q.name}</option>)}
-                      </select>
+                      <select name="quadra_id" value={formData.quadra_id} onChange={handleChange} className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600"><option value="">Selecione a quadra</option>{quadras.map(q => <option key={q.id} value={q.id}>{q.name}</option>)}</select>
                     </div>
+                    {!isBlockMode && (
                      <div>
                       <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte</label>
                       <select name="sport_type" value={formData.sport_type} onChange={handleChange} className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600">
                         {ALL_SPORTS.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Input label="Data" name="date" type="date" value={formData.date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
@@ -719,156 +653,29 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                     <Input label="Fim" name="end_time" type="time" value={formData.end_time} onChange={handleChange} icon={<Clock className="h-4 w-4 text-brand-gray-400"/>} />
                   </div>
 
-                  <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="form-checkbox h-4 w-4 rounded text-brand-blue-600"
-                        checked={showHirePlayer}
-                        onChange={(e) => setShowHirePlayer(e.target.checked)}
-                      />
-                      <span className="text-sm font-medium flex items-center gap-2">
-                        <Handshake className="h-4 w-4 text-brand-gray-500" />
-                        Deseja contratar um Jogador Profissional?
-                      </span>
-                    </label>
-                    {showHirePlayer && (
-                      <div className="mt-4 p-4 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg">
-                        {availableProfessionals.length > 0 ? (
-                          <div className="space-y-3 max-h-48 overflow-y-auto">
-                            {availableProfessionals.map(prof => (
-                              <button key={prof.id} onClick={() => setSelectedProfissionalId(prev => prev === prof.id ? null : prof.id)} className={`w-full p-3 border-2 rounded-lg text-left flex items-center gap-3 transition-all ${selectedProfissionalId === prof.id ? 'border-brand-blue-500 bg-blue-50 dark:bg-brand-blue-900/50' : 'border-brand-gray-200 dark:border-brand-gray-700 hover:border-brand-blue-400'}`}>
-                                <img src={prof.avatar_url || `https://avatar.vercel.sh/${prof.id}.svg`} alt={prof.name} className="w-12 h-12 rounded-full object-cover" />
-                                <div className="flex-1">
-                                  <p className="font-bold text-sm">{prof.name}</p>
-                                  <p className="text-xs text-brand-gray-500">{prof.nivel_tecnico}</p>
-                                </div>
-                                <p className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(prof.taxa_hora)}</p>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-center text-sm text-brand-gray-500 py-4">Nenhum profissional disponível para este esporte no momento.</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {rentalItems.length > 0 && (
-                    <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
-                      <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center">
-                        <ShoppingBag className="h-5 w-5 mr-2 text-brand-blue-500" />
-                        Alugar Itens Adicionais
-                      </h4>
-                      <div className="space-y-3 max-h-40 overflow-y-auto pr-2">
-                        {rentalItems.map(item => {
-                          const stock = availableStock[item.id] ?? 0;
-                          const currentSelection = selectedItems[item.id] || 0;
-                          return (
-                            <div key={item.id} className="flex items-center justify-between">
-                              <div>
-                                <p className="font-medium text-sm">{item.name} <span className="text-xs text-brand-gray-500">({stock} disponíveis)</span></p>
-                                <p className="text-xs text-green-600 dark:text-green-400 font-semibold">
-                                  {formatCurrency(item.price)} / reserva
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button size="sm" variant="outline" onClick={() => handleItemQuantityChange(item.id, currentSelection - 1)}>-</Button>
-                                <span className="w-8 text-center font-semibold">{currentSelection}</span>
-                                <Button size="sm" variant="outline" onClick={() => handleItemQuantityChange(item.id, currentSelection + 1)} disabled={currentSelection >= stock}>+</Button>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
+                  {!isBlockMode && (
+                    <>
+                      {isEditing && originalCreditUsed > 0 && (<div className="p-3 rounded-md bg-gray-100 dark:bg-gray-700/50 flex items-center gap-3"><Info className="h-5 w-5 text-gray-500 dark:text-gray-400 flex-shrink-0" /><div><p className="font-semibold text-gray-800 dark:text-gray-200">Crédito Já Aplicado</p><p className="text-sm text-gray-600 dark:text-gray-300">Esta reserva já utilizou <strong className="text-green-600 dark:text-green-400">{formatCurrency(originalCreditUsed)}</strong> de crédito.</p></div></div>)}
+                      {availableCredit > 0 && (<div className="p-3 rounded-md bg-blue-50 dark:bg-blue-900/50 flex items-center justify-between"><div className="flex items-center"><CreditCard className="h-5 w-5 mr-3 text-blue-500" /><div><p className="font-semibold text-blue-800 dark:text-blue-200">Saldo de Crédito do Cliente</p><p className="text-sm text-blue-600 dark:text-blue-300 font-bold">{formatCurrency(availableCredit)}</p></div></div><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={useCredit} onChange={e => setUseCredit(e.target.checked)} className="form-checkbox h-5 w-5 rounded text-brand-blue-600" /><span className="text-sm font-medium">Usar Saldo</span></label></div>)}
+                      <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" className="form-checkbox h-4 w-4 rounded text-brand-blue-600" checked={showHirePlayer} onChange={(e) => setShowHirePlayer(e.target.checked)} /><span className="text-sm font-medium flex items-center gap-2"><Handshake className="h-4 w-4 text-brand-gray-500" />Deseja contratar um Atleta de Aluguel?</span></label>{showHirePlayer && (<div className="mt-4 p-4 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg">{availableProfessionals.length > 0 ? (<div className="space-y-3 max-h-48 overflow-y-auto">{availableProfessionals.map(prof => (<button key={prof.id} onClick={() => setSelectedProfissionalId(prev => prev === prof.id ? null : prof.id)} className={`w-full p-3 border-2 rounded-lg text-left flex items-center gap-3 transition-all ${selectedProfissionalId === prof.id ? 'border-brand-blue-500 bg-blue-50 dark:bg-brand-blue-900/50' : 'border-brand-gray-200 dark:border-brand-gray-700 hover:border-brand-blue-400'}`}><img src={prof.avatar_url || `https://avatar.vercel.sh/${prof.id}.svg`} alt={prof.name} className="w-12 h-12 rounded-full object-cover" /><div className="flex-1"><p className="font-bold text-sm">{prof.name}</p><p className="text-xs text-brand-gray-500">{prof.nivel_tecnico || 'Nível não informado'}</p></div><p className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(prof.taxa_hora)}</p></button>))}</div>) : (<p className="text-center text-sm text-brand-gray-500 py-4">Nenhum atleta disponível para este esporte no momento.</p>)}</div>)}</div>
+                      {rentalItems.length > 0 && (<div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4"><h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><ShoppingBag className="h-5 w-5 mr-2 text-brand-blue-500" />Alugar Itens Adicionais</h4><div className="space-y-3 max-h-40 overflow-y-auto pr-2">{rentalItems.map(item => { const stock = availableStock[item.id] ?? 0; const currentSelection = selectedItems[item.id] || 0; return (<div key={item.id} className="flex items-center justify-between"><div><p className="font-medium text-sm">{item.name} <span className="text-xs text-brand-gray-500">({stock} disponíveis)</span></p><p className="text-xs text-green-600 dark:text-green-400 font-semibold">{formatCurrency(item.price)} / reserva</p></div><div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => handleItemQuantityChange(item.id, currentSelection - 1)}>-</Button><span className="w-8 text-center font-semibold">{currentSelection}</span><Button size="sm" variant="outline" onClick={() => handleItemQuantityChange(item.id, currentSelection + 1)} disabled={currentSelection >= stock}>+</Button></div></div>)})}</div></div>)}
+                      {activeRule && (<div className={`p-3 rounded-md flex items-start ${activeRule.is_default ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800' : 'bg-green-50 dark:bg-green-900/50 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'}`}><Tag className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"/><p className="text-xs">{activeRule.is_default ? 'Aplicada regra padrão: ' : 'Promoção aplicada: '}<strong>"{activeRule.sport_type}"</strong> das {activeRule.start_time} às {activeRule.end_time}. Preço: <strong>{formatCurrency(customerType === 'Mensalista' ? activeRule.price_monthly : activeRule.price_single)}/h</strong>.</p></div>)}
+                      <div className="p-4 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-800 space-y-2 border border-brand-gray-200 dark:border-brand-gray-700"><h4 className="font-semibold text-brand-gray-800 dark:text-white">Resumo Financeiro</h4>{priceBreakdown.map((item, index) => (<div key={index} className="flex justify-between items-center text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">{item.description}</span><span className="font-medium text-brand-gray-800 dark:text-white">{formatCurrency(item.subtotal)}</span></div>))}{discountAmount > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-green-600 dark:text-green-400">Desconto por Duração ({discountInfo?.duration}h - {discountInfo?.percentage}%)</span><span className="font-medium text-green-600 dark:text-green-400">- {formatCurrency(discountAmount)}</span></div>)}{rentalCost > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Itens Alugados</span><span className="font-medium text-brand-gray-800 dark:text-white">+ {formatCurrency(rentalCost)}</span></div>)}{professionalCost > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Taxa do Atleta</span><span className="font-medium text-brand-gray-800 dark:text-white">+ {formatCurrency(professionalCost)}</span></div>)}{(formData.credit_used || 0) > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-blue-600 dark:text-blue-400">Crédito Utilizado</span><span className="font-medium text-blue-600 dark:text-blue-400">- {formatCurrency(formData.credit_used)}</span></div>)}<div className="flex justify-between text-lg font-bold border-t-2 border-brand-gray-300 dark:border-brand-gray-600 pt-2 mt-2"><span className="text-brand-gray-800 dark:text-white">Valor a Pagar</span><span className="text-brand-blue-600 dark:text-brand-blue-300">{formatCurrency(valorAPagar)}</span></div></div>
+                    </>
                   )}
+
+                  {conflictWarning && (<div className="p-3 rounded-md bg-red-50 dark:bg-red-900/50 flex items-start text-red-700 dark:text-red-300"><AlertTriangle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"/><p className="text-xs">{conflictWarning}</p></div>)}
+                  {operatingHoursWarning && (<div className="p-3 rounded-md bg-yellow-50 dark:bg-yellow-900/50 flex items-start text-yellow-700 dark:text-yellow-300"><AlertTriangle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"/><p className="text-xs">{operatingHoursWarning}</p></div>)}
                   
-                  {activeRule && (
-                    <div className={`p-3 rounded-md flex items-start ${
-                      activeRule.is_default 
-                        ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800' 
-                        : 'bg-green-50 dark:bg-green-900/50 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
-                    }`}>
-                        <Tag className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"/>
-                        <p className="text-xs">
-                            {activeRule.is_default ? 'Aplicada regra padrão: ' : 'Promoção aplicada: '}
-                            <strong>"{activeRule.sport_type}"</strong> das {activeRule.start_time} às {activeRule.end_time}. Preço: <strong>{formatCurrency(customerType === 'Mensalista' ? activeRule.price_monthly : activeRule.price_single)}/h</strong>.
-                        </p>
-                    </div>
-                  )}
-
-                  <div className="p-4 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-800 space-y-2 border border-brand-gray-200 dark:border-brand-gray-700">
-                      <h4 className="font-semibold text-brand-gray-800 dark:text-white">Resumo Financeiro</h4>
-                      
-                      {priceBreakdown.map((item, index) => (
-                        <div key={index} className="flex justify-between items-center text-sm">
-                          <span className="text-brand-gray-600 dark:text-brand-gray-400">{item.description}</span>
-                          <span className="font-medium text-brand-gray-800 dark:text-white">{formatCurrency(item.subtotal)}</span>
-                        </div>
-                      ))}
-
-                      {discountAmount > 0 && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-green-600 dark:text-green-400">Desconto por Duração ({discountInfo?.duration}h - {discountInfo?.percentage}%)</span>
-                          <span className="font-medium text-green-600 dark:text-green-400">- {formatCurrency(discountAmount)}</span>
-                        </div>
-                      )}
-                      
-                      {rentalCost > 0 && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-brand-gray-600 dark:text-brand-gray-400">Itens Alugados</span>
-                          <span className="font-medium text-brand-gray-800 dark:text-white">+ {formatCurrency(rentalCost)}</span>
-                        </div>
-                      )}
-
-                      {professionalCost > 0 && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-brand-gray-600 dark:text-brand-gray-400">Taxa do Profissional</span>
-                          <span className="font-medium text-brand-gray-800 dark:text-white">+ {formatCurrency(professionalCost)}</span>
-                        </div>
-                      )}
-
-                      {(formData.credit_used || 0) > 0 && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-blue-600 dark:text-blue-400">Crédito Utilizado</span>
-                          <span className="font-medium text-blue-600 dark:text-blue-400">- {formatCurrency(formData.credit_used)}</span>
-                        </div>
-                      )}
-
-                      <div className="flex justify-between text-lg font-bold border-t-2 border-brand-gray-300 dark:border-brand-gray-600 pt-2 mt-2">
-                          <span className="text-brand-gray-800 dark:text-white">Valor a Pagar</span>
-                          <span className="text-brand-blue-600 dark:text-brand-blue-300">
-                            {formatCurrency(valorAPagar)}
-                          </span>
-                      </div>
-                  </div>
-
-                  {conflictWarning && (
-                    <div className="p-3 rounded-md bg-red-50 dark:bg-red-900/50 flex items-start text-red-700 dark:text-red-300">
-                        <AlertTriangle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"/>
-                        <p className="text-xs">{conflictWarning}</p>
-                    </div>
-                  )}
-
-                  {operatingHoursWarning && (
-                    <div className="p-3 rounded-md bg-yellow-50 dark:bg-yellow-900/50 flex items-start text-yellow-700 dark:text-yellow-300">
-                        <AlertTriangle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"/>
-                        <p className="text-xs">{operatingHoursWarning}</p>
-                    </div>
-                  )}
-
-                  <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
-                     <label className="flex items-center gap-2 cursor-pointer">
+                  {!isClientBooking && (
+                    <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" checked={formData.isRecurring} onChange={e => setFormData(p => ({...p, isRecurring: e.target.checked}))} className="form-checkbox h-4 w-4 rounded text-brand-blue-600"/>
-                        <span className="text-sm font-medium">Reserva Recorrente</span>
-                     </label>
-                     {formData.isRecurring && (
-                        <div className="mt-3 pl-6">
-                            <Input label="Repetir até" name="recurringEndDate" type="date" value={formData.recurringEndDate} onChange={handleChange} icon={<Repeat className="h-4 w-4 text-brand-gray-400"/>} />
-                        </div>
-                     )}
-                  </div>
+                        <span className="text-sm font-medium">Reserva Recorrente (Fixo)</span>
+                      </label>
+                      {formData.isRecurring && (<div className="mt-3 pl-6"><Input label="Repetir até" name="recurringEndDate" type="date" value={formData.recurringEndDate || ''} onChange={handleChange} icon={<Repeat className="h-4 w-4 text-brand-gray-400"/>} /></div>)}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -884,7 +691,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
               <div className="flex gap-3">
                 <Button variant="outline" onClick={onClose}>Fechar</Button>
                 <Button onClick={handleSaveClick} disabled={isLoading || !!operatingHoursWarning || !!conflictWarning}>
-                  <Save className="h-4 w-4 mr-2"/> {isEditing ? 'Salvar Alterações' : 'Criar Reserva'}
+                  <Save className="h-4 w-4 mr-2"/> {isEditing ? 'Salvar Alterações' : isBlockMode ? 'Salvar Bloqueio' : 'Criar Reserva'}
                 </Button>
               </div>
             </div>

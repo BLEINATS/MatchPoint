@@ -3,6 +3,7 @@ import { AuthState, User, Profile, Arena, ArenaMembership, Aluno } from '../type
 import { useToast } from './ToastContext';
 import { localApi } from '../lib/localApi';
 import { v4 as uuidv4 } from 'uuid';
+import { seedInitialData } from '../lib/seedData';
 
 interface AuthContextType extends AuthState {
   allArenas: Arena[];
@@ -28,40 +29,6 @@ export const useAuth = () => {
   return context;
 };
 
-const MOCK_ADMIN_USER_ID = 'mock-admin-user-id-1';
-const MOCK_ARENA_ID = 'mock-arena-id-1';
-
-const getMockAdminProfile = (): Profile => ({
-  id: MOCK_ADMIN_USER_ID,
-  name: 'Admin da Arena',
-  email: 'admin@matchplay.com',
-  role: 'admin_arena',
-  avatar_url: null,
-  created_at: new Date().toISOString(),
-});
-
-const getMockClientProfile = (email: string, name?: string): Profile => ({
-  id: `client_profile_${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
-  name: name || `Cliente ${email.split('@')[0]}`,
-  email: email,
-  role: 'cliente',
-  avatar_url: null,
-  created_at: new Date().toISOString(),
-});
-
-const getMockArena = (): Arena => ({
-  id: MOCK_ARENA_ID,
-  owner_id: MOCK_ADMIN_USER_ID,
-  name: 'Minha Arena Local',
-  slug: 'minha-arena-local',
-  city: 'Sua Cidade',
-  state: 'UF',
-  created_at: new Date().toISOString(),
-  logo_url: '', main_image: '', cnpj_cpf: '', responsible_name: '',
-  contact_phone: '', public_email: '', cep: '', address: '', number: '',
-  neighborhood: '', google_maps_link: '', cancellation_policy: '', terms_of_use: '',
-});
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -77,13 +44,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const initializeSession = async () => {
       setIsLoading(true);
       try {
-        const { data: existingArenas } = await localApi.select<Arena>('arenas', 'all');
-        let currentArenas = existingArenas || [];
-        if (currentArenas.length === 0) {
-            const mockArena = getMockArena();
-            await localApi.upsert<Arena>('arenas', [mockArena], 'all');
-            currentArenas = [mockArena];
+        const seedKey = 'initial_data_seeded_v2';
+        if (!localStorage.getItem(seedKey)) {
+          await seedInitialData();
+          localStorage.setItem(seedKey, 'true');
         }
+
+        const { data: existingArenas } = await localApi.select<Arena>('arenas', 'all');
+        const currentArenas = existingArenas || [];
         setAllArenas(currentArenas);
 
         const loggedInUserStr = localStorage.getItem('loggedInUser');
@@ -148,7 +116,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const defaultArena = arenas[0];
 
     if (email.toLowerCase() === 'admin@matchplay.com') {
-        userProfile = getMockAdminProfile();
+        const { data: adminProfiles } = await localApi.select<Profile>('profiles', 'all');
+        const adminProfile = adminProfiles.find(p => p.email === email.toLowerCase());
+        if (!adminProfile) throw new Error("Perfil de administrador não encontrado.");
+        userProfile = adminProfile;
+
         const userArena = arenas.find(a => a.owner_id === userProfile.id);
         setArena(userArena || null);
         setSelectedArenaContext(userArena || null);
@@ -159,12 +131,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         const { data: allAlunos } = await localApi.select<Aluno>('alunos', defaultArena.id);
-        const existingAluno = allAlunos.find(a => a.email?.toLowerCase() === email.toLowerCase());
+        let existingAluno = allAlunos.find(a => a.email?.toLowerCase() === email.toLowerCase());
 
         if (existingAluno) {
+            if (!existingAluno.profile_id) {
+                const newProfileId = `profile_${uuidv4()}`;
+                existingAluno.profile_id = newProfileId;
+                await localApi.upsert('alunos', [existingAluno], defaultArena.id);
+            }
+
             alunoForArena = existingAluno;
             userProfile = {
-                id: existingAluno.profile_id || `client_profile_${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
+                id: existingAluno.profile_id!,
                 name: existingAluno.name,
                 email: existingAluno.email!,
                 role: 'cliente',
@@ -173,7 +151,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 created_at: existingAluno.created_at,
             };
         } else {
-            userProfile = getMockClientProfile(email, 'Cliente Teste');
+            const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+            const existingProfile = allProfiles.find(p => p.email.toLowerCase() === email.toLowerCase());
+
+            if (existingProfile) {
+                userProfile = existingProfile;
+            } else {
+                const newProfile = {
+                    id: `profile_${uuidv4()}`,
+                    name: `Cliente ${email.split('@')[0]}`,
+                    email: email,
+                    role: 'cliente' as 'cliente',
+                    created_at: new Date().toISOString(),
+                };
+                await localApi.upsert('profiles', [newProfile], 'all');
+                userProfile = newProfile;
+            }
+
             const newAlunoPayload: Omit<Aluno, 'id' | 'created_at'> = {
                 arena_id: defaultArena.id,
                 profile_id: userProfile.id,
@@ -185,6 +179,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 join_date: new Date().toISOString().split('T')[0],
                 credit_balance: 0,
                 gamification_points: 0,
+                aulas_restantes: 0,
+                aulas_agendadas: [],
             };
             const { data: createdAlunos } = await localApi.upsert('alunos', [newAlunoPayload], defaultArena.id);
             alunoForArena = createdAlunos[0];
@@ -221,8 +217,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateArena = async (updatedArenaData: Partial<Arena>) => {
     if (!arena) return;
     const newArena = { ...arena, ...updatedArenaData };
-    await localApi.upsert('arenas', [newArena], 'all');
+    
+    const updatedArenas = allArenas.map(a => a.id === newArena.id ? newArena : a);
+    
+    await localApi.upsert('arenas', updatedArenas, 'all');
+    
+    setAllArenas(updatedArenas);
     setArena(newArena);
+    if (selectedArenaContext?.id === newArena.id) {
+        setSelectedArenaContext(newArena);
+    }
+
     addToast({ message: 'Dados da arena atualizados!', type: 'success' });
   };
 

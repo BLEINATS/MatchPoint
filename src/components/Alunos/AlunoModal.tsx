@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Mail, Phone, Calendar, Award, Dribbble, DollarSign, Trash2, Gift, ClipboardList } from 'lucide-react';
-import { Aluno } from '../../types';
+import { X, Save, User, Mail, Phone, Calendar, Award, Dribbble, DollarSign, Trash2, Gift, ClipboardList, Hash } from 'lucide-react';
+import { Aluno, PlanoAula } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { format } from 'date-fns';
 import { maskPhone } from '../../utils/masks';
-import CreatableSelect from '../Forms/CreatableSelect';
 import { useToast } from '../../context/ToastContext';
 import GamificationTab from './GamificationTab';
 import CreditsTab from './CreditsTab';
 import { localApi } from '../../lib/localApi';
+import { formatCurrency } from '../../utils/formatters';
 
 interface AlunoModalProps {
   isOpen: boolean;
@@ -19,25 +19,25 @@ interface AlunoModalProps {
   onDelete: (id: string) => void;
   initialData: Aluno | null;
   availableSports: string[];
-  availablePlans: string[];
+  planos: PlanoAula[];
   modalType: 'Cliente' | 'Aluno';
   allAlunos: Aluno[];
   onDataChange: () => void;
 }
 
 const DEFAULT_SPORTS = ['Beach Tennis', 'Futevôlei', 'Futebol Society', 'Vôlei', 'Tênis', 'Padel', 'Funcional'];
-const DEFAULT_PLANS = ['Aula Avulsa', 'Pacote 10 Aulas', 'Plano Mensal - 1x/semana', 'Plano Mensal - 2x/semana', 'Plano Mensal - 3x/semana', 'Plano Mensal - 4x/semana'];
 
-const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDelete, initialData, availableSports, availablePlans, modalType, allAlunos, onDataChange }) => {
+const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDelete, initialData, availableSports, planos, modalType, allAlunos, onDataChange }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
     status: 'ativo' as Aluno['status'],
     sport: '',
-    plan_name: '',
-    monthly_fee: '',
+    plan_id: null as string | null,
+    aulas_restantes: 0,
     join_date: format(new Date(), 'yyyy-MM-dd'),
+    monthly_fee: 0,
   });
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState<'details' | 'credits' | 'gamification'>('details');
@@ -49,9 +49,9 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
     return [...new Set([...DEFAULT_SPORTS, ...availableSports])];
   }, [availableSports]);
 
-  const allPlans = useMemo(() => {
-    return [...new Set([...DEFAULT_PLANS, ...availablePlans])];
-  }, [availablePlans]);
+  const activePlanOptions = useMemo(() => {
+    return (planos || []).filter(p => p.is_active);
+  }, [planos]);
 
   const refreshInternalData = useCallback(async () => {
     if (!initialData?.id || !initialData?.arena_id) return;
@@ -78,14 +78,15 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
           phone: initialData.phone || '',
           status: initialData.status,
           sport: initialData.sport || '',
-          plan_name: initialData.plan_name,
-          monthly_fee: initialData.monthly_fee?.toString().replace('.', ',') || '',
+          plan_id: initialData.plan_id,
+          aulas_restantes: initialData.aulas_restantes ?? 0,
           join_date: initialData.join_date,
+          monthly_fee: initialData.monthly_fee || 0,
         });
       } else {
         setFormData({
-          name: '', email: '', phone: '', status: 'ativo', sport: '', plan_name: '', monthly_fee: '',
-          join_date: format(new Date(), 'yyyy-MM-dd'),
+          name: '', email: '', phone: '', status: 'ativo', sport: '', plan_id: null, aulas_restantes: 0,
+          join_date: format(new Date(), 'yyyy-MM-dd'), monthly_fee: 0
         });
       }
     }
@@ -119,16 +120,19 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
         return;
       }
     }
+    
+    const selectedPlan = planos.find(p => p.id === formData.plan_id);
 
     const dataToSave = {
       ...formData,
-      monthly_fee: parseFloat(formData.monthly_fee.replace(',', '.')) || 0,
+      plan_name: selectedPlan?.name || 'Avulso',
+      monthly_fee: selectedPlan?.price || 0,
     };
 
     if (isEditing && internalAluno) {
       onSave({ ...internalAluno, ...dataToSave });
     } else {
-      onSave(dataToSave);
+      onSave(dataToSave as any);
     }
   };
   
@@ -140,11 +144,22 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    let finalValue = value;
+    let finalValue: string | number | null = value;
     if (name === 'phone') {
       finalValue = maskPhone(value);
     }
-    setFormData(prev => ({ ...prev, [name]: finalValue }));
+
+    if (name === 'plan_id') {
+      const selectedPlan = activePlanOptions.find(p => p.id === value);
+      setFormData(prev => ({ 
+        ...prev, 
+        plan_id: value || null,
+        aulas_restantes: selectedPlan?.num_aulas ?? 0,
+        monthly_fee: selectedPlan?.price || 0
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: finalValue as string }));
+    }
   };
 
   const modalTitle = isEditing ? `Editar ${modalType}` : `Adicionar Novo ${modalType}`;
@@ -224,32 +239,29 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                         <Input label="Data de Início" name="join_date" type="date" value={formData.join_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <CreatableSelect
-                          label="Esporte"
-                          options={allSports}
-                          value={formData.sport}
-                          onChange={(value) => setFormData(p => ({ ...p, sport: value }))}
-                          placeholder="Selecione ou crie"
-                          icon={<Dribbble className="h-4 w-4 text-brand-gray-400" />}
-                        />
-                        <CreatableSelect
-                          label="Plano Contratado"
-                          options={allPlans}
-                          value={formData.plan_name}
-                          onChange={(value) => setFormData(p => ({ ...p, plan_name: value }))}
-                          placeholder="Selecione ou crie"
-                          icon={<Award className="h-4 w-4 text-brand-gray-400" />}
-                        />
+                        <div>
+                          <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte</label>
+                          <select name="sport" value={formData.sport} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                            <option value="">Selecione um esporte</option>
+                            {allSports.map(sport => <option key={sport} value={sport}>{sport}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Plano Contratado</label>
+                          <select name="plan_id" value={formData.plan_id || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                            <option value="">Nenhum (Avulso)</option>
+                            {activePlanOptions.map(plan => <option key={plan.id} value={plan.id}>{plan.name} ({formatCurrency(plan.price)})</option>)}
+                          </select>
+                        </div>
                       </div>
                       <Input
-                        label="Valor da Mensalidade (R$)"
-                        name="monthly_fee"
-                        type="text"
-                        inputMode="decimal"
-                        value={formData.monthly_fee}
+                        label="Aulas Restantes (Créditos)"
+                        name="aulas_restantes"
+                        type="number"
+                        value={(formData.aulas_restantes || 0).toString()}
                         onChange={handleChange}
-                        icon={<DollarSign className="h-4 w-4 text-brand-gray-400" />}
-                        placeholder="Ex: 99,90"
+                        icon={<Hash className="h-4 w-4 text-brand-gray-400" />}
+                        placeholder="Ex: 8"
                       />
                     </div>
                   )}

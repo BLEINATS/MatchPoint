@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, GamificationPointTransaction, AtletaAluguel } from '../../types';
-import { Calendar, Compass, Search, Sparkles, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Star, Handshake } from 'lucide-react';
+import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel } from '../../types';
+import { Calendar, Compass, Search, Sparkles, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star } from 'lucide-react';
 import { isAfter, startOfDay, isSameDay, format, parse, getDay, addDays, isBefore, endOfDay, isPast, addMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
@@ -26,13 +26,16 @@ import { processReservationCompletion } from '../../utils/gamificationUtils';
 import HirePlayerModal from './HirePlayerModal';
 import AssignToReservationModal from './AssignToReservationModal';
 import AtletasTab from './AtletasTab';
+import { useTheme } from '../../context/ThemeContext';
+import AulasTab from './Student/AulasTab';
 
-type TabType = 'overview' | 'reservations' | 'credits' | 'rewards' | 'atletas';
+type TabType = 'overview' | 'reservations' | 'aulas' | 'atletas' | 'credits' | 'rewards';
 
 const ClientDashboard: React.FC = () => {
   const { profile, selectedArenaContext, switchArenaContext, memberships, allArenas, alunoProfileForSelectedArena, refreshAlunoProfile } = useAuth();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { theme } = useTheme();
 
   const [quadras, setQuadras] = useState<Quadra[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
@@ -43,8 +46,7 @@ const ClientDashboard: React.FC = () => {
   const [professores, setProfessores] = useState<Professor[]>([]);
   const [atletas, setAtletas] = useState<AtletaAluguel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
-
+  
   const [levels, setLevels] = useState<GamificationLevel[]>([]);
   const [rewards, setRewards] = useState<GamificationReward[]>([]);
   const [achievements, setAchievements] = useState<GamificationAchievement[]>([]);
@@ -66,6 +68,53 @@ const ClientDashboard: React.FC = () => {
   
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [atletaToAssign, setAtletaToAssign] = useState<AtletaAluguel | null>(null);
+  
+  const isStudent = useMemo(() => !!alunoProfileForSelectedArena?.plan_id, [alunoProfileForSelectedArena]);
+
+  const defaultTabOrder: TabType[] = useMemo(() => {
+    const baseTabs: TabType[] = ['overview', 'reservations', 'atletas', 'credits'];
+    if (isStudent) baseTabs.splice(2, 0, 'aulas');
+    if (gamificationEnabled) baseTabs.push('rewards');
+    return baseTabs;
+  }, [isStudent, gamificationEnabled]);
+
+  const [tabOrder, setTabOrder] = useState<TabType[]>(defaultTabOrder);
+  const [activeTab, setActiveTab] = useState<TabType>(defaultTabOrder[0]);
+
+  useEffect(() => {
+    if (profile?.id) {
+      const savedOrder = localStorage.getItem(`client_dashboard_tab_order_${profile.id}`);
+      if (savedOrder) {
+        try {
+          const parsedOrder: TabType[] = JSON.parse(savedOrder);
+          const currentTabs = new Set(defaultTabOrder);
+          const validSavedOrder = parsedOrder.filter(id => currentTabs.has(id));
+          const missingTabs = [...currentTabs].filter(id => !validSavedOrder.includes(id));
+          const finalOrder = [...validSavedOrder, ...missingTabs];
+
+          setTabOrder(finalOrder);
+          if (!finalOrder.includes(activeTab)) {
+            setActiveTab(finalOrder[0]);
+          }
+        } catch (e) {
+          console.error("Failed to parse tab order from localStorage", e);
+          setTabOrder(defaultTabOrder);
+          setActiveTab(defaultTabOrder[0]);
+        }
+      } else {
+        setTabOrder(defaultTabOrder);
+        setActiveTab(defaultTabOrder[0]);
+      }
+    }
+  }, [profile?.id, defaultTabOrder, activeTab]);
+
+  const handleReorder = (newOrder: TabType[]) => {
+    setTabOrder(newOrder);
+    if (profile?.id) {
+      localStorage.setItem(`client_dashboard_tab_order_${profile.id}`, JSON.stringify(newOrder));
+    }
+  };
+
 
   const myArenas = useMemo(() => {
     return allArenas.filter(arena => memberships.some(m => m.arena_id === arena.id));
@@ -220,13 +269,46 @@ const ClientDashboard: React.FC = () => {
     return reservas.filter(r => { try { const reservationDate = parseDateStringAsLocal(r.date); const [endHours, endMinutes] = r.end_time.split(':').map(Number); const endDateTime = new Date(reservationDate.setHours(endHours, endMinutes, 0, 0)); return isBefore(endDateTime, now); } catch { return true; } }).sort((a, b) => { try { const aDate = parseDateStringAsLocal(a.date); const [aStartHours, aStartMinutes] = a.start_time.split(':').map(Number); const aDateTime = new Date(aDate.setHours(aStartHours, aStartMinutes, 0, 0)); const bDate = parseDateStringAsLocal(b.date); const [bStartHours, bStartMinutes] = b.start_time.split(':').map(Number); const bDateTime = new Date(bDate.setHours(bStartHours, bStartMinutes, 0, 0)); return bDateTime.getTime() - aDateTime.getTime(); } catch { return 0; } });
   }, [reservas]);
 
-  const isStudent = useMemo(() => !!alunoProfileForSelectedArena?.plan_name && alunoProfileForSelectedArena.plan_name.toLowerCase() !== 'avulso', [alunoProfileForSelectedArena]);
-  const studentTurmas = useMemo(() => { if (!isStudent || !alunoProfileForSelectedArena) return []; return turmas.filter(t => t.student_ids.includes(alunoProfileForSelectedArena.id)); }, [isStudent, alunoProfileForSelectedArena, turmas]);
-  const nextClass = useMemo(() => { if (!isStudent || studentTurmas.length === 0) return null; const now = new Date(); let upcomingClasses: any[] = []; studentTurmas.forEach(turma => { let runDate = startOfDay(new Date()); for (let i = 0; i < 30; i++) { if (turma.daysOfWeek.includes(getDay(runDate))) { const classDateTime = parse(turma.start_time, 'HH:mm', runDate); if (isAfter(classDateTime, now)) { upcomingClasses.push({ turma, date: new Date(runDate), dateTime: classDateTime, quadra: quadras.find(q => q.id === turma.quadra_id), professor: professores.find(p => p.id === turma.professor_id), }); } } runDate = addDays(runDate, 1); } }); if (upcomingClasses.length === 0) return null; upcomingClasses.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime()); return upcomingClasses[0]; }, [isStudent, studentTurmas, quadras, professores]);
+  const studentTurmas = useMemo(() => { if (!isStudent || !alunoProfileForSelectedArena) return []; return turmas.filter(t => t.matriculas.some(m => m.student_ids.includes(alunoProfileForSelectedArena!.id))); }, [isStudent, alunoProfileForSelectedArena, turmas]);
+  
+  const nextClass = useMemo(() => {
+    if (!isStudent || !alunoProfileForSelectedArena) return null;
+    const now = new Date();
+    let upcomingClasses: any[] = [];
+    
+    turmas.forEach(turma => {
+      turma.matriculas.forEach(matricula => {
+        if (matricula.student_ids.includes(alunoProfileForSelectedArena!.id)) {
+          let runDate = startOfDay(new Date());
+          for (let i = 0; i < 30; i++) { 
+            if (turma.daysOfWeek.includes(getDay(runDate))) {
+              const classDateTime = parse(matricula.time, 'HH:mm', runDate);
+              if (isAfter(classDateTime, now)) {
+                upcomingClasses.push({
+                  turma,
+                  date: new Date(runDate),
+                  dateTime: classDateTime,
+                  time: matricula.time,
+                  quadra: quadras.find(q => q.id === turma.quadra_id),
+                  professor: professores.find(p => p.id === turma.professor_id),
+                });
+              }
+            }
+            runDate = addDays(runDate, 1);
+          }
+        }
+      });
+    });
+
+    if (upcomingClasses.length === 0) return null;
+    upcomingClasses.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
+    return upcomingClasses[0];
+  }, [isStudent, alunoProfileForSelectedArena, turmas, quadras, professores]);
 
   const tabs: { id: TabType; label: string; icon: React.ElementType; visible: boolean }[] = [
     { id: 'overview', label: 'Início', icon: LayoutDashboard, visible: true },
     { id: 'reservations', label: 'Reservas', icon: Calendar, visible: true },
+    { id: 'aulas', label: 'Minhas Aulas', icon: GraduationCap, visible: isStudent },
     { id: 'atletas', label: 'Atletas', icon: Handshake, visible: true },
     { id: 'credits', label: 'Créditos', icon: CreditCard, visible: true },
     { id: 'rewards', label: 'Recompensas', icon: Gift, visible: gamificationEnabled },
@@ -239,6 +321,7 @@ const ClientDashboard: React.FC = () => {
     switch (activeTab) {
       case 'overview': return <OverviewTab creditBalance={alunoProfileForSelectedArena?.credit_balance || 0} nextReservation={upcomingReservations[0]} nextClass={nextClass} quadras={quadras} reservas={allArenaReservations} onSlotClick={handleSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} arenaName={selectedArenaContext?.name} recommendation={recommendation} selectedArena={selectedArenaContext} totalPoints={alunoProfileForSelectedArena?.gamification_points} levelName={(alunoProfileForSelectedArena?.gamification_levels as { name: string } | null)?.name} />;
       case 'reservations': return <ReservationsTab upcoming={upcomingReservations} past={pastReservations} quadras={quadras} arenaName={selectedArenaContext?.name} onCancel={handleOpenCancelModal} onDetail={handleOpenDetailModal} onHirePlayer={(res) => { setReservationToHireFor(res); setIsHirePlayerModalOpen(true); }} />;
+      case 'aulas': return <AulasTab aluno={alunoProfileForSelectedArena!} turmas={turmas} professores={professores} quadras={quadras} onDataChange={loadData} />;
       case 'atletas': return <AtletasTab atletas={atletas} onHire={(atleta) => { setAtletaToAssign(atleta); setIsAssignModalOpen(true); }} />;
       case 'credits': return <CreditsTab balance={alunoProfileForSelectedArena?.credit_balance || 0} history={creditHistory} />;
       case 'rewards': return <RewardsTab aluno={alunoProfileForSelectedArena} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} history={gamificationHistory} />;
@@ -252,8 +335,37 @@ const ClientDashboard: React.FC = () => {
         <div><h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Meu Painel</h1><p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Gerencie suas reservas, aulas e créditos.</p></div>
         <ArenaSelector arenas={myArenas} selectedArena={selectedArenaContext} onSelect={switchArenaContext} />
       </motion.div>
-      {!selectedArenaContext ? (<div className="text-center py-16 bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700"><motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}><Compass className="h-12 w-12 text-brand-blue-400 mx-auto mb-4" /><h2 className="text-2xl font-bold text-brand-gray-800 dark:text-brand-gray-200">Selecione uma arena</h2><p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Escolha uma das suas arenas para ver seus dados.</p></motion.div></div>) : (<><div className="border-b border-brand-gray-200 dark:border-brand-gray-700 mb-8"><nav className="-mb-px flex space-x-6 overflow-x-auto" aria-label="Tabs">{tabs.filter(tab => tab.visible).map(tab => (<button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${activeTab === tab.id ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700 hover:border-brand-gray-300 dark:text-brand-gray-400 dark:hover:text-brand-gray-200 dark:hover:border-brand-gray-600'}`}><tab.icon className="mr-2 h-5 w-5" />{tab.label}</button>))}</nav></div><AnimatePresence mode="wait"><motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>{renderContent()}</motion.div></AnimatePresence></>)}
-      <AnimatePresence>{isModalOpen && modalSlot && selectedArenaContext && (<ReservationModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveClientReservation} onCancelReservation={() => {}} newReservationSlot={{ quadraId: modalSlot.quadraId, time: modalSlot.time, type: 'avulsa' }} quadras={quadras} alunos={[]} allReservations={allArenaReservations} arenaId={selectedArenaContext.id} selectedDate={selectedDate} isClientBooking={true} userProfile={profile} clientProfile={alunoProfileForSelectedArena} profissionais={[]} />)}</AnimatePresence>
+      {!selectedArenaContext ? (<div className="text-center py-16 bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700"><motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}><Compass className="h-12 w-12 text-brand-blue-400 mx-auto mb-4" /><h2 className="text-2xl font-bold text-brand-gray-800 dark:text-brand-gray-200">Selecione uma arena</h2><p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Escolha uma das suas arenas para ver seus dados.</p></motion.div></div>) : (<><div className="border-b border-brand-gray-200 dark:border-brand-gray-700 mb-8">
+        <Reorder.Group axis="x" values={tabOrder} onReorder={handleReorder} className="-mb-px flex space-x-6 overflow-x-auto no-scrollbar">
+            {tabOrder.map(tabId => {
+              const tab = tabs.find(t => t.id === tabId);
+              if (!tab || !tab.visible) return null;
+              return (
+                <Reorder.Item 
+                  key={tab.id} 
+                  value={tab.id} 
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-shrink-0 rounded-t-lg transition-colors cursor-grab active:cursor-grabbing whitespace-nowrap py-4 px-3 border-b-2 font-medium text-sm flex items-center ${
+                    activeTab === tab.id
+                      ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400'
+                      : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400'
+                  }`}
+                  whileDrag={{
+                    backgroundColor: theme === 'dark' ? '#1e293b' : '#ffffff',
+                    scale: 1.05,
+                    boxShadow: '0px 5px 15px rgba(0,0,0,0.1)',
+                    zIndex: 10,
+                  }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <tab.icon className="mr-2 h-5 w-5" />
+                  {tab.label}
+                </Reorder.Item>
+              );
+            })}
+          </Reorder.Group>
+        </div><AnimatePresence mode="wait"><motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>{renderContent()}</motion.div></AnimatePresence></>)}
+      <AnimatePresence>{isModalOpen && modalSlot && selectedArenaContext && (<ReservationModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveClientReservation} onCancelReservation={() => {}} newReservationSlot={{ quadraId: modalSlot.quadraId, time: modalSlot.time, type: 'avulsa' }} quadras={quadras} alunos={alunoProfileForSelectedArena ? [alunoProfileForSelectedArena] : []} allReservations={allArenaReservations} arenaId={selectedArenaContext.id} selectedDate={selectedDate} isClientBooking={true} userProfile={profile} clientProfile={alunoProfileForSelectedArena} profissionais={atletas} />)}</AnimatePresence>
       <AnimatePresence>{isCancelModalOpen && reservationToCancel && selectedArenaContext && (<ClientCancellationModal isOpen={isCancelModalOpen} onClose={() => setIsCancelModalOpen(false)} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} policyText={selectedArenaContext.cancellation_policy} />)}</AnimatePresence>
       <AnimatePresence>{isDetailModalOpen && reservationToDetail && selectedArenaContext && (<ReservationDetailModal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} reserva={reservationToDetail} quadra={quadras.find(q => q.id === reservationToDetail.quadra_id) || null} arenaName={selectedArenaContext.name} onCancel={handleOpenCancelModal} />)}</AnimatePresence>
       <AnimatePresence>{isHirePlayerModalOpen && reservationToHireFor && (<HirePlayerModal isOpen={isHirePlayerModalOpen} onClose={() => setIsHirePlayerModalOpen(false)} onConfirm={(profId) => handleHireProfessional(reservationToHireFor.id, profId)} reserva={reservationToHireFor} />)}</AnimatePresence>
@@ -262,7 +374,7 @@ const ClientDashboard: React.FC = () => {
   );
 };
 
-const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: Quadra[], arenaName?: string, onCancel: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer: (reserva: Reserva) => void}> = ({upcoming, past, quadras, arenaName, onCancel, onDetail, onHirePlayer}) => (
+const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: Quadra[], arenaName?: string, onCancel: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void}> = ({upcoming, past, quadras, arenaName, onCancel, onDetail, onHirePlayer}) => (
   <div className="space-y-8">
     <ReservationList title="Próximas Reservas" reservations={upcoming} quadras={quadras} arenaName={arenaName} onCancel={onCancel} onDetail={onDetail} onHirePlayer={onHirePlayer} />
     <ReservationList title="Histórico de Reservas" reservations={past} quadras={quadras} arenaName={arenaName} isPast onDetail={onDetail} />
@@ -315,8 +427,8 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
   </div>
 );
 
-const OverviewTab: React.FC<{ creditBalance: number, nextReservation?: Reserva, nextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, recommendation: { quadra: Quadra; date: Date; time: string } | null; selectedArena: Arena | null; totalPoints?: number; levelName?: string; }> = ({creditBalance, nextReservation, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, recommendation, selectedArena, totalPoints, levelName}) => { const [favoriteQuadras, setFavoriteQuadras] = useState<string[]>([]); useEffect(() => { if (profile?.id) { const savedFavorites = localStorage.getItem(`favorite_quadras_${profile.id}`); if (savedFavorites) setFavoriteQuadras(JSON.parse(savedFavorites)); } }, [profile?.id]); const toggleFavorite = (quadraId: string) => { if (!profile) return; const newFavorites = favoriteQuadras.includes(quadraId) ? favoriteQuadras.filter(id => id !== quadraId) : [...favoriteQuadras, quadraId]; setFavoriteQuadras(newFavorites); localStorage.setItem(`favorite_quadras_${profile.id}`, JSON.stringify(newFavorites)); }; const sortedQuadras = useMemo(() => { return [...quadras].sort((a, b) => { const aIsFav = favoriteQuadras.includes(a.id); const bIsFav = favoriteQuadras.includes(b.id); if (aIsFav && !bIsFav) return -1; if (!aIsFav && bIsFav) return 1; return a.name.localeCompare(b.name); }); }, [quadras, favoriteQuadras]); const handleRecommendationClick = () => { if (recommendation) { setSelectedDate(recommendation.date); onSlotClick(recommendation.time, recommendation.quadra.id); } }; return ( <div className="flex flex-col lg:flex-row gap-8"> <div className="lg:w-2/3 space-y-8 order-1 lg:order-none"> {nextClass && <NextClassCard date={nextClass.date} turmaName={nextClass.turma.name} quadraName={nextClass.quadra?.name} professorName={nextClass.professor?.name} startTime={nextClass.turma.start_time} arenaName={arenaName} />} {nextReservation && <UpcomingReservationCard reservation={nextReservation} quadra={quadras.find(q => q.id === nextReservation.quadra_id)} index={0} arenaName={arenaName} />} {!nextClass && !nextReservation && selectedArena && ( <ArenaInfoCard arena={selectedArena} /> )} {!nextClass && !nextReservation && !selectedArena && ( <EmptyState message="Você não tem nenhuma atividade agendada." /> )} <QuickBookingWidget quadras={sortedQuadras} reservas={reservas} onSlotClick={onSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} favoriteQuadras={favoriteQuadras} toggleFavorite={toggleFavorite} profile={profile} /> </div> <div className="lg:w-1/3 space-y-8 order-2 lg:order-none"> <CreditBalanceCard balance={creditBalance} /> <GamificationPointsCard points={totalPoints} levelName={levelName} /> {recommendation ? ( <RecommendationCard quadraName={recommendation.quadra.name} day={format(recommendation.date, 'EEEE', { locale: ptBR })} time={recommendation.time} onClick={handleRecommendationClick} /> ) : ( <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 p-6"> <h3 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200 mb-4 flex items-center"><Sparkles className="h-5 w-5 mr-2 text-yellow-400" /> Recomendações</h3> <p className="text-sm text-brand-gray-500">Em breve, você verá aqui horários recomendados para você.</p> </div> )} </div> </div> ); };
-const QuickBookingWidget: React.FC<{ quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, favoriteQuadras: string[], toggleFavorite: (quadraId: string) => void, profile: Profile | null, }> = ({quadras, reservas, onSlotClick, selectedDate, setSelectedDate, favoriteQuadras, toggleFavorite, profile}) => { const displayedReservations = useMemo(() => { const viewStartDate = startOfDay(new Date()); const viewEndDate = endOfDay(addDays(new Date(), 365)); return expandRecurringReservations(reservas, viewStartDate, viewEndDate, quadras); }, [reservas, quadras]); const generateTimeSlots = (quadra: Quadra) => { const slots = []; const dayOfWeek = getDay(selectedDate); let horario; if (dayOfWeek === 0) horario = quadra.horarios?.sunday; else if (dayOfWeek === 6) horario = quadra.horarios?.saturday; else horario = quadra.horarios?.weekday; if (!horario || !horario.start || !horario.end) return []; let currentTime = parse(horario.start.slice(0,5), 'HH:mm', selectedDate); let endTime = parse(horario.end.slice(0,5), 'HH:mm', selectedDate); if (endTime <= currentTime) endTime = addDays(endTime, 1); const interval = quadra.booking_duration_minutes || 60; while (currentTime < endTime) { slots.push(format(currentTime, 'HH:mm')); currentTime = addMinutes(currentTime, interval); } return slots; }; const getSlotStatus = (time: string, quadraId: string) => { const slotDateTime = parse(time, 'HH:mm', selectedDate); if (isPast(slotDateTime) && !isSameDay(selectedDate, startOfDay(new Date()))) { return { status: 'past', data: null }; } else if (isPast(slotDateTime) && isSameDay(selectedDate, startOfDay(new Date()))) { return { status: 'past', data: null }; } const slotStartMinutes = timeToMinutes(time); const reserva = displayedReservations.find(r => { if (r.quadra_id !== quadraId || !isSameDay(parseDateStringAsLocal(r.date), selectedDate) || r.status === 'cancelada') { return false; } const reservationStartMinutes = timeToMinutes(r.start_time); let reservationEndMinutes = timeToMinutes(r.end_time); if (reservationEndMinutes <= reservationStartMinutes) { if (r.end_time.includes('00:00')) { reservationEndMinutes = 24 * 60; } else { reservationEndMinutes += 24 * 60; } } return slotStartMinutes >= reservationStartMinutes && slotStartMinutes < reservationEndMinutes; }); if (reserva) return { status: 'booked', data: reserva }; return { status: 'available', data: null }; }; const getPriceRange = (quadra: Quadra) => { if (!quadra.pricing_rules || quadra.pricing_rules.length === 0) return "A definir"; const activePrices = quadra.pricing_rules.filter(r => r.is_active).map(r => r.price_single); if (activePrices.length === 0) return "A definir"; const minPrice = Math.min(...activePrices); const maxPrice = Math.max(...activePrices); if (minPrice === maxPrice) return formatCurrency(minPrice); return `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`; }; const renderSlotButton = (quadra: Quadra, time: string) => { const { status } = getSlotStatus(time, quadra.id); let styles = 'bg-brand-gray-100 text-brand-gray-500 dark:bg-brand-gray-700 dark:text-brand-gray-400'; let icon = <Clock className="h-3 w-3 mr-1" />; if (status === 'available') { styles = 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-500/20'; } else if (status === 'past') { styles = 'bg-brand-gray-100 text-brand-gray-400 dark:bg-brand-gray-700/50 dark:text-brand-gray-500 cursor-not-allowed'; } else if (status === 'booked') { styles = 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400 cursor-not-allowed'; } return ( <motion.button key={time} whileHover={{ scale: status === 'available' ? 1.05 : 1 }} whileTap={{ scale: status === 'available' ? 0.95 : 1 }} onClick={() => onSlotClick(time, quadra.id)} disabled={status !== 'available'} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all text-center ${styles}`}> <div className="flex items-center justify-center"> {icon} {time.slice(0,5)} </div> </motion.button> ); }; return ( <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 p-6"> <h3 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200 mb-4 flex items-center"><Calendar className="h-5 w-5 mr-2 text-brand-blue-500" /> Reserva Rápida</h3> <div className="mb-6"> <DatePickerCalendar selectedDate={selectedDate} onDateChange={setSelectedDate} /> </div> <div className="space-y-6"> {quadras.map(quadra => ( <div key={quadra.id}> <div className="flex justify-between items-center mb-3"> <div> <h4 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200">{quadra.name}</h4> <p className="text-sm text-brand-gray-500">{quadra.sports.join(', ')} - <span className="font-medium text-green-600">{getPriceRange(quadra)}</span></p> </div> {profile && ( <button onClick={() => toggleFavorite(quadra.id)} className="p-2 rounded-full hover:bg-red-100/50 dark:hover:bg-red-500/10 transition-colors"> <Heart className={`h-5 w-5 transition-all ${favoriteQuadras.includes(quadra.id) ? 'fill-current text-red-500' : 'text-brand-gray-400'}`} /> </button> )} </div> <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3"> {generateTimeSlots(quadra).map(time => renderSlotButton(quadra, time))} </div> </div> ))} </div> </div> ); };
+const OverviewTab: React.FC<{ creditBalance: number, nextReservation?: Reserva, nextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, recommendation: { quadra: Quadra; date: Date; time: string } | null; selectedArena: Arena | null; totalPoints?: number; levelName?: string; }> = ({creditBalance, nextReservation, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, recommendation, selectedArena, totalPoints, levelName}) => { const [favoriteQuadras, setFavoriteQuadras] = useState<string[]>([]); useEffect(() => { if (profile?.id) { const savedFavorites = localStorage.getItem(`favorite_quadras_${profile.id}`); if (savedFavorites) setFavoriteQuadras(JSON.parse(savedFavorites)); } }, [profile?.id]); const toggleFavorite = (quadraId: string) => { if (!profile) return; const newFavorites = favoriteQuadras.includes(quadraId) ? favoriteQuadras.filter(id => id !== quadraId) : [...favoriteQuadras, quadraId]; setFavoriteQuadras(newFavorites); localStorage.setItem(`favorite_quadras_${profile.id}`, JSON.stringify(newFavorites)); }; const sortedQuadras = useMemo(() => { return [...quadras].sort((a, b) => { const aIsFav = favoriteQuadras.includes(a.id); const bIsFav = favoriteQuadras.includes(b.id); if (aIsFav && !bIsFav) return -1; if (!aIsFav && bIsFav) return 1; return a.name.localeCompare(b.name); }); }, [quadras, favoriteQuadras]); const handleRecommendationClick = () => { if (recommendation) { setSelectedDate(recommendation.date); onSlotClick(recommendation.time, recommendation.quadra.id); } }; return ( <div className="flex flex-col lg:flex-row gap-8"> <div className="lg:w-2/3 space-y-8 order-1 lg:order-none"> {nextClass && <NextClassCard date={nextClass.date} turmaName={nextClass.turma.name} quadraName={nextClass.quadra?.name} professorName={nextClass.professor?.name} startTime={nextClass.time} arenaName={arenaName} />} {nextReservation && <UpcomingReservationCard reservation={nextReservation} quadra={quadras.find(q => q.id === nextReservation.quadra_id)} index={0} arenaName={arenaName} />} {!nextClass && !nextReservation && selectedArena && ( <ArenaInfoCard arena={selectedArena} /> )} {!nextClass && !nextReservation && !selectedArena && ( <EmptyState message="Você não tem nenhuma atividade agendada." /> )} <QuickBookingWidget quadras={sortedQuadras} reservas={reservas} onSlotClick={onSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} favoriteQuadras={favoriteQuadras} toggleFavorite={toggleFavorite} profile={profile} /> </div> <div className="lg:w-1/3 space-y-8 order-2 lg:order-none"> <CreditBalanceCard balance={creditBalance} /> <GamificationPointsCard points={totalPoints} levelName={levelName} /> {recommendation ? ( <RecommendationCard quadraName={recommendation.quadra.name} day={format(recommendation.date, 'EEEE', { locale: ptBR })} time={recommendation.time} onClick={handleRecommendationClick} /> ) : ( <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 p-6"> <h3 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200 mb-4 flex items-center"><Sparkles className="h-5 w-5 mr-2 text-yellow-400" /> Recomendações</h3> <p className="text-sm text-brand-gray-500">Em breve, você verá aqui horários recomendados para você.</p> </div> )} </div> </div> ); };
+const QuickBookingWidget: React.FC<{ quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, favoriteQuadras: string[], toggleFavorite: (quadraId: string) => void, profile: Profile | null, }> = ({quadras, reservas, onSlotClick, selectedDate, setSelectedDate, favoriteQuadras, toggleFavorite, profile}) => { const displayedReservations = useMemo(() => { const viewStartDate = startOfDay(new Date()); const viewEndDate = endOfDay(addDays(new Date(), 365)); return expandRecurringReservations(reservas, viewStartDate, viewEndDate, quadras); }, [reservas, quadras]); const generateTimeSlots = (quadra: Quadra) => { const slots = []; const dayOfWeek = getDay(selectedDate); let horario; if (dayOfWeek === 0) horario = quadra.horarios?.sunday; else if (dayOfWeek === 6) horario = quadra.horarios?.saturday; else horario = quadra.horarios?.weekday; if (!horario || !horario.start || !horario.end) return []; let currentTime = parse(horario.start.slice(0,5), 'HH:mm', selectedDate); let endTime = parse(horario.end.slice(0,5), 'HH:mm', selectedDate); if (endTime <= currentTime) endTime = addDays(endTime, 1); const interval = quadra.booking_duration_minutes || 60; while (currentTime < endTime) { slots.push(format(currentTime, 'HH:mm')); currentTime = addMinutes(currentTime, interval); } return slots; }; const getSlotStatus = (time: string, quadraId: string) => { const slotDateTime = parse(time, 'HH:mm', selectedDate); if (isPast(slotDateTime) && !isSameDay(selectedDate, startOfDay(new Date()))) { return { status: 'past', data: null }; } else if (isPast(slotDateTime) && isSameDay(selectedDate, startOfDay(new Date()))) { return { status: 'past', data: null }; } const slotStartMinutes = timeToMinutes(time); const reserva = displayedReservations.find(r => { if (r.quadra_id !== quadraId || !isSameDay(parseDateStringAsLocal(r.date), selectedDate) || r.status === 'cancelada') { return false; } const reservationStartMinutes = timeToMinutes(r.start_time); let reservationEndMinutes = timeToMinutes(r.end_time); if (reservationEndMinutes === 0 && r.end_time.includes('00:00')) { reservationEndMinutes = 24 * 60; } else if (reservationEndMinutes <= reservationStartMinutes) { reservationEndMinutes += 24 * 60; } return slotStartMinutes >= reservationStartMinutes && slotStartMinutes < reservationEndMinutes; }); if (reserva) return { status: 'booked', data: reserva }; return { status: 'available', data: null }; }; const getPriceRange = (quadra: Quadra) => { if (!quadra.pricing_rules || quadra.pricing_rules.length === 0) return "A definir"; const activePrices = quadra.pricing_rules.filter(r => r.is_active).map(r => r.price_single); if (activePrices.length === 0) return "A definir"; const minPrice = Math.min(...activePrices); const maxPrice = Math.max(...activePrices); if (minPrice === maxPrice) return formatCurrency(minPrice); return `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`; }; const renderSlotButton = (quadra: Quadra, time: string) => { const { status } = getSlotStatus(time, quadra.id); let styles = 'bg-brand-gray-100 text-brand-gray-500 dark:bg-brand-gray-700 dark:text-brand-gray-400'; let icon = <Clock className="h-3 w-3 mr-1" />; if (status === 'available') { styles = 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-500/20'; } else if (status === 'past') { styles = 'bg-brand-gray-100 text-brand-gray-400 dark:bg-brand-gray-700/50 dark:text-brand-gray-500 cursor-not-allowed'; } else if (status === 'booked') { styles = 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400 cursor-not-allowed'; } return ( <motion.button key={time} whileHover={{ scale: status === 'available' ? 1.05 : 1 }} whileTap={{ scale: status === 'available' ? 0.95 : 1 }} onClick={() => onSlotClick(time, quadra.id)} disabled={status !== 'available'} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all text-center ${styles}`}> <div className="flex items-center justify-center"> {icon} {time.slice(0,5)} </div> </motion.button> ); }; return ( <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 p-6"> <h3 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200 mb-4 flex items-center"><Calendar className="h-5 w-5 mr-2 text-brand-blue-500" /> Reserva Rápida</h3> <div className="mb-6"> <DatePickerCalendar selectedDate={selectedDate} onDateChange={setSelectedDate} /> </div> <div className="space-y-6"> {quadras.map(quadra => ( <div key={quadra.id}> <div className="flex justify-between items-center mb-3"> <div> <h4 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200">{quadra.name}</h4> <p className="text-sm text-brand-gray-500">{quadra.sports.join(', ')} - <span className="font-medium text-green-600">{getPriceRange(quadra)}</span></p> </div> {profile && ( <button onClick={() => toggleFavorite(quadra.id)} className="p-2 rounded-full hover:bg-red-100/50 dark:hover:bg-red-500/10 transition-colors"> <Heart className={`h-5 w-5 transition-all ${favoriteQuadras.includes(quadra.id) ? 'fill-current text-red-500' : 'text-brand-gray-400'}`} /> </button> )} </div> <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3"> {generateTimeSlots(quadra).map(time => renderSlotButton(quadra, time))} </div> </div> ))} </div> </div> ); };
 const CreditsTab: React.FC<{balance: number, history: CreditTransaction[]}> = ({balance, history}) => ( <div className="space-y-8"> <CreditBalanceCard balance={balance} /> <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700"> <h3 className="text-xl font-semibold p-6">Histórico de Transações</h3> {history.length === 0 ? ( <p className="px-6 pb-6 text-brand-gray-500">Nenhuma transação de crédito encontrada.</p> ) : ( <ul className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700"> {history.map(item => ( <li key={item.id} className="p-4 sm:p-6 flex justify-between items-center"> <div> <p className={`font-medium ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{item.amount > 0 ? 'Crédito Adicionado' : 'Crédito Utilizado'}</p> <p className="text-sm text-brand-gray-500">{item.description}</p> <p className="text-xs text-brand-gray-400 mt-1">{item.created_at ? format(new Date(item.created_at), 'dd/MM/yyyy HH:mm') : ''}</p> </div> <p className={`text-lg font-bold ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}> {item.amount > 0 ? '+' : ''}{formatCurrency(item.amount)} </p> </li> ))} </ul> )} </div> </div> );
 const CreditBalanceCard: React.FC<{balance: number}> = ({balance}) => ( <div className="bg-gradient-to-r from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 text-white p-6 rounded-lg shadow-lg"> <div className="flex justify-between items-center"> <h3 className="font-semibold">Saldo de Crédito</h3> <CreditCard className="h-6 w-6" /> </div> <p className="text-4xl font-bold mt-2">{formatCurrency(balance)}</p> <p className="text-sm opacity-80 mt-1">Use seu crédito para abater o valor de novas reservas.</p> </div> );
 const GamificationPointsCard: React.FC<{points?: number, levelName?: string}> = ({points = 0, levelName = 'Iniciante'}) => ( <div className="bg-gradient-to-r from-yellow-400 to-orange-500 dark:from-yellow-500 dark:to-orange-600 text-white p-6 rounded-lg shadow-lg"> <div className="flex justify-between items-center"> <h3 className="font-semibold">MatchPlay Rewards</h3> <Star className="h-6 w-6" /> </div> <p className="text-4xl font-bold mt-2">{points}</p> <p className="text-sm opacity-80 mt-1">Pontos • Nível {levelName}</p> </div> );

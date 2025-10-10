@@ -20,7 +20,7 @@ import { localApi } from '../lib/localApi';
 import Layout from '../components/Layout/Layout';
 import Button from '../components/Forms/Button';
 import Input from '../components/Forms/Input';
-import { Quadra, Reserva, ReservationType, Aluno } from '../types';
+import { Quadra, Reserva, ReservationType, Aluno, AtletaAluguel } from '../types';
 import AgendaView from '../components/Reservations/AgendaView';
 import ListView from '../components/Reservations/ListView';
 import CalendarView from '../components/Reservations/CalendarView';
@@ -44,6 +44,7 @@ const Reservations: React.FC = () => {
   const [quadras, setQuadras] = useState<Quadra[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
+  const [atletas, setAtletas] = useState<AtletaAluguel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('agenda');
   const [selectedDate, setSelectedDate] = useState(startOfDay(new Date()));
@@ -67,12 +68,16 @@ const Reservations: React.FC = () => {
     if (!arena) return;
     setIsLoading(true);
     try {
-      const { data: quadrasData } = await localApi.select<Quadra>('quadras', arena.id);
-      setQuadras(quadrasData || []);
-      const { data: reservasData } = await localApi.select<Reserva>('reservas', arena.id);
-      setReservas(reservasData || []);
-      const { data: alunosData } = await localApi.select<Aluno>('alunos', arena.id);
-      setAlunos(alunosData || []);
+      const [quadrasRes, reservasRes, alunosRes, atletasRes] = await Promise.all([
+        localApi.select<Quadra>('quadras', arena.id),
+        localApi.select<Reserva>('reservas', arena.id),
+        localApi.select<Aluno>('alunos', arena.id),
+        localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
+      ]);
+      setQuadras(quadrasRes.data || []);
+      setReservas(reservasRes.data || []);
+      setAlunos(alunosRes.data || []);
+      setAtletas(atletasRes.data || []);
     } catch (error: any) {
       addToast({ message: `Erro ao carregar dados: ${error.message}`, type: 'error' });
     } finally {
@@ -245,7 +250,7 @@ const Reservations: React.FC = () => {
         <ReservationLegend />
         <AnimatePresence mode="wait"><motion.div key={viewMode + filters.quadraId} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>{isLoading ? <div className="text-center py-16"><Loader2 className="w-8 h-8 border-4 border-brand-blue-500 border-t-transparent rounded-full animate-spin mx-auto" /></div> : (() => { switch (viewMode) { case 'agenda': return <AgendaView quadras={filteredQuadras} reservas={displayedReservations} selectedDate={selectedDate} onSlotClick={openNewReservationModal} onReservationClick={openEditReservationModal} />; case 'calendar': return <CalendarView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} selectedDate={selectedDate} onDateChange={setSelectedDate} onDayDoubleClick={openNewReservationOnDay} onSlotClick={openNewReservationOnDay} />; case 'list': return <ListView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} />; default: return null; } })()}</motion.div></AnimatePresence>
       </div>
-      <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={arena?.id || ''} selectedDate={selectedDate} />}</AnimatePresence>
+      <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={arena?.id || ''} selectedDate={selectedDate} profissionais={atletas} />}</AnimatePresence>
       <AnimatePresence>{isCancellationModalOpen && (<CancellationModal isOpen={isCancellationModalOpen} onClose={() => { setIsCancellationModalOpen(false); setReservationToCancel(null); }} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} />)}</AnimatePresence>
       <AnimatePresence>{isManualCancelModalOpen && (<ManualCancellationModal isOpen={isManualCancelModalOpen} onClose={() => { setIsManualCancelModalOpen(false); setReservationToCancel(null); }} onConfirm={() => reservationToCancel && handleConfirmManualCancel(reservationToCancel.id)} reservaName={reservationToCancel?.clientName || 'Reserva'} />)}</AnimatePresence>
     </Layout>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Building, FileText, BarChart2, CheckCircle, Save, ArrowLeft, User, Lock } from 'lucide-react';
+import { Building, FileText, BarChart2, CheckCircle, Save, ArrowLeft, User, Lock, CreditCard, DollarSign } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { Arena, Profile } from '../types';
@@ -10,8 +10,10 @@ import ProfileTab from '../components/Settings/ProfileTab';
 import ClientProfileSettingsTab from '../components/Settings/ClientProfileSettingsTab';
 import OperationTab from '../components/Settings/OperationTab';
 import PlanTab from '../components/Settings/PlanTab';
+import PaymentSettingsTab from '../components/Settings/PaymentSettingsTab';
+import PlanosAulasTab from '../components/Settings/PlanosAulasTab';
 
-type AdminTabType = 'profile' | 'operation' | 'plan';
+type AdminTabType = 'profile' | 'operation' | 'payments' | 'planos_aulas' | 'plan';
 type ClientTabType = 'my-profile' | 'security';
 
 const Settings: React.FC = () => {
@@ -28,6 +30,8 @@ const Settings: React.FC = () => {
   const adminTabs: { id: AdminTabType; label: string; icon: React.ElementType }[] = [
     { id: 'profile', label: 'Perfil da Arena', icon: Building },
     { id: 'operation', label: 'Operação e Políticas', icon: FileText },
+    { id: 'payments', label: 'Pagamentos', icon: CreditCard },
+    { id: 'planos_aulas', label: 'Planos de Aulas', icon: DollarSign },
     { id: 'plan', label: 'Plano e Faturamento', icon: BarChart2 },
   ];
 
@@ -73,6 +77,10 @@ const Settings: React.FC = () => {
           return <ProfileTab formData={arenaFormData} setFormData={setArenaFormData} />;
         case 'operation':
           return <OperationTab formData={arenaFormData} setFormData={setArenaFormData} />;
+        case 'payments':
+          return <PaymentSettingsTab formData={arenaFormData} setFormData={setArenaFormData} />;
+        case 'planos_aulas':
+          return <PlanosAulasTab />;
         case 'plan':
           return <PlanTab />;
         default:
@@ -105,7 +113,7 @@ const Settings: React.FC = () => {
     );
   }
   
-  const canSave = isAdmin ? (activeTab === 'profile' || activeTab === 'operation') : (activeTab === 'my-profile');
+  const canSave = isAdmin ? (activeTab === 'profile' || activeTab === 'operation' || activeTab === 'payments') : (activeTab === 'my-profile');
 
   return (
     <Layout>
