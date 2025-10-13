@@ -15,53 +15,6 @@ import AchievementsSettings from '../components/Gamification/AchievementsSetting
 
 type TabType = 'general' | 'levels' | 'rewards' | 'achievements';
 
-// This function now acts as a "reset to default" by overwriting existing data.
-const seedDefaultGamificationData = async (arenaId: string) => {
-  try {
-    console.log("Overwriting with default gamification data to ensure a clean state...");
-    
-    const defaultSettings: GamificationSettings = {
-      arena_id: arenaId,
-      is_enabled: true,
-      points_per_reservation: 10,
-      points_per_real: 1,
-    };
-
-    const defaultLevels: Omit<GamificationLevel, 'id' | 'arena_id'>[] = [
-      { name: 'Bronze', points_required: 0, level_rank: 1 },
-      { name: 'Prata', points_required: 500, level_rank: 2 },
-      { name: 'Ouro', points_required: 1500, level_rank: 3 },
-      { name: 'Platina', points_required: 3000, level_rank: 4 },
-    ];
-
-    const defaultRewards: Omit<GamificationReward, 'id' | 'arena_id'>[] = [
-      { title: 'Desconto de R$10', description: 'Use seus pontos para ganhar R$10 de desconto em uma reserva.', points_cost: 100, type: 'discount', value: 10, quantity: null, is_active: true },
-      { title: '1 Hora Grátis', description: 'Troque seus pontos por uma hora de jogo na faixa!', points_cost: 500, type: 'free_hour', value: null, quantity: 10, is_active: true },
-      { title: 'Aluguel de Bola Grátis', description: 'Resgate uma bola para sua próxima partida.', points_cost: 50, type: 'free_item', value: 1, quantity: null, is_active: true },
-    ];
-
-    const defaultAchievements: Omit<GamificationAchievement, 'id' | 'arena_id'>[] = [
-      { name: 'Primeira Reserva', description: 'Bem-vindo! Ganhe pontos na sua primeira reserva.', type: 'first_reservation', points_reward: 25, icon: 'Sparkles' },
-      { name: 'Fidelidade Bronze', description: 'Complete 10 reservas e mostre sua lealdade.', type: 'loyalty_10', points_reward: 50, icon: 'Award' },
-      { name: 'Fidelidade Prata', description: 'Uau! 50 reservas completadas.', type: 'loyalty_50', points_reward: 250, icon: 'Medal' },
-      { name: 'Lenda da Arena', description: 'Você é uma lenda! 100 reservas.', type: 'loyalty_100', points_reward: 1000, icon: 'Trophy' },
-      { name: 'Rato de Quadra', description: 'Jogou pelo menos uma vez por semana no último mês.', type: 'weekly_frequency', points_reward: 100, icon: 'CalendarCheck' },
-      { name: 'Explorador', description: 'Jogou em todas as quadras da arena.', type: 'play_all_courts', points_reward: 75, icon: 'Map' },
-    ];
-    
-    // Use overwrite: true to replace any existing (and duplicated) data.
-    await localApi.upsert('gamification_settings', [defaultSettings], arenaId, true);
-    await localApi.upsert('gamification_levels', defaultLevels, arenaId, true);
-    await localApi.upsert('gamification_rewards', defaultRewards, arenaId, true);
-    await localApi.upsert('gamification_achievements', defaultAchievements, arenaId, true);
-
-    console.log("Default gamification data has been seeded/overwritten.");
-  } catch (error) {
-    console.error("Error seeding gamification data:", error);
-  }
-};
-
-
 const Gamification: React.FC = () => {
   const { arena } = useAuth();
   const { addToast } = useToast();
@@ -79,16 +32,6 @@ const Gamification: React.FC = () => {
     if (!arena) return;
     setIsLoading(true);
     try {
-      // Use a versioned key to ensure this runs once per user after the update.
-      // This will fix existing users with duplicated data.
-      const seedKey = `gamification_seeded_v3_for_${arena.id}`;
-      
-      if (!localStorage.getItem(seedKey)) {
-        await seedDefaultGamificationData(arena.id);
-        localStorage.setItem(seedKey, 'true');
-      }
-
-      // Now, load the data which is guaranteed to be clean.
       const [settingsRes, levelsRes, rewardsRes, achievementsRes] = await Promise.all([
         localApi.select<GamificationSettings>('gamification_settings', arena.id),
         localApi.select<GamificationLevel>('gamification_levels', arena.id),

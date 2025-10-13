@@ -116,8 +116,9 @@ export interface Aluno {
   plan_id: string | null;
   plan_name: string;
   monthly_fee: number | null;
-  aulas_restantes: number;
+  aulas_restantes: number | null;
   aulas_agendadas: { turma_id: string; date: string; time: string }[];
+  attendance_history?: { date: string; status: 'present' | 'absent' }[];
   join_date: string;
   created_at: string;
   avatar_url?: string;
@@ -142,6 +143,7 @@ export interface Professor {
   valor_hora_aula?: number | null;
   metodologia?: string | null;
   portfolio_url?: string | null;
+  comissao?: number;
   created_at: string;
 }
 
@@ -217,11 +219,12 @@ export interface Reservation {
   date: string;
   start_time: string;
   end_time: string;
-  status: 'confirmada' | 'pendente' | 'cancelada' | 'realizada' | 'aguardando_aceite_profissional';
+  status: 'confirmada' | 'pendente' | 'cancelada' | 'realizada' | 'aguardando_aceite_profissional' | 'aguardando_pagamento';
   type: ReservationType;
   total_price?: number;
   credit_used?: number;
   payment_status?: 'pago' | 'pendente' | 'parcialmente_pago';
+  payment_deadline?: string | null;
   sport_type?: string;
   notes?: string;
   isRecurring?: boolean;
@@ -240,6 +243,14 @@ export interface Reservation {
   }[] | null;
   atleta_aluguel_id?: string | null;
   atleta_aceite_status?: 'pendente' | 'aceito' | 'recusado' | null;
+  participants?: {
+    profile_id: string;
+    name: string;
+    avatar_url: string | null;
+    status: 'pending' | 'accepted' | 'declined';
+    payment_status: 'pendente' | 'pago';
+  }[] | null;
+  invites_closed?: boolean;
 }
 
 // Alias para compatibilidade
@@ -440,6 +451,15 @@ export interface FinanceTransaction {
   type: 'receita' | 'despesa';
   category: string;
   date: string;
+  created_at: string;
+}
+
+export interface Friendship {
+  id: string;
+  user1_id: string; // profile_id
+  user2_id: string; // profile_id
+  status: 'pending' | 'accepted';
+  requested_by: string; // profile_id of the requester
   created_at: string;
 }
 

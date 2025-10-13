@@ -11,6 +11,8 @@ interface FilterPanelProps {
     type: 'all' | ReservationType;
     clientName: string;
     quadraId: 'all' | string;
+    startDate: string;
+    endDate: string;
   };
   onFilterChange: React.Dispatch<React.SetStateAction<any>>;
   onClearFilters: () => void;
@@ -24,7 +26,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onFilterChange, onCl
   };
 
   const reservationStatuses: Reserva['status'][] = ['confirmada', 'pendente', 'cancelada'];
-  const reservationTypes: ReservationType[] = ['normal', 'aula', 'evento', 'bloqueio'];
+  const reservationTypes: ReservationType[] = ['avulsa', 'aula', 'evento', 'bloqueio'];
 
   return (
     <motion.div
@@ -34,8 +36,8 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onFilterChange, onCl
       transition={{ duration: 0.3, ease: 'easeInOut' }}
       className="mt-4 pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 overflow-hidden"
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="lg:col-span-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
           <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Quadra</label>
           <select
             name="quadraId"
@@ -47,7 +49,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onFilterChange, onCl
             {quadras.map(q => <option key={q.id} value={q.id}>{q.name}</option>)}
           </select>
         </div>
-        <div className="lg:col-span-1">
+        <div>
           <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Status</label>
           <select
             name="status"
@@ -61,7 +63,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onFilterChange, onCl
             ))}
           </select>
         </div>
-        <div className="lg:col-span-1">
+        <div>
           <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Tipo</label>
           <select
             name="type"
@@ -75,8 +77,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onFilterChange, onCl
             ))}
           </select>
         </div>
-        <div className="lg:col-span-2">
-          <Input
+        <Input
             label="Buscar por Cliente"
             name="clientName"
             value={filters.clientName}
@@ -84,7 +85,10 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ filters, onFilterChange, onCl
             placeholder="Digite o nome do cliente..."
             className="text-sm"
           />
-        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+        <Input label="Filtrar de" name="startDate" type="date" value={filters.startDate} onChange={handleInputChange} />
+        <Input label="Até" name="endDate" type="date" value={filters.endDate} onChange={handleInputChange} />
       </div>
       <div className="mt-4 text-right">
         <Button variant="ghost" size="sm" onClick={onClearFilters}>

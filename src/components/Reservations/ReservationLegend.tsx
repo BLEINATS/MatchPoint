@@ -2,9 +2,10 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { getReservationTypeDetails } from '../../utils/reservationUtils';
 import { ReservationType } from '../../types';
+import { Clock } from 'lucide-react';
 
 const ReservationLegend: React.FC = () => {
-  const types: ReservationType[] = ['normal', 'aula', 'evento', 'bloqueio'];
+  const types: ReservationType[] = ['avulsa', 'aula', 'evento', 'bloqueio'];
 
   return (
     <motion.div 
@@ -22,6 +23,10 @@ const ReservationLegend: React.FC = () => {
           </div>
         )
       })}
+      <div className="flex items-center text-xs text-brand-gray-600 dark:text-brand-gray-400">
+        <div className="w-3 h-3 rounded-sm mr-2 bg-yellow-400 bg-striped"></div>
+        <span>Aguardando Pagamento</span>
+      </div>
       <div className="flex items-center text-xs text-brand-gray-600 dark:text-brand-gray-400">
         <div className="w-3 h-3 rounded-sm mr-2 bg-slate-500"></div>
         <span>Reserva Recorrente (Fixo)</span>

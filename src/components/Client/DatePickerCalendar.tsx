@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isSameDay, isBefore, startOfDay } from 'date-fns';
+import React, { useState, useMemo } from 'react';
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isBefore, startOfDay, addWeeks, subWeeks, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarRange, CalendarDays } from 'lucide-react';
+import Button from '../Forms/Button';
 
 interface DatePickerCalendarProps {
   selectedDate: Date;
@@ -9,25 +10,39 @@ interface DatePickerCalendarProps {
 }
 
 const DatePickerCalendar: React.FC<DatePickerCalendarProps> = ({ selectedDate, onDateChange }) => {
-  const [currentMonth, setCurrentMonth] = useState(startOfMonth(selectedDate));
+  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
+  const [currentDate, setCurrentDate] = useState(selectedDate);
   const today = startOfDay(new Date());
 
-  const handleMonthChange = (direction: 'next' | 'prev') => {
-    setCurrentMonth(current => direction === 'next' ? addMonths(current, 1) : subMonths(current, 1));
+  const handleNavigation = (direction: 'next' | 'prev') => {
+    const newDate = viewMode === 'week'
+      ? direction === 'next' ? addWeeks(currentDate, 1) : subWeeks(currentDate, 1)
+      : direction === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1);
+    setCurrentDate(newDate);
+    if (viewMode === 'month') {
+        const newSelected = startOfMonth(newDate);
+        if(!isSameDay(selectedDate, newSelected)) onDateChange(newSelected);
+    } else {
+        const newSelected = startOfWeek(newDate, { locale: ptBR });
+        if(!isSameDay(selectedDate, newSelected)) onDateChange(newSelected);
+    }
   };
+
+  const headerTitle = useMemo(() => {
+    return format(currentDate, 'MMMM yyyy', { locale: ptBR });
+  }, [currentDate]);
 
   const renderHeader = () => (
     <div className="flex justify-between items-center mb-4">
       <h3 className="text-lg font-semibold capitalize text-brand-gray-900 dark:text-white">
-        {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+        {headerTitle}
       </h3>
-      <div className="flex items-center">
-        <button onClick={() => handleMonthChange('prev')} className="p-2 rounded-md hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <button onClick={() => handleMonthChange('next')} className="p-2 rounded-md hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
-          <ChevronRight className="h-5 w-5" />
-        </button>
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="sm" onClick={() => handleNavigation('prev')}><ChevronLeft className="h-5 w-5" /></Button>
+        <Button variant="ghost" size="sm" onClick={() => handleNavigation('next')}><ChevronRight className="h-5 w-5" /></Button>
+        <Button variant="ghost" size="sm" onClick={() => setViewMode(viewMode === 'week' ? 'month' : 'week')} title={viewMode === 'week' ? 'Ver Mês' : 'Ver Semana'}>
+          {viewMode === 'week' ? <CalendarDays className="h-5 w-5" /> : <CalendarRange className="h-5 w-5" />}
+        </Button>
       </div>
     </div>
   );
@@ -42,11 +57,20 @@ const DatePickerCalendar: React.FC<DatePickerCalendarProps> = ({ selectedDate, o
   };
 
   const renderCells = () => {
-    const monthStart = currentMonth;
-    const days = eachDayOfInterval({ start: startOfMonth(monthStart), end: endOfMonth(monthStart) });
-    const prefixDaysCount = getDay(monthStart);
-    const suffixDaysCount = 6 - getDay(endOfMonth(monthStart));
+    let days: Date[];
+    let prefixDaysCount = 0;
 
+    if (viewMode === 'week') {
+        const weekStart = startOfWeek(currentDate, { locale: ptBR });
+        const weekEnd = endOfWeek(currentDate, { locale: ptBR });
+        days = eachDayOfInterval({ start: weekStart, end: weekEnd });
+    } else {
+        const monthStart = startOfMonth(currentDate);
+        const monthEnd = endOfMonth(monthStart);
+        days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+        prefixDaysCount = getDay(monthStart);
+    }
+    
     return (
       <div className="grid grid-cols-7 gap-1">
         {Array.from({ length: prefixDaysCount }).map((_, i) => <div key={`empty-pre-${i}`} className="aspect-square"></div>)}
@@ -79,13 +103,12 @@ const DatePickerCalendar: React.FC<DatePickerCalendarProps> = ({ selectedDate, o
             </div>
           );
         })}
-        {Array.from({ length: suffixDaysCount }).map((_, i) => <div key={`empty-suf-${i}`} className="aspect-square"></div>)}
       </div>
     );
   };
 
   return (
-    <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 p-6">
+    <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 p-4 sm:p-6">
       {renderHeader()}
       {renderDaysOfWeek()}
       {renderCells()}

@@ -32,17 +32,6 @@ const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationCli
       default: return { icon: AlertCircle, color: 'text-brand-gray-400', label: 'N/D' };
     }
   };
-
-  const sortedReservas = [...reservas].sort((a, b) => {
-    const dateA = parseDateStringAsLocal(a.date);
-    const dateB = parseDateStringAsLocal(b.date);
-    if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
-      return 0;
-    }
-    const dateDiff = dateB.getTime() - dateA.getTime();
-    if (dateDiff !== 0) return dateDiff;
-    return a.start_time.localeCompare(b.start_time);
-  });
   
   const getQuadraName = (id: string) => quadras.find(q => q.id === id)?.name || 'Quadra não encontrada';
 
@@ -62,7 +51,7 @@ const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationCli
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-brand-gray-800 divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
-            {sortedReservas.map(reserva => {
+            {reservas.map(reserva => {
               const typeDetails = getReservationTypeDetails(reserva.type, reserva.isRecurring);
               const paymentStatus = getPaymentStatus(reserva.payment_status);
               const rentedItemsTitle = reserva.rented_items && reserva.rented_items.length > 0 
@@ -121,7 +110,7 @@ const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationCli
                 </tr>
               )
             })}
-             {sortedReservas.length === 0 && (
+             {reservas.length === 0 && (
                 <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-sm text-brand-gray-500">
                         Nenhuma reserva encontrada para os filtros selecionados.
@@ -134,7 +123,7 @@ const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationCli
 
       {/* Mobile View: Cards */}
       <div className="md:hidden p-4 space-y-4">
-        {sortedReservas.map(reserva => {
+        {reservas.map(reserva => {
           const typeDetails = getReservationTypeDetails(reserva.type, reserva.isRecurring);
           const paymentStatus = getPaymentStatus(reserva.payment_status);
           const rentedItemsTitle = reserva.rented_items && reserva.rented_items.length > 0 
@@ -184,7 +173,7 @@ const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationCli
             </div>
           );
         })}
-        {sortedReservas.length === 0 && (
+        {reservas.length === 0 && (
             <div className="px-6 py-8 text-center text-sm text-brand-gray-500">
                 Nenhuma reserva encontrada para os filtros selecionados.
             </div>

@@ -18,6 +18,7 @@ import { isSameDay, startOfMonth, endOfMonth, format, parse, startOfDay, formatD
 import { ptBR } from 'date-fns/locale';
 import Button from '../Forms/Button';
 import { formatCurrency } from '../../utils/formatters';
+import Timer from '../Shared/Timer';
 
 const AnalyticsDashboard: React.FC = () => {
   const { arena, profile } = useAuth();
@@ -181,14 +182,27 @@ const AnalyticsDashboard: React.FC = () => {
       const quadraName = quadras.find(q => q.id === r.quadra_id)?.name || 'Quadra';
       const typeDetails = getReservationTypeDetails(r.type, r.isRecurring);
       let text = '';
-      let details = '';
+      let details: React.ReactNode = '';
       let color = '';
       let icon: React.ElementType;
 
-      if (r.status === 'cancelada') {
+      if (r.status === 'aguardando_pagamento' && r.payment_deadline) {
+        text = `Reserva aguardando pagamento`;
+        details = (
+          <div className="flex items-center gap-2">
+            <span>{r.clientName || 'Cliente'} na {quadraName}</span>
+            <span className="text-xs font-bold flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              <Timer deadline={r.payment_deadline} onExpire={loadData} />
+            </span>
+          </div>
+        );
+        icon = Clock;
+        color = 'text-yellow-500';
+      } else if (r.status === 'cancelada') {
         text = `Reserva cancelada`;
         details = `${r.clientName || 'Cliente'} na ${quadraName}`;
-        icon = Clock;
+        icon = XCircle;
         color = 'text-red-500';
       } else {
         text = `Nova reserva (${typeDetails.label})`;
@@ -219,7 +233,7 @@ const AnalyticsDashboard: React.FC = () => {
     const allActivities = [...reservaActivities, ...alunoActivities];
     allActivities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
     return allActivities.slice(0, 5);
-  }, [reservas, alunos, quadras]);
+  }, [reservas, alunos, quadras, loadData]);
 
   const handleActionClick = (action: string) => {
     switch (action) {
@@ -475,7 +489,7 @@ const RecentActivityFeed: React.FC<{ activities: any[] }> = ({ activities }) => 
                         </div>
                         <div className="flex-1">
                             <p className="text-sm font-semibold text-brand-gray-800 dark:text-brand-gray-200">{act.text}</p>
-                            <p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{act.details}</p>
+                            <div className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{act.details}</div>
                             <p className="text-xs text-brand-gray-500 dark:text-brand-gray-500 mt-1">
                                 {formatDistanceToNow(new Date(act.time), { locale: ptBR, addSuffix: true })}
                             </p>

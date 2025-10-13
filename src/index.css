@@ -19,4 +19,14 @@
       -ms-overflow-style: none;  /* IE and Edge */
       scrollbar-width: none;  /* Firefox */
   }
+
+  .bg-striped {
+    background-image: repeating-linear-gradient(
+      45deg,
+      rgba(0, 0, 0, 0.1),
+      rgba(0, 0, 0, 0.1) 10px,
+      transparent 10px,
+      transparent 20px
+    );
+  }
 }

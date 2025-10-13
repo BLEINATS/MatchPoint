@@ -1,5 +1,5 @@
 import { Reserva, Torneio, Evento, Quadra, Turma } from '../types';
-import { eachDayOfInterval, format, parse, addMinutes, getDay, isWithinInterval, startOfDay, endOfDay, addYears } from 'date-fns';
+import { eachDayOfInterval, format, parse, addMinutes, getDay, isWithinInterval, startOfDay, endOfDay, addYears, differenceInMinutes } from 'date-fns';
 import { parseDateStringAsLocal } from './dateUtils';
 
 /**
@@ -95,6 +95,7 @@ export const syncEventReservations = (
 
 /**
  * Sincroniza as reservas de uma turma com a agenda principal.
+ * Gera slots de reserva individuais para cada aula dentro do bloco de tempo da turma.
  */
 export const syncTurmaReservations = (
   turma: Turma,
@@ -103,30 +104,40 @@ export const syncTurmaReservations = (
   // 1. Remove todas as reservas antigas associadas a esta turma
   const otherReservas = allReservas.filter(r => r.turma_id !== turma.id);
 
-  // 2. Cria novas reservas recorrentes para a turma
+  // 2. Cria novas reservas para cada slot de aula da turma
   const newReservationsForTurma: Reserva[] = [];
   const loopStartDate = parseDateStringAsLocal(turma.start_date);
   const loopEndDate = turma.end_date ? parseDateStringAsLocal(turma.end_date) : addYears(loopStartDate, 1);
   
   const classDays = eachDayOfInterval({ start: loopStartDate, end: loopEndDate });
 
+  const blockStartTime = parse(turma.start_time, 'HH:mm', new Date());
+  const blockEndTime = parse(turma.end_time, 'HH:mm', new Date());
+  const blockDuration = differenceInMinutes(blockEndTime, blockStartTime);
+  const numberOfSlots = blockDuration / 60; // Assumindo slots de 1 hora
+
   for (const day of classDays) {
     if (turma.daysOfWeek.includes(getDay(day))) {
-      newReservationsForTurma.push({
-        id: `reserva_turma_${turma.id}_${format(day, 'yyyyMMdd')}`,
-        arena_id: turma.arena_id,
-        quadra_id: turma.quadra_id,
-        turma_id: turma.id,
-        date: format(day, 'yyyy-MM-dd'),
-        start_time: turma.start_time,
-        end_time: turma.end_time,
-        type: 'aula',
-        status: 'confirmada',
-        clientName: `Aula: ${turma.name}`,
-        isRecurring: true,
-        master_id: `turma_${turma.id}`,
-        created_at: new Date().toISOString(),
-      } as Reserva);
+      for (let i = 0; i < numberOfSlots; i++) {
+        const slotStartTime = addMinutes(blockStartTime, i * 60);
+        const slotEndTime = addMinutes(slotStartTime, 60);
+        
+        newReservationsForTurma.push({
+          id: `reserva_turma_${turma.id}_${format(day, 'yyyyMMdd')}_${format(slotStartTime, 'HHmm')}`,
+          arena_id: turma.arena_id,
+          quadra_id: turma.quadra_id,
+          turma_id: turma.id,
+          date: format(day, 'yyyy-MM-dd'),
+          start_time: format(slotStartTime, 'HH:mm'),
+          end_time: format(slotEndTime, 'HH:mm'),
+          type: 'aula',
+          status: 'confirmada',
+          clientName: `Aula: ${turma.name}`,
+          isRecurring: true,
+          master_id: `turma_${turma.id}`,
+          created_at: new Date().toISOString(),
+        } as Reserva);
+      }
     }
   }
 

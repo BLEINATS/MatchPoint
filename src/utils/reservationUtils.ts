@@ -10,6 +10,7 @@ export const getReservationTypeDetails = (type: ReservationType, isRecurring?: b
     'torneio': { label: 'Torneio', icon: Trophy, bgColor: 'bg-orange-500', borderColor: 'border-orange-600', publicBgColor: 'bg-orange-100 dark:bg-orange-900/50', publicTextColor: 'text-orange-700 dark:text-orange-400' },
     'evento': { label: 'Evento Privado', icon: PartyPopper, bgColor: 'bg-pink-500', borderColor: 'border-pink-600', publicBgColor: 'bg-pink-100 dark:bg-pink-900/50', publicTextColor: 'text-pink-700 dark:text-pink-400' },
     'bloqueio': { label: 'Bloqueio', icon: Ban, bgColor: 'bg-red-500', borderColor: 'border-red-600', publicBgColor: 'bg-red-100 dark:bg-red-900/50', publicTextColor: 'text-red-700 dark:text-red-400' },
+    'aguardando_pagamento': { label: 'Aguardando Pagamento', icon: Clock, bgColor: 'bg-yellow-400', borderColor: 'border-yellow-500', publicBgColor: 'bg-yellow-100 dark:bg-yellow-900/50', publicTextColor: 'text-yellow-700 dark:text-yellow-400' },
   };
 
   // Fallback to 'avulsa' if type is not recognized
@@ -34,6 +35,7 @@ export const getStatusDetails = (status: Reserva['status']) => {
     switch (status) {
         case 'confirmada': return { label: 'Confirmada', color: 'text-green-500' };
         case 'pendente': return { label: 'Pendente', color: 'text-yellow-500' };
+        case 'aguardando_pagamento': return { label: 'Aguardando Pagamento', color: 'text-yellow-500' };
         case 'cancelada': return { label: 'Cancelada', color: 'text-red-500' };
         case 'realizada': return { label: 'Realizada', color: 'text-purple-500' };
         case 'aguardando_aceite_profissional': return { label: 'Aguardando Profissional', color: 'text-orange-500' };

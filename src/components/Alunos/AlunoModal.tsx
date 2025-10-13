@@ -28,13 +28,13 @@ interface AlunoModalProps {
 const DEFAULT_SPORTS = ['Beach Tennis', 'Futevôlei', 'Futebol Society', 'Vôlei', 'Tênis', 'Padel', 'Funcional'];
 
 const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDelete, initialData, availableSports, planos, modalType, allAlunos, onDataChange }) => {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<Partial<Omit<Aluno, 'id' | 'arena_id' | 'created_at'>>>({
     name: '',
     email: '',
     phone: '',
-    status: 'ativo' as Aluno['status'],
+    status: 'ativo',
     sport: '',
-    plan_id: null as string | null,
+    plan_id: null,
     aulas_restantes: 0,
     join_date: format(new Date(), 'yyyy-MM-dd'),
     monthly_fee: 0,
@@ -52,6 +52,12 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   const activePlanOptions = useMemo(() => {
     return (planos || []).filter(p => p.is_active);
   }, [planos]);
+  
+  const selectedPlan = useMemo(() => {
+    return planos.find(p => p.id === formData.plan_id);
+  }, [formData.plan_id, planos]);
+
+  const isUnlimitedPlan = useMemo(() => selectedPlan?.num_aulas === null, [selectedPlan]);
 
   const refreshInternalData = useCallback(async () => {
     if (!initialData?.id || !initialData?.arena_id) return;
@@ -79,7 +85,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
           status: initialData.status,
           sport: initialData.sport || '',
           plan_id: initialData.plan_id,
-          aulas_restantes: initialData.aulas_restantes ?? 0,
+          aulas_restantes: initialData.aulas_restantes,
           join_date: initialData.join_date,
           monthly_fee: initialData.monthly_fee || 0,
         });
@@ -105,7 +111,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   };
 
   const handleSave = () => {
-    const unmaskedPhone = formData.phone.replace(/\D/g, '');
+    const unmaskedPhone = formData.phone?.replace(/\D/g, '');
 
     if (unmaskedPhone) {
       const isDuplicate = allAlunos.some(aluno => {
@@ -121,12 +127,11 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
       }
     }
     
-    const selectedPlan = planos.find(p => p.id === formData.plan_id);
-
     const dataToSave = {
       ...formData,
       plan_name: selectedPlan?.name || 'Avulso',
       monthly_fee: selectedPlan?.price || 0,
+      aulas_restantes: isUnlimitedPlan ? null : (formData.aulas_restantes || 0),
     };
 
     if (isEditing && internalAluno) {
@@ -145,17 +150,19 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     let finalValue: string | number | null = value;
+
     if (name === 'phone') {
       finalValue = maskPhone(value);
     }
 
     if (name === 'plan_id') {
-      const selectedPlan = activePlanOptions.find(p => p.id === value);
-      setFormData(prev => ({ 
-        ...prev, 
+      const newSelectedPlan = activePlanOptions.find(p => p.id === value);
+      const isNewPlanUnlimited = newSelectedPlan?.num_aulas === null;
+      setFormData(prev => ({
+        ...prev,
         plan_id: value || null,
-        aulas_restantes: selectedPlan?.num_aulas ?? 0,
-        monthly_fee: selectedPlan?.price || 0
+        aulas_restantes: isNewPlanUnlimited ? null : (newSelectedPlan?.num_aulas ?? 0),
+        monthly_fee: newSelectedPlan?.price || 0,
       }));
     } else {
       setFormData(prev => ({ ...prev, [name]: finalValue as string }));
@@ -225,7 +232,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                       <Input label="Nome Completo" name="name" value={formData.name} onChange={handleChange} icon={<User className="h-4 w-4 text-brand-gray-400"/>} required />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <Input label="E-mail" name="email" type="email" value={formData.email || ''} onChange={handleChange} icon={<Mail className="h-4 w-4 text-brand-gray-400"/>} />
-                        <Input label="Telefone" name="phone" value={formData.phone} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} />
+                        <Input label="Telefone" name="phone" value={formData.phone || ''} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} />
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -241,7 +248,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte</label>
-                          <select name="sport" value={formData.sport} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                          <select name="sport" value={formData.sport || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
                             <option value="">Selecione um esporte</option>
                             {allSports.map(sport => <option key={sport} value={sport}>{sport}</option>)}
                           </select>
@@ -258,10 +265,11 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                         label="Aulas Restantes (Créditos)"
                         name="aulas_restantes"
                         type="number"
-                        value={(formData.aulas_restantes || 0).toString()}
+                        value={isUnlimitedPlan ? '' : (formData.aulas_restantes ?? 0).toString()}
                         onChange={handleChange}
                         icon={<Hash className="h-4 w-4 text-brand-gray-400" />}
-                        placeholder="Ex: 8"
+                        placeholder={isUnlimitedPlan ? 'Ilimitado' : 'Ex: 8'}
+                        disabled={isUnlimitedPlan}
                       />
                     </div>
                   )}

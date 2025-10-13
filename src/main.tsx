@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
-import App from './App.tsx';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import App, { ProtectedRoute } from './App.tsx';
 import './index.css';
 
 import Home from './pages/Home';
@@ -23,22 +23,12 @@ import Gamification from './pages/Gamification';
 import TorneioPublico from './pages/TorneioPublico.tsx';
 import Financeiro from './pages/Financeiro.tsx';
 import ProfessorProfilePage from './pages/ProfessorProfilePage.tsx';
-import { useAuth } from './context/AuthContext';
+
+// Context Providers
+import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
 import React from 'react';
-
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-brand-gray-50 dark:bg-brand-gray-900">
-        <div className="w-8 h-8 border-4 border-brand-blue-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  return user ? <>{children}</> : <Navigate to="/auth" />;
-};
 
 const router = createBrowserRouter([
   {
@@ -112,6 +102,12 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <ThemeProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </ToastProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

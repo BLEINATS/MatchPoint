@@ -3,9 +3,10 @@ import { motion } from 'framer-motion';
 import { format, isSameDay } from 'date-fns';
 import { Quadra, Reserva } from '../../types';
 import { getReservationTypeDetails } from '../../utils/reservationUtils';
-import { Plus, DollarSign, AlertCircle, CheckCircle, CreditCard, ShoppingBag } from 'lucide-react';
+import { Plus, DollarSign, AlertCircle, CheckCircle, CreditCard, ShoppingBag, Clock } from 'lucide-react';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatters';
+import Timer from '../Shared/Timer';
 
 interface AgendaViewProps {
   quadras: Quadra[];
@@ -13,9 +14,10 @@ interface AgendaViewProps {
   selectedDate: Date;
   onSlotClick: (quadraId: string, time: string) => void;
   onReservationClick: (reserva: Reserva) => void;
+  onDataChange: () => void;
 }
 
-const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate, onSlotClick, onReservationClick }) => {
+const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate, onSlotClick, onReservationClick, onDataChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const timeSlots = Array.from({ length: (23 - 6) * 2 + 1 }, (_, i) => {
@@ -111,8 +113,23 @@ const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate
 
                   if (height <= 0) return null;
 
-                  const typeDetails = getReservationTypeDetails(reservation.type, reservation.isRecurring);
+                  const isPendingPayment = reservation.status === 'aguardando_pagamento';
+                  let typeDetails = getReservationTypeDetails(reservation.type, reservation.isRecurring);
+                  
+                  if (isPendingPayment) {
+                    typeDetails = {
+                      label: 'Aguardando Pagamento',
+                      icon: Clock,
+                      bgColor: 'bg-yellow-400',
+                      borderColor: 'border-yellow-500',
+                      publicBgColor: '',
+                      publicTextColor: ''
+                    };
+                  }
+
                   const Icon = typeDetails.icon;
+                  const textColor = isPendingPayment ? 'text-yellow-900' : 'text-white';
+
 
                   const rentedItemsTitle = reservation.rented_items && reservation.rented_items.length > 0 
                     ? `Itens: ${reservation.rented_items.map(i => `${i.quantity}x ${i.name}`).join(', ')}` 
@@ -122,7 +139,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate
                     <motion.div
                       key={reservation.id}
                       onClick={(e) => { e.stopPropagation(); onReservationClick(reservation); }}
-                      className={`absolute w-[calc(100%-4px)] m-0.5 p-2 rounded-lg text-white text-xs cursor-pointer shadow-lg z-10 flex flex-col justify-between overflow-hidden ${typeDetails.bgColor} bg-opacity-90 border-l-4 ${typeDetails.borderColor}`}
+                      className={`absolute w-[calc(100%-4px)] m-0.5 p-2 rounded-lg ${textColor} text-xs cursor-pointer shadow-lg z-10 flex flex-col justify-between overflow-hidden ${typeDetails.bgColor} ${isPendingPayment ? 'bg-striped' : 'bg-opacity-90'} border-l-4 ${typeDetails.borderColor}`}
                       style={{
                           top: `${top}rem`,
                           height: `calc(${height}rem - 4px)`,
@@ -143,13 +160,20 @@ const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate
                         <span className="font-semibold opacity-90 flex items-center gap-1">
                           {formatCurrency(reservation.total_price)}
                           {reservation.credit_used && reservation.credit_used > 0 && (
-                            <CreditCard className="h-3 w-3 text-white/80" title={`Pago com ${formatCurrency(reservation.credit_used)} de crédito`} />
+                            <CreditCard className="h-3 w-3 text-current opacity-80" title={`Pago com ${formatCurrency(reservation.credit_used)} de crédito`} />
                           )}
                           {rentedItemsTitle && (
-                            <ShoppingBag className="h-3 w-3 text-white/80" title={rentedItemsTitle} />
+                            <ShoppingBag className="h-3 w-3 text-current opacity-80" title={rentedItemsTitle} />
                           )}
                         </span>
-                        {getPaymentStatusIcon(reservation.payment_status)}
+                        {isPendingPayment && reservation.payment_deadline ? (
+                          <div className="text-xs font-bold flex items-center">
+                            <Timer deadline={reservation.payment_deadline} onExpire={onDataChange} />
+                            <Clock className="h-3 w-3 ml-1 animate-pulse" />
+                          </div>
+                        ) : (
+                          getPaymentStatusIcon(reservation.payment_status)
+                        )}
                       </div>
                     </motion.div>
                   );

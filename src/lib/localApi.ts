@@ -27,8 +27,8 @@ const saveArenaData = (arenaId: string, data: Record<string, any[]>) => {
 export const localApi = {
   select: async <T>(tableName: string, arenaId: string): Promise<{ data: T[], error: null }> => {
     if (arenaId === 'all') {
-        const allArenasData = localStorage.getItem('db_arenas');
-        return { data: allArenasData ? JSON.parse(allArenasData) : [], error: null };
+        const allData = localStorage.getItem(`db_${tableName}`);
+        return { data: allData ? JSON.parse(allData) : [], error: null };
     }
     const arenaData = getArenaData(arenaId);
     const tableData = arenaData[tableName] || [];
@@ -37,8 +37,30 @@ export const localApi = {
 
   upsert: async <T extends { id?: string }>(tableName: string, items: T[], arenaId: string, overwrite: boolean = false): Promise<{ data: T[], error: null }> => {
     if (arenaId === 'all') {
-        localStorage.setItem('db_arenas', JSON.stringify(items));
-        return { data: items, error: null };
+        if (overwrite) {
+            localStorage.setItem(`db_${tableName}`, JSON.stringify(items));
+            return { data: items, error: null };
+        }
+        
+        const allDataStr = localStorage.getItem(`db_${tableName}`);
+        let allData: T[] = allDataStr ? JSON.parse(allDataStr) : [];
+        const savedItems: T[] = [];
+
+        items.forEach(item => {
+            const index = item.id ? allData.findIndex(i => i.id === item.id) : -1;
+            if (index > -1) {
+                const updatedItem = { ...allData[index], ...item, updated_at: new Date().toISOString() };
+                allData[index] = updatedItem;
+                savedItems.push(updatedItem);
+            } else {
+                const newItem = { ...item, id: (item.id || uuidv4()), created_at: (item as any).created_at || new Date().toISOString() } as T;
+                allData.push(newItem);
+                savedItems.push(newItem);
+            }
+        });
+
+        localStorage.setItem(`db_${tableName}`, JSON.stringify(allData));
+        return { data: savedItems, error: null };
     }
     
     if (overwrite) {
@@ -76,6 +98,13 @@ export const localApi = {
   },
 
   delete: async (tableName: string, ids: string[], arenaId: string): Promise<{ error: null }> => {
+    if (arenaId === 'all') {
+        const allDataStr = localStorage.getItem(`db_${tableName}`);
+        let allData: any[] = allDataStr ? JSON.parse(allDataStr) : [];
+        allData = allData.filter(item => !ids.includes(item.id));
+        localStorage.setItem(`db_${tableName}`, JSON.stringify(allData));
+        return { error: null };
+    }
     const arenaData = getArenaData(arenaId);
     let tableData: any[] = arenaData[tableName] || [];
     tableData = tableData.filter(item => !ids.includes(item.id));
@@ -91,14 +120,11 @@ export const localApi = {
 };
 
 export const localUploadPhoto = async (file: File): Promise<{ publicUrl: string }> => {
-    // Generate a temporary blob URL for preview.
-    // This URL is valid only for the current session and does not store data in localStorage.
     const blobUrl = URL.createObjectURL(file);
     return Promise.resolve({ publicUrl: blobUrl });
 };
 
 export const localDeletePhoto = async (url: string): Promise<void> => {
-    // If the URL is a blob URL, revoke it to free up memory.
     if (url.startsWith('blob:')) {
         URL.revokeObjectURL(url);
     }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Phone, Mail, MapPin, Star, Briefcase, FileText, Hash, Image as ImageIcon, Loader2, Link as LinkIcon, Percent, DollarSign } from 'lucide-react';
+import { X, Save, User, Phone, Mail, MapPin, Star, Briefcase, FileText, Hash, Image as ImageIcon, Loader2, Link as LinkIcon, Percent, DollarSign, Trash2 } from 'lucide-react';
 import { AtletaAluguel, Aluno } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
@@ -285,13 +285,13 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
             <div className="p-6 mt-auto border-t border-brand-gray-200 dark:border-brand-gray-700 flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <ToggleSwitch enabled={formData.status === 'disponivel'} setEnabled={(val) => setFormData(p => ({ ...p, status: val ? 'disponivel' : 'indisponivel' }))} />
-                <span className="text-sm font-medium">Atleta ativo</span>
+                <span className="text-sm font-medium">Jogador ativo</span>
               </div>
               <div className="flex justify-end gap-3">
                 {isEditing && <Button type="button" variant="outline" onClick={handleDelete} className="text-red-500 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"><Trash2 className="h-4 w-4 mr-2" /> Excluir</Button>}
                 <Button variant="outline" onClick={onClose}>Cancelar</Button>
                 <Button onClick={handleSave}>
-                  <Save className="h-4 w-4 mr-2"/> {isEditing ? 'Salvar Alterações' : 'Cadastrar Atleta'}
+                  <Save className="h-4 w-4 mr-2"/> {isEditing ? 'Salvar Alterações' : 'Cadastrar Jogador'}
                 </Button>
               </div>
             </div>
