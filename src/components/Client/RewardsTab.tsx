@@ -4,7 +4,7 @@ import { Star, Gift, Trophy, CheckCircle, History } from 'lucide-react';
 import Button from '../Forms/Button';
 import { format } from 'date-fns';
 import ConfirmationModal from '../Shared/ConfirmationModal';
-import { supabase } from '../../lib/supabaseClient';
+import { localApi } from '../../lib/localApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -33,69 +33,55 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
     setIsRedeeming(true);
     try {
       // 1. Deduct points
-      const { error: rpcError } = await supabase.rpc('add_gamification_points', {
-        p_aluno_id: aluno.id,
-        p_points_to_add: -rewardToRedeem.points_cost,
-        p_description: `Resgate: ${rewardToRedeem.title}`,
-      });
-      if (rpcError) throw rpcError;
+      const updatedPoints = (aluno.gamification_points || 0) - rewardToRedeem.points_cost;
+      await localApi.upsert('alunos', [{ ...aluno, gamification_points: updatedPoints }], aluno.arena_id);
+      
+      // 2. Create point transaction
+      await localApi.upsert('gamification_point_transactions', [{
+        aluno_id: aluno.id,
+        arena_id: aluno.arena_id,
+        points: -rewardToRedeem.points_cost,
+        type: 'reward_redemption',
+        description: `Resgate: ${rewardToRedeem.title}`,
+      }], aluno.arena_id);
 
-      // 2. Update quantity if limited
+      // 3. Update reward quantity if limited
       if (rewardToRedeem.quantity !== null && rewardToRedeem.quantity > 0) {
-        const { error: updateError } = await supabase
-          .from('gamification_rewards')
-          .update({ quantity: rewardToRedeem.quantity - 1 })
-          .eq('id', rewardToRedeem.id);
-        if (updateError) {
-          console.error("Erro ao atualizar quantidade da recompensa:", updateError);
-        }
+        await localApi.upsert('gamification_rewards', [{ ...rewardToRedeem, quantity: rewardToRedeem.quantity - 1 }], aluno.arena_id);
       }
 
-      // 3. Add credit if it's a discount reward
+      // 4. Add credit if it's a discount reward
       if (rewardToRedeem.type === 'discount' && rewardToRedeem.value && rewardToRedeem.value > 0) {
         const creditValue = rewardToRedeem.value;
+        const updatedCreditBalance = (aluno.credit_balance || 0) + creditValue;
+        await localApi.upsert('alunos', [{ ...aluno, credit_balance: updatedCreditBalance }], aluno.arena_id);
         
-        const { error: creditError } = await supabase.rpc('add_credit_to_aluno', {
-            aluno_id_to_update: aluno.id,
-            arena_id_to_check: aluno.arena_id,
-            amount_to_add: creditValue
-        });
-        if (creditError) throw creditError;
-
-        const { error: transactionError } = await supabase.from('credit_transactions').insert({
+        await localApi.upsert('credit_transactions', [{
             aluno_id: aluno.id,
             arena_id: aluno.arena_id,
             amount: creditValue,
             type: 'goodwill_credit',
             description: `Crédito por resgate: ${rewardToRedeem.title}`,
-        });
-        if (transactionError) throw transactionError;
+        }], aluno.arena_id);
 
         if (aluno.profile_id) {
-            await supabase.from('notificacoes').insert({
+            await localApi.upsert('notificacoes', [{
                 profile_id: aluno.profile_id,
                 arena_id: aluno.arena_id,
                 message: `Você resgatou "${rewardToRedeem.title}" e ganhou ${creditValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} de crédito!`,
                 type: 'gamification_reward',
-            });
+            }], aluno.arena_id);
         }
       } else {
         if (aluno.profile_id) {
-            await supabase.from('notificacoes').insert({
+            await localApi.upsert('notificacoes', [{
               profile_id: aluno.profile_id,
               arena_id: aluno.arena_id,
               message: `Você resgatou "${rewardToRedeem.title}"!`,
               type: 'gamification_reward',
-            });
+            }], aluno.arena_id);
         }
       }
-
-      // 4. Notify admin
-      await supabase.from('notificacoes').insert({
-        arena_id: aluno.arena_id,
-        message: `Cliente ${aluno.name} resgatou a recompensa "${rewardToRedeem.title}".`,
-        type: 'gamification_reward',
-      });
 
       addToast({ message: 'Recompensa resgatada com sucesso!', type: 'success' });
       refreshAlunoProfile();
@@ -128,7 +114,7 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
       <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h3 className="text-xl font-bold">{currentLevel?.name || 'Iniciante'}</h3>
+            <h4 className="text-lg font-bold">{currentLevel?.name || 'Iniciante'}</h4>
             <p className="text-sm text-brand-gray-500">Seu nível no MatchPlay Rewards</p>
           </div>
           <div className="text-right">
@@ -148,7 +134,7 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
 
       {/* Rewards */}
       <div>
-        <h3 className="text-xl font-semibold mb-4 flex items-center"><Gift className="mr-2 h-5 w-5 text-green-500" /> Recompensas para Resgate</h3>
+        <h4 className="text-lg font-semibold mb-4 flex items-center"><Gift className="mr-2 h-5 w-5 text-green-500" /> Recompensas para Resgate</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {rewards.filter(r => r.is_active).map(reward => (
             <div key={reward.id} className="bg-white dark:bg-brand-gray-800 rounded-lg shadow p-4 border border-brand-gray-200 dark:border-brand-gray-700 flex flex-col justify-between">
@@ -174,7 +160,7 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
 
       {/* Achievements */}
       <div>
-        <h3 className="text-xl font-semibold mb-4 flex items-center"><Trophy className="mr-2 h-5 w-5 text-yellow-500" /> Conquistas</h3>
+        <h4 className="text-lg font-semibold mb-4 flex items-center"><Trophy className="mr-2 h-5 w-5 text-yellow-500" /> Conquistas</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {achievements.map(ach => {
             const isUnlocked = unlockedAchievements.some(ua => ua.achievement_id === ach.id);
@@ -194,7 +180,7 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
       
       {/* History */}
       <div>
-        <h3 className="text-xl font-semibold mb-4 flex items-center"><History className="mr-2 h-5 w-5 text-brand-blue-500" /> Histórico de Pontos</h3>
+        <h4 className="text-lg font-semibold mb-4 flex items-center"><History className="mr-2 h-5 w-5 text-brand-blue-500" /> Histórico de Pontos</h4>
         <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
           <div className="max-h-96 overflow-y-auto">
             {history.length > 0 ? (
@@ -204,7 +190,7 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
                     <div>
                       <p className="font-medium text-sm text-brand-gray-800 dark:text-brand-gray-200">{tx.description}</p>
                       <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400 mt-1">
-                        {format(new Date(tx.created_at), 'dd/MM/yyyy HH:mm')}
+                        {tx.created_at ? format(new Date(tx.created_at), 'dd/MM/yyyy HH:mm') : ''}
                       </p>
                     </div>
                     <span className={`font-bold text-lg ${tx.points >= 0 ? 'text-green-600' : 'text-red-600'}`}>

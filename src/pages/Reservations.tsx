@@ -32,7 +32,8 @@ import FilterPanel from '../components/Reservations/FilterPanel';
 import { startOfDay, format, startOfMonth, endOfMonth, isBefore, parse, addYears, subDays, getDay, addDays, endOfDay, addMinutes } from 'date-fns';
 import { expandRecurringReservations } from '../utils/reservationUtils';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
-import { processReservationCompletion } from '../utils/gamificationUtils';
+import { processReservationCompletion, reverseReservationPoints } from '../utils/gamificationUtils';
+import { formatCurrency } from '../utils/formatters';
 
 type ViewMode = 'agenda' | 'calendar' | 'list';
 
@@ -276,20 +277,49 @@ const Reservations: React.FC = () => {
     try {
         const reserva = reservas.find(r => r.id === reservaId);
         if (!reserva) throw new Error('Reserva não encontrada.');
+
+        const pointsToDeduct = await reverseReservationPoints(reserva, arena.id);
+        
+        let targetAluno = reserva.profile_id ? alunos.find(a => a.profile_id === reserva.profile_id) : alunos.find(a => a.name === reserva.clientName);
+        
+        if (targetAluno) {
+            const { data: updatedAlunos } = await localApi.select<Aluno>('alunos', arena.id);
+            const latestAlunoState = updatedAlunos.find(a => a.id === targetAluno!.id);
+            if (latestAlunoState) {
+                const updatedAluno = { ...latestAlunoState };
+                let hasChanges = false;
+                if (creditAmount > 0) {
+                    updatedAluno.credit_balance = (updatedAluno.credit_balance || 0) + creditAmount;
+                    await localApi.upsert('credit_transactions', [{ aluno_id: targetAluno.id, arena_id: arena.id, amount: creditAmount, type: 'cancellation_credit', description: `Crédito (${reason}) da reserva #${reserva.id.substring(0, 8)}`, related_reservation_id: reserva.id }], arena.id);
+                    hasChanges = true;
+                }
+                if (pointsToDeduct > 0) {
+                    updatedAluno.gamification_points = (updatedAluno.gamification_points || 0) - pointsToDeduct;
+                    hasChanges = true;
+                }
+                if (hasChanges) {
+                    await localApi.upsert('alunos', [updatedAluno], arena.id);
+                }
+            }
+        }
+        
         const updatePayload: Partial<Reserva> = { status: 'cancelada' };
-        if (creditAmount === 0 && reserva.total_price && reserva.total_price > 0) updatePayload.payment_status = 'pago';
+        if (creditAmount === 0 && reserva.total_price && reserva.total_price > 0) {
+            updatePayload.payment_status = 'pago';
+        }
         await localApi.upsert('reservas', [{ ...reserva, ...updatePayload }], arena.id);
-        if (creditAmount > 0) {
-            let targetAluno = reserva.profile_id ? alunos.find(a => a.profile_id === reserva.profile_id) : alunos.find(a => a.name === reserva.clientName);
-            if (targetAluno) {
-                targetAluno.credit_balance = (targetAluno.credit_balance || 0) + creditAmount;
-                await localApi.upsert('alunos', [targetAluno], arena.id);
-                await localApi.upsert('credit_transactions', [{ aluno_id: targetAluno.id, arena_id: arena.id, amount: creditAmount, type: 'cancellation_credit', description: `Crédito (${reason}) da reserva #${reserva.id.substring(0, 8)}`, related_reservation_id: reserva.id }], arena.id);
-                addToast({ message: 'Reserva cancelada e crédito aplicado!', type: 'success' });
-            } else { addToast({ message: `Reserva cancelada. Crédito de ${creditAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} deve ser gerenciado manualmente.`, type: 'info' }); }
-        } else { addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' }); }
-        setIsCancellationModalOpen(false); setReservationToCancel(null); await loadData();
-    } catch (error: any) { addToast({ message: `Erro ao processar cancelamento: ${error.message}`, type: 'error' }); }
+        
+        addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
+        if (creditAmount > 0) addToast({ message: `${formatCurrency(creditAmount)} de crédito aplicado.`, type: 'info' });
+        if (pointsToDeduct > 0) addToast({ message: `${pointsToDeduct} pontos deduzidos.`, type: 'info' });
+
+    } catch (error: any) {
+        addToast({ message: `Erro ao processar cancelamento: ${error.message}`, type: 'error' });
+    } finally {
+        setIsCancellationModalOpen(false);
+        setReservationToCancel(null);
+        await loadData();
+    }
   };
 
   const openNewReservationModal = (quadraId: string, time: string) => { setNewReservationSlot({ quadraId, time, type: 'avulsa' }); setSelectedReservation(null); setIsModalOpen(true); };
@@ -314,7 +344,7 @@ const Reservations: React.FC = () => {
         <ReservationLegend />
         <AnimatePresence mode="wait"><motion.div key={viewMode + filters.quadraId} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>{isLoading ? <div className="text-center py-16"><Loader2 className="w-8 h-8 border-4 border-brand-blue-500 border-t-transparent rounded-full animate-spin mx-auto" /></div> : (() => { switch (viewMode) { case 'agenda': return <AgendaView quadras={filteredQuadras} reservas={displayedReservations} selectedDate={selectedDate} onSlotClick={openNewReservationModal} onReservationClick={openEditReservationModal} onDataChange={loadData} />; case 'calendar': return <CalendarView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} selectedDate={selectedDate} onDateChange={setSelectedDate} onDayDoubleClick={openNewReservationOnDay} onSlotClick={openNewReservationOnDay} />; case 'list': return <ListView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} />; default: return null; } })()}</motion.div></AnimatePresence>
       </div>
-      <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={arena?.id || ''} selectedDate={selectedDate} profissionais={atletas} userProfile={profile} />}</AnimatePresence>
+      <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={arena?.id || ''} selectedDate={selectedDate} profissionais={atletas} />}</AnimatePresence>
       <AnimatePresence>{isCancellationModalOpen && (<CancellationModal isOpen={isCancellationModalOpen} onClose={() => { setIsCancellationModalOpen(false); setReservationToCancel(null); }} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} />)}</AnimatePresence>
       <AnimatePresence>{isManualCancelModalOpen && (<ManualCancellationModal isOpen={isManualCancelModalOpen} onClose={() => { setIsManualCancelModalOpen(false); setReservationToCancel(null); }} onConfirm={() => reservationToCancel && handleConfirmManualCancel(reservationToCancel.id)} reservaName={reservationToCancel?.clientName || 'Reserva'} />)}</AnimatePresence>
     </Layout>

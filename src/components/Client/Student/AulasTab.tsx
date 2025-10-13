@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Aluno, Turma, Professor, Quadra, PlanoAula } from '../../../types';
-import { Calendar, Clock, GraduationCap, MapPin, Users } from 'lucide-react';
+import { Calendar, Clock, GraduationCap, MapPin, Users, RefreshCw } from 'lucide-react';
 import { format, isAfter, isSameDay, parse, getDay, isPast, addMinutes, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DatePickerCalendar from '../DatePickerCalendar';
@@ -83,7 +83,7 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
       const slots = getSlotsForTurma(turma);
       slots.forEach(slotTime => {
         const slotDateTime = parse(slotTime, 'HH:mm', day);
-        if (isPast(slotDateTime) && !isSameDay(slotDateTime, new Date())) return;
+        const isSlotPast = isPast(slotDateTime);
 
         const isEnrolled = (aluno.aulas_agendadas || []).some(a => a.turma_id === turma.id && a.date === format(day, 'yyyy-MM-dd') && a.time === slotTime);
         if (isEnrolled) return;
@@ -100,6 +100,7 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
           isEnrolled: false,
           enrolledCount,
           capacity: turma.alunos_por_horario,
+          isPast: isSlotPast,
         });
       });
     });
@@ -152,19 +153,43 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
             <h4 className="text-lg font-semibold mb-4 capitalize">Horários em {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}</h4>
             {availableSlots.length > 0 ? (
               <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
-                {availableSlots.map(slot => (
-                  <button key={slot.id} onClick={() => handleOpenModal(slot)} className="w-full text-left p-4 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700 transition-colors">
-                    <div className="flex-1">
-                      <p className="font-bold text-brand-gray-900 dark:text-white">{slot.turma.name}</p>
-                      <div className="text-sm text-brand-gray-600 dark:text-brand-gray-400 mt-2 space-y-1.5">
-                        <p className="flex items-center"><Clock className="h-4 w-4 mr-2 flex-shrink-0"/>{slot.time}</p>
-                        <p className="flex items-center"><GraduationCap className="h-4 w-4 mr-2 flex-shrink-0"/>Prof. {slot.professor?.name}</p>
-                        <p className="flex items-center"><MapPin className="h-4 w-4 mr-2 flex-shrink-0"/>{slot.quadra?.name}</p>
+                {availableSlots.map(slot => {
+                  const isFull = slot.enrolledCount >= slot.capacity;
+                  const isDisabled = slot.isPast || isFull;
+                  return (
+                    <button 
+                      key={slot.id} 
+                      onClick={() => !isDisabled && handleOpenModal(slot)} 
+                      disabled={isDisabled}
+                      className={`w-full text-left p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-colors ${
+                          isDisabled 
+                              ? 'bg-brand-gray-100 dark:bg-brand-gray-800 opacity-60 cursor-not-allowed'
+                              : 'bg-brand-gray-50 dark:bg-brand-gray-700/50 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700'
+                      }`}
+                    >
+                      <div className="flex-1">
+                        <p className="font-bold text-brand-gray-900 dark:text-white">{slot.turma.name}</p>
+                        <div className="text-sm text-brand-gray-600 dark:text-brand-gray-400 mt-2 space-y-1.5">
+                          <p className="flex items-center"><Clock className="h-4 w-4 mr-2 flex-shrink-0"/>{slot.time}</p>
+                          <p className="flex items-center"><GraduationCap className="h-4 w-4 mr-2 flex-shrink-0"/>Prof. {slot.professor?.name}</p>
+                          <p className="flex items-center"><MapPin className="h-4 w-4 mr-2 flex-shrink-0"/>{slot.quadra?.name}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mt-3 sm:mt-0"><Users className="h-4 w-4"/><span>{slot.enrolledCount} / {slot.capacity}</span></div>
-                  </button>
-                ))}
+                      <div className="flex items-center gap-2 text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mt-3 sm:mt-0">
+                        {slot.isPast ? (
+                          <span className="font-bold text-brand-gray-500">Encerrado</span>
+                        ) : isFull ? (
+                          <span className="font-bold text-red-500">Lotado</span>
+                        ) : (
+                          <>
+                              <Users className="h-4 w-4"/>
+                              <span>{slot.enrolledCount} / {slot.capacity}</span>
+                          </>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             ) : (<div className="text-center py-10"><Calendar className="h-12 w-12 text-brand-gray-400 mx-auto mb-4" /><p className="text-brand-gray-500">Nenhum horário disponível para esta data.</p></div>)}
           </div>

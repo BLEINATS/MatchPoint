@@ -10,7 +10,7 @@
   || "Você confirma que deseja alterar a lógica de crédito/preço?"  ||
   ====================================================================
 */}
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, Calendar, Clock, User, Phone, Repeat, Tag, DollarSign, Info, AlertTriangle, CreditCard, ShoppingBag, Handshake, Users } from 'lucide-react';
 import { Aluno, Quadra, Reserva, PricingRule, DurationDiscount, ReservationType, RentalItem, Profile, AtletaAluguel, Friendship } from '../../types';
@@ -80,6 +80,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   const [showHirePlayer, setShowHirePlayer] = useState(false);
   const [selectedProfissionalId, setSelectedProfissionalId] = useState<string | null>(null);
 
+  const [isGroupBooking, setIsGroupBooking] = useState(false);
   const [invitedFriendIds, setInvitedFriendIds] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
@@ -258,7 +259,9 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
           }
         }
         setSelectedItems(initialSelectedItems);
-        setInvitedFriendIds(reservation.participants?.filter(p => p.profile_id !== userProfile?.id).map(p => p.profile_id) || []);
+        const initialInvitedIds = reservation.participants?.filter(p => p.profile_id !== userProfile?.id).map(p => p.profile_id) || [];
+        setInvitedFriendIds(initialInvitedIds);
+        setIsGroupBooking(!!reservation.participants && reservation.participants.length > 1);
       } else if (newReservationSlot) {
         const startTime = newReservationSlot.time || '09:00';
         const quadraId = newReservationSlot.quadraId || (quadras.length > 0 ? quadras[0].id : '');
@@ -288,30 +291,31 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         setOriginalCreditUsed(0);
         setSelectedItems({});
         setInvitedFriendIds([]);
+        setIsGroupBooking(false);
       }
       setFormData(prev => ({...prev, ...baseData}));
     }
   }, [reservation, newReservationSlot, isOpen, selectedDate, quadras, clientProfile, userProfile, isClientBooking]);
 
-  const findMatchingRule = (
+  const findMatchingRule = useCallback((
     rules: PricingRule[], sport: string, date: string, startTime: string
   ): { rule: PricingRule | null, isMonthly: boolean } => {
     const reservationDay = getDay(parseDateStringAsLocal(date));
     const isMonthlyCustomer = !!(selectedClient && selectedClient.monthly_fee && selectedClient.monthly_fee > 0);
     const reservationStartTimeMinutes = timeToMinutes(startTime);
-  
+
     const applicableRules = rules.filter(rule => {
       const ruleStartMinutes = timeToMinutes(rule.start_time);
       let ruleEndMinutes = timeToMinutes(rule.end_time);
-  
+
       if (ruleEndMinutes === 0 && rule.end_time === '00:00') {
         ruleEndMinutes = 24 * 60;
       }
-  
+
       let match = false;
       if (ruleStartMinutes < ruleEndMinutes) {
         match = reservationStartTimeMinutes >= ruleStartMinutes && reservationStartTimeMinutes < ruleEndMinutes;
-      } else {
+      } else { // Overnight rule
         match = reservationStartTimeMinutes >= ruleStartMinutes || reservationStartTimeMinutes < ruleEndMinutes;
       }
       
@@ -320,16 +324,16 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         (rule.sport_type === sport || rule.sport_type === 'Qualquer Esporte') &&
         match;
     });
-  
+
     const specificSportRule = applicableRules.find(r => r.sport_type === sport && !r.is_default);
     const anySportRule = applicableRules.find(r => r.sport_type === 'Qualquer Esporte' && !r.is_default);
     const defaultSpecificSportRule = applicableRules.find(r => r.sport_type === sport && r.is_default);
     const defaultAnySportRule = applicableRules.find(r => r.sport_type === 'Qualquer Esporte' && r.is_default);
-  
+
     const targetRule = specificSportRule || anySportRule || defaultSpecificSportRule || defaultAnySportRule || null;
-  
+
     return { rule: targetRule, isMonthly: isMonthlyCustomer };
-  };
+  }, [selectedClient]);
 
   useEffect(() => {
     const calculatePrice = () => {
@@ -358,7 +362,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         return;
       }
 
-      const reservationStartMinutes = timeToMinutes(start_time);
+      const reservationStartTimeMinutes = timeToMinutes(start_time);
       let reservationEndMinutes = timeToMinutes(end_time);
       const openingMinutes = timeToMinutes(operatingHours.start);
       let closingMinutes = timeToMinutes(operatingHours.end);
@@ -371,9 +375,9 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
       }
 
       const effectiveClosingMinutes = closingMinutes < openingMinutes ? closingMinutes + 24 * 60 : closingMinutes;
-      const effectiveReservationEndMinutes = reservationEndMinutes <= reservationStartMinutes ? reservationEndMinutes + 24 * 60 : reservationEndMinutes;
+      const effectiveReservationEndMinutes = reservationEndMinutes <= reservationStartTimeMinutes ? reservationEndMinutes + 24 * 60 : reservationEndMinutes;
 
-      if (reservationStartMinutes < openingMinutes || effectiveReservationEndMinutes > effectiveClosingMinutes) {
+      if (reservationStartTimeMinutes < openingMinutes || effectiveReservationEndMinutes > effectiveClosingMinutes) {
         setOperatingHoursWarning(`Atenção: O horário selecionado (${start_time} - ${end_time}) está fora do funcionamento da quadra (${operatingHours.start} - ${operatingHours.end}).`);
         setPriceBreakdown([]); setReservationPrice(0); setDiscountAmount(0); setDiscountInfo(null);
         return;
@@ -396,7 +400,10 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
       const { rule: applicableRule, isMonthly } = findMatchingRule(rulesForQuadra, sport_type, date, start_time);
       setActiveRule(applicableRule);
       
-      const pricePerHour = applicableRule ? (isMonthly ? applicableRule.price_monthly : applicableRule.price_single) : 0;
+      let pricePerHour = 0;
+      if (applicableRule) {
+        pricePerHour = isClientBooking ? applicableRule.price_single : (isMonthly ? applicableRule.price_monthly : applicableRule.price_single);
+      }
       const totalCalculatedPrice = pricePerHour * totalDurationHours;
 
       setReservationPrice(totalCalculatedPrice);
@@ -466,9 +473,9 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     };
     calculatePrice();
   }, [
-    formData.quadra_id, formData.sport_type, formData.date, formData.start_time, formData.end_time, formData.type,
+    formData.quadra_id, formData.sport_type, formData.date, formData.start_time, formData.end_time, formData.type, formData.isRecurring,
     selectedClient, quadras, durationDiscounts, useCredit, availableCredit, isEditing, 
-    originalCreditUsed, selectedItems, rentalItems, addToast, profissionais, selectedProfissionalId
+    originalCreditUsed, selectedItems, rentalItems, addToast, profissionais, selectedProfissionalId, findMatchingRule, isClientBooking
   ]);
 
   useEffect(() => {
@@ -547,7 +554,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     }
     
     const participants: any[] = [];
-    if (userProfile) {
+    if (isGroupBooking && userProfile) {
         participants.push({
             profile_id: userProfile.id,
             name: userProfile.name,
@@ -555,19 +562,19 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
             status: 'accepted',
             payment_status: 'pendente'
         });
+        invitedFriendIds.forEach(friendId => {
+            const friendProfile = friends.find(f => f.id === friendId);
+            if (friendProfile) {
+                participants.push({
+                    profile_id: friendProfile.id,
+                    name: friendProfile.name,
+                    avatar_url: friendProfile.avatar_url,
+                    status: 'pending',
+                    payment_status: 'pendente'
+                });
+            }
+        });
     }
-    invitedFriendIds.forEach(friendId => {
-        const friendProfile = friends.find(f => f.id === friendId);
-        if (friendProfile) {
-            participants.push({
-                profile_id: friendProfile.id,
-                name: friendProfile.name,
-                avatar_url: friendProfile.avatar_url,
-                status: 'pending',
-                payment_status: 'pendente'
-            });
-        }
-    });
 
     let dataToSave: Partial<Reserva> = { ...formData, participants, originalCreditUsed: originalCreditUsed };
     
@@ -640,7 +647,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   const totalBruto = reservationPrice;
   const valorAPagar = totalBruto - discountAmount + rentalCost + professionalCost - (formData.credit_used || 0);
   
-  const numParticipants = 1 + invitedFriendIds.length;
+  const numParticipants = isGroupBooking ? 1 + invitedFriendIds.length : 1;
   const valorPorJogador = numParticipants > 0 ? (totalBruto - discountAmount + rentalCost + professionalCost) / numParticipants : 0;
 
   const isBlockMode = formData.type === 'bloqueio';
@@ -709,7 +716,21 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
                   {!isBlockMode && (
                     <>
-                      <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4"><h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><Users className="h-5 w-5 mr-2 text-brand-blue-500" />Convidar Amigos</h4>{friends.length > 0 ? (<div className="space-y-2 max-h-32 overflow-y-auto pr-2">{friends.map(friend => (<label key={friend.id} className="flex items-center justify-between p-2 rounded-md hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700/50 cursor-pointer"><div className="flex items-center gap-3"><img src={friend.avatar_url || `https://avatar.vercel.sh/${friend.id}.svg`} alt={friend.name} className="w-8 h-8 rounded-full object-cover" /><span className="text-sm font-medium">{friend.name}</span></div><input type="checkbox" checked={invitedFriendIds.includes(friend.id)} onChange={() => handleFriendToggle(friend.id)} className="form-checkbox h-5 w-5 rounded text-brand-blue-600" /></label>))}</div>) : (<p className="text-sm text-center text-brand-gray-500 py-4">Você ainda não tem amigos para convidar.</p>)}</div>
+                      {!isGroupBooking && !isEditing && (
+                        <div className="text-center py-2">
+                          <Button variant="outline" onClick={() => setIsGroupBooking(true)}>
+                            <Users className="h-4 w-4 mr-2" />
+                            Convidar amigos e dividir o valor
+                          </Button>
+                        </div>
+                      )}
+                      <AnimatePresence>
+                        {isGroupBooking && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                            <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4"><h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><Users className="h-5 w-5 mr-2 text-brand-blue-500" />Convidar Amigos</h4>{friends.length > 0 ? (<div className="space-y-2 max-h-32 overflow-y-auto pr-2">{friends.map(friend => (<label key={friend.id} className="flex items-center justify-between p-2 rounded-md hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700/50 cursor-pointer"><div className="flex items-center gap-3"><img src={friend.avatar_url || `https://avatar.vercel.sh/${friend.id}.svg`} alt={friend.name} className="w-8 h-8 rounded-full object-cover" /><span className="text-sm font-medium">{friend.name}</span></div><input type="checkbox" checked={invitedFriendIds.includes(friend.id)} onChange={() => handleFriendToggle(friend.id)} className="form-checkbox h-5 w-5 rounded text-brand-blue-600" /></label>))}</div>) : (<p className="text-sm text-center text-brand-gray-500 py-4">Você ainda não tem amigos para convidar.</p>)}</div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                       {isEditing && originalCreditUsed > 0 && (<div className="p-3 rounded-md bg-gray-100 dark:bg-gray-700/50 flex items-center gap-3"><Info className="h-5 w-5 text-gray-500 dark:text-gray-400 flex-shrink-0" /><div><p className="font-semibold text-gray-800 dark:text-gray-200">Crédito Já Aplicado</p><p className="text-sm text-gray-600 dark:text-gray-300">Esta reserva já utilizou <strong className="text-green-600 dark:text-green-400">{formatCurrency(originalCreditUsed)}</strong> de crédito.</p></div></div>)}
                       {availableCredit > 0 && (<div className="p-3 rounded-md bg-blue-50 dark:bg-blue-900/50 flex items-center justify-between"><div className="flex items-center"><CreditCard className="h-5 w-5 mr-3 text-blue-500" /><div><p className="font-semibold text-blue-800 dark:text-blue-200">Saldo de Crédito do Cliente</p><p className="text-sm text-blue-600 dark:text-blue-300 font-bold">{formatCurrency(availableCredit)}</p></div></div><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={useCredit} onChange={e => setUseCredit(e.target.checked)} className="form-checkbox h-5 w-5 rounded text-brand-blue-600" /><span className="text-sm font-medium">Usar Saldo</span></label></div>)}
                       <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" className="form-checkbox h-4 w-4 rounded text-brand-blue-600" checked={showHirePlayer} onChange={(e) => setShowHirePlayer(e.target.checked)} /><span className="text-sm font-medium flex items-center gap-2"><Handshake className="h-4 w-4 text-brand-gray-500" />Deseja contratar um Atleta de Aluguel?</span></label>{showHirePlayer && (<div className="mt-4 p-4 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg">{availableProfessionals.length > 0 ? (<div className="space-y-3 max-h-48 overflow-y-auto">{availableProfessionals.map(prof => (<button key={prof.id} onClick={() => setSelectedProfissionalId(prev => prev === prof.id ? null : prof.id)} className={`w-full p-3 border-2 rounded-lg text-left flex items-center gap-3 transition-all ${selectedProfissionalId === prof.id ? 'border-brand-blue-500 bg-blue-100 dark:bg-brand-blue-500/20' : 'border-brand-gray-200 dark:border-brand-gray-700 hover:border-brand-blue-400'}`}><img src={prof.avatar_url || `https://avatar.vercel.sh/${prof.id}.svg`} alt={prof.name} className="w-12 h-12 rounded-full object-cover" /><div className="flex-1"><p className="font-bold text-sm text-brand-gray-900 dark:text-white">{prof.name}</p><p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">{prof.nivel_tecnico || 'Nível não informado'}</p></div><p className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(prof.taxa_hora)}</p></button>))}</div>) : (<p className="text-center text-sm text-brand-gray-500 py-4">Nenhum atleta disponível para este esporte no momento.</p>)}</div>)}</div>
@@ -721,7 +742,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                         {discountAmount > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-green-600 dark:text-green-400">Desconto por Duração ({discountInfo?.duration}h - {discountInfo?.percentage}%)</span><span className="font-medium text-green-600 dark:text-green-400">- {formatCurrency(discountAmount)}</span></div>)}
                         {rentalCost > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Itens Alugados</span><span className="font-medium text-brand-gray-800 dark:text-white">+ {formatCurrency(rentalCost)}</span></div>)}
                         {professionalCost > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Taxa do Atleta</span><span className="font-medium text-brand-gray-800 dark:text-white">+ {formatCurrency(professionalCost)}</span></div>)}
-                        <div className="flex justify-between items-center text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Valor por Jogador ({numParticipants}x)</span><span className="font-medium text-brand-gray-800 dark:text-white">{formatCurrency(valorPorJogador)}</span></div>
+                        {isGroupBooking && (<div className="flex justify-between text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Valor por Jogador ({numParticipants}x)</span><div><span className="font-medium text-brand-gray-800 dark:text-white">{formatCurrency(valorPorJogador)}</span></div></div>)}
                         {(formData.credit_used || 0) > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-blue-600 dark:text-blue-400">Crédito Utilizado</span><span className="font-medium text-blue-600 dark:text-blue-400">- {formatCurrency(formData.credit_used)}</span></div>)}
                         <div className="flex justify-between text-lg font-bold border-t-2 border-brand-gray-300 dark:border-brand-gray-600 pt-2 mt-2"><span className="text-brand-gray-800 dark:text-white">Valor a Pagar</span><span className="text-brand-blue-600 dark:text-brand-blue-300">{formatCurrency(valorAPagar)}</span></div>
                       </div>
@@ -755,7 +776,8 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
               <div className="flex gap-3">
                 <Button variant="outline" onClick={onClose}>Fechar</Button>
                 <Button onClick={handleSaveClick} disabled={isLoading || !!operatingHoursWarning || !!conflictWarning}>
-                  <Save className="h-4 w-4 mr-2"/> {isEditing ? 'Salvar Alterações' : isBlockMode ? 'Salvar Bloqueio' : 'Criar Reserva'}
+                  <Save className="h-4 w-4 mr-2"/> 
+                  {isEditing ? 'Salvar Alterações' : isBlockMode ? 'Salvar Bloqueio' : isGroupBooking ? 'Criar Jogo em Grupo' : 'Pagar Reserva'}
                 </Button>
               </div>
             </div>

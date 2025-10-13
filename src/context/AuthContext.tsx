@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const initializeSession = async () => {
       setIsLoading(true);
       try {
-        const seedKey = 'initial_data_seeded_v10'; // Incremented version to force re-seed if needed
+        const seedKey = 'initial_data_seeded_v13_gamification_final';
         if (!localStorage.getItem(seedKey)) {
           await seedInitialData();
           localStorage.setItem(seedKey, 'true');

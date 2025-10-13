@@ -264,7 +264,6 @@ export interface CreditTransaction {
   type: 'cancellation_credit' | 'manual_adjustment' | 'reservation_payment' | 'goodwill_credit';
   description?: string;
   related_reservation_id?: string;
-  created_by?: string;
   created_at?: string;
 }
 
@@ -436,7 +435,7 @@ export interface GamificationPointTransaction {
   arena_id: string;
   aluno_id: string;
   points: number;
-  type: 'reservation_completed' | 'manual_adjustment' | 'achievement_unlocked' | 'reward_redemption';
+  type: 'reservation_created' | 'reservation_completed' | 'manual_adjustment' | 'achievement_unlocked' | 'reward_redemption' | 'cancellation_deduction';
   description: string;
   related_reservation_id: string | null;
   related_achievement_id: string | null;
