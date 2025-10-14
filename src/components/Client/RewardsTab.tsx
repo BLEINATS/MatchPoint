@@ -7,6 +7,7 @@ import ConfirmationModal from '../Shared/ConfirmationModal';
 import { localApi } from '../../lib/localApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { formatCurrency } from '../../utils/formatters';
 
 interface RewardsTabProps {
   aluno: Aluno | null;
@@ -32,11 +33,35 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
 
     setIsRedeeming(true);
     try {
-      // 1. Deduct points
-      const updatedPoints = (aluno.gamification_points || 0) - rewardToRedeem.points_cost;
-      await localApi.upsert('alunos', [{ ...aluno, gamification_points: updatedPoints }], aluno.arena_id);
+      const { data: allAlunos } = await localApi.select<Aluno>('alunos', aluno.arena_id);
+      const currentAlunoState = allAlunos.find(a => a.id === aluno.id);
+      if (!currentAlunoState) throw new Error("Aluno não encontrado para atualizar.");
+
+      const updatedAlunoData = { ...currentAlunoState };
+
+      const currentPoints = updatedAlunoData.gamification_points || 0;
+      if (currentPoints < rewardToRedeem.points_cost) {
+        throw new Error("Pontos insuficientes para resgatar esta recompensa.");
+      }
+      updatedAlunoData.gamification_points = currentPoints - rewardToRedeem.points_cost;
+
+      let creditValue = 0;
+      let creditDescription = `Crédito por resgate: ${rewardToRedeem.title}`;
+
+      if (rewardToRedeem.type === 'discount' && rewardToRedeem.value && rewardToRedeem.value > 0) {
+        creditValue = rewardToRedeem.value;
+      } else if (rewardToRedeem.type === 'free_hour') {
+        const standardHourPrice = 90; // Preço padrão de uma hora, pode ser buscado das configurações da arena no futuro
+        creditValue = standardHourPrice * (rewardToRedeem.value || 1);
+        creditDescription = `Crédito (1 Hora Grátis): ${rewardToRedeem.title}`;
+      }
       
-      // 2. Create point transaction
+      if (creditValue > 0) {
+        updatedAlunoData.credit_balance = (updatedAlunoData.credit_balance || 0) + creditValue;
+      }
+      
+      await localApi.upsert('alunos', [updatedAlunoData], aluno.arena_id);
+      
       await localApi.upsert('gamification_point_transactions', [{
         aluno_id: aluno.id,
         arena_id: aluno.arena_id,
@@ -45,46 +70,36 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
         description: `Resgate: ${rewardToRedeem.title}`,
       }], aluno.arena_id);
 
-      // 3. Update reward quantity if limited
-      if (rewardToRedeem.quantity !== null && rewardToRedeem.quantity > 0) {
-        await localApi.upsert('gamification_rewards', [{ ...rewardToRedeem, quantity: rewardToRedeem.quantity - 1 }], aluno.arena_id);
-      }
-
-      // 4. Add credit if it's a discount reward
-      if (rewardToRedeem.type === 'discount' && rewardToRedeem.value && rewardToRedeem.value > 0) {
-        const creditValue = rewardToRedeem.value;
-        const updatedCreditBalance = (aluno.credit_balance || 0) + creditValue;
-        await localApi.upsert('alunos', [{ ...aluno, credit_balance: updatedCreditBalance }], aluno.arena_id);
-        
+      if (creditValue > 0) {
         await localApi.upsert('credit_transactions', [{
             aluno_id: aluno.id,
             arena_id: aluno.arena_id,
             amount: creditValue,
             type: 'goodwill_credit',
-            description: `Crédito por resgate: ${rewardToRedeem.title}`,
+            description: creditDescription,
         }], aluno.arena_id);
+      }
 
-        if (aluno.profile_id) {
-            await localApi.upsert('notificacoes', [{
-                profile_id: aluno.profile_id,
-                arena_id: aluno.arena_id,
-                message: `Você resgatou "${rewardToRedeem.title}" e ganhou ${creditValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} de crédito!`,
-                type: 'gamification_reward',
-            }], aluno.arena_id);
-        }
-      } else {
-        if (aluno.profile_id) {
-            await localApi.upsert('notificacoes', [{
-              profile_id: aluno.profile_id,
-              arena_id: aluno.arena_id,
-              message: `Você resgatou "${rewardToRedeem.title}"!`,
-              type: 'gamification_reward',
-            }], aluno.arena_id);
-        }
+      if (rewardToRedeem.quantity !== null && rewardToRedeem.quantity > 0) {
+        await localApi.upsert('gamification_rewards', [{ ...rewardToRedeem, quantity: rewardToRedeem.quantity - 1 }], aluno.arena_id);
+      }
+
+      if (aluno.profile_id) {
+        const notificationMessage = creditValue > 0
+          ? `Você resgatou "${rewardToRedeem.title}" e ganhou ${formatCurrency(creditValue)} de crédito!`
+          : `Você resgatou "${rewardToRedeem.title}"!`;
+        
+        await localApi.upsert('notificacoes', [{
+            profile_id: aluno.profile_id,
+            arena_id: aluno.arena_id,
+            message: notificationMessage,
+            type: 'gamification_reward',
+        }], aluno.arena_id);
       }
 
       addToast({ message: 'Recompensa resgatada com sucesso!', type: 'success' });
-      refreshAlunoProfile();
+      await refreshAlunoProfile();
+
     } catch (error: any) {
       addToast({ message: `Erro ao resgatar: ${error.message}`, type: 'error' });
     } finally {
@@ -93,9 +108,8 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
     }
   };
 
-  const currentLevel = levels.find(l => (aluno.gamification_points || 0) >= l.points_required);
-  const currentLevelIndex = currentLevel ? levels.findIndex(l => l.id === currentLevel.id) : -1;
-  const nextLevel = currentLevelIndex > 0 ? levels[currentLevelIndex - 1] : null;
+  const currentLevel = levels.sort((a, b) => b.points_required - a.points_required).find(l => (aluno.gamification_points || 0) >= l.points_required);
+  const nextLevel = levels.sort((a, b) => a.points_required - b.points_required).find(l => (aluno.gamification_points || 0) < l.points_required);
 
   let progressPercentage = 0;
   if (currentLevel) {

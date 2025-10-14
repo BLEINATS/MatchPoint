@@ -1,38 +1,38 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../../context/AuthContext';
-import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, PlanoAula, Friendship, GamificationPointTransaction } from '../../types';
-import { Calendar, Compass, Search, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star, User, Users } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, PlanoAula, Friendship, GamificationPointTransaction, FinanceTransaction } from '../types';
+import { Calendar, Compass, Search, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star, User, Users, Banknote } from 'lucide-react';
 import { isAfter, startOfDay, isSameDay, format, parse, getDay, addDays, isBefore, endOfDay, addMinutes, subDays, isWithinInterval, formatDistanceToNow, isPast, differenceInHours, differenceInWeeks, endOfWeek, startOfWeek, addWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { parseDateStringAsLocal } from '../../utils/dateUtils';
-import UpcomingReservationCard from './UpcomingReservationCard';
-import Button from '../Forms/Button';
-import ArenaSelector from './ArenaSelector';
-import NextClassCard from './Student/NextClassCard';
-import ReservationModal from '../Reservations/ReservationModal';
-import { useToast } from '../../context/ToastContext';
-import { expandRecurringReservations } from '../../utils/reservationUtils';
-import DatePickerCalendar from './DatePickerCalendar';
-import ClientCancellationModal from './ClientCancellationModal';
-import ArenaInfoCard from './ArenaInfoCard';
-import ReservationDetailModal from './ReservationDetailModal';
-import { localApi } from '../../lib/localApi';
-import { formatCurrency } from '../../utils/formatters';
-import { processCancellation, awardPointsForCompletedReservation } from '../../utils/gamificationUtils';
-import HirePlayerModal from './HirePlayerModal';
-import AssignToReservationModal from './AssignToReservationModal';
-import AulasTab from './Student/AulasTab';
-import ClientProfileView from './ClientProfileView';
-import SideNavBar from './SideNavBar';
-import BottomNavBar from './BottomNavBar';
-import Alert from '../Shared/Alert';
-import FriendsView from './FriendsView';
+import { parseDateStringAsLocal } from '../utils/dateUtils';
+import UpcomingReservationCard from '../components/Client/UpcomingReservationCard';
+import Button from '../components/Forms/Button';
+import ArenaSelector from '../components/Client/ArenaSelector';
+import NextClassCard from '../components/Client/Student/NextClassCard';
+import ReservationModal from '../components/Reservations/ReservationModal';
+import { useToast } from '../context/ToastContext';
+import { expandRecurringReservations } from '../utils/reservationUtils';
+import DatePickerCalendar from '../components/Client/DatePickerCalendar';
+import ClientCancellationModal from '../components/Client/ClientCancellationModal';
+import ArenaInfoCard from '../components/Client/ArenaInfoCard';
+import ReservationDetailModal from '../components/Client/ReservationDetailModal';
+import { localApi } from '../lib/localApi';
+import { formatCurrency } from '../utils/formatters';
+import { processCancellation, awardPointsForCompletedReservation } from '../utils/gamificationUtils';
+import HirePlayerModal from '../components/Client/HirePlayerModal';
+import AssignToReservationModal from '../components/Client/AssignToReservationModal';
+import AulasTab from '../components/Client/Student/AulasTab';
+import ClientProfileView from '../components/Client/ClientProfileView';
+import SideNavBar from '../components/Client/SideNavBar';
+import BottomNavBar from '../components/Client/BottomNavBar';
+import Alert from '../components/Shared/Alert';
+import FriendsView from '../components/Client/FriendsView';
 import { useNavigate } from 'react-router-dom';
-import Timer from '../Shared/Timer';
-import PaymentModal from '../Shared/PaymentModal';
-import ProfileDetailModal from './ProfileDetailModal';
-import AttendanceReportModal from './Student/AttendanceReportModal';
+import Timer from '../components/Shared/Timer';
+import PaymentModal from '../components/Shared/PaymentModal';
+import ProfileDetailModal from '../components/Client/ProfileDetailModal';
+import AttendanceReportModal from '../components/Client/Student/AttendanceReportModal';
 
 type View = 'inicio' | 'aulas' | 'reservas' | 'amigos' | 'perfil';
 
@@ -48,6 +48,7 @@ const ClientDashboard: React.FC = () => {
   const [allArenaAlunos, setAllArenaAlunos] = useState<Aluno[]>([]);
   const [creditHistory, setCreditHistory] = useState<CreditTransaction[]>([]);
   const [gamificationHistory, setGamificationHistory] = useState<GamificationPointTransaction[]>([]);
+  const [paymentHistory, setPaymentHistory] = useState<{ id: string; date: string; description: string; amount: number }[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [professores, setProfessores] = useState<Professor[]>([]);
   const [atletas, setAtletas] = useState<AtletaAluguel[]>([]);
@@ -82,11 +83,11 @@ const ClientDashboard: React.FC = () => {
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [profileModalInitialTab, setProfileModalInitialTab] = useState<'credits' | 'gamification'>('credits');
+  const [profileModalInitialTab, setProfileModalInitialTab] = useState<'credits' | 'gamification' | 'payments'>('credits');
 
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
 
-  const handleOpenProfileModal = (tab: 'credits' | 'gamification') => {
+  const handleOpenProfileModal = (tab: 'credits' | 'gamification' | 'payments') => {
     setProfileModalInitialTab(tab);
     setIsProfileModalOpen(true);
   };
@@ -107,13 +108,13 @@ const ClientDashboard: React.FC = () => {
       setIsLoading(false);
       setQuadras([]); setAllArenaReservations([]); setTurmas([]); setProfessores([]);
       setAtletas([]); setPlanos([]); setAllArenaAlunos([]);
-      setReservas([]); setCreditHistory([]); setGamificationHistory([]);
+      setReservas([]); setCreditHistory([]); setGamificationHistory([]); setPaymentHistory([]);
       return;
     }
 
     setIsLoading(true);
     try {
-      const [quadrasRes, allReservasRes, turmasRes, profsRes, atletasRes, creditRes, gamificationHistoryRes, gamificationSettingsRes, levelsRes, rewardsRes, achievementsRes, unlockedAchievementsRes, planosRes, allAlunosRes, friendshipsRes, profilesRes] = await Promise.all([
+      const [quadrasRes, allReservasRes, turmasRes, profsRes, atletasRes, creditRes, gamificationHistoryRes, gamificationSettingsRes, levelsRes, rewardsRes, achievementsRes, unlockedAchievementsRes, planosRes, allAlunosRes, friendshipsRes, profilesRes, financeTransactionsRes] = await Promise.all([
         localApi.select<Quadra>('quadras', selectedArenaContext.id),
         localApi.select<Reserva>('reservas', selectedArenaContext.id),
         localApi.select<Turma>('turmas', selectedArenaContext.id),
@@ -130,6 +131,7 @@ const ClientDashboard: React.FC = () => {
         localApi.select<Aluno>('alunos', selectedArenaContext.id),
         localApi.select<Friendship>('friendships', 'all'),
         localApi.select<Profile>('profiles', 'all'),
+        localApi.select<FinanceTransaction>('finance_transactions', selectedArenaContext.id),
       ]);
       
       const now = new Date();
@@ -175,6 +177,30 @@ const ClientDashboard: React.FC = () => {
       if (alunoProfileForSelectedArena) {
         setGamificationHistory((gamificationHistoryRes.data || []).filter(t => t.aluno_id === alunoProfileForSelectedArena.id).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
         setCreditHistory((creditRes.data || []).filter(c => c.aluno_id === alunoProfileForSelectedArena.id).sort((a,b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime()));
+        
+        const reservationPayments = allReservations
+          .filter(r => r.profile_id === profile.id && r.payment_status === 'pago' && (r.total_price || 0) > 0)
+          .map(r => ({
+            id: `res-payment-${r.id}`,
+            date: r.updated_at || r.created_at,
+            description: `Pagamento Reserva: ${r.clientName} em ${format(parseDateStringAsLocal(r.date), 'dd/MM/yy')}`,
+            amount: r.total_price!,
+          }));
+
+        const planPayments = (financeTransactionsRes.data || [])
+          .filter(t => t.description.includes(alunoProfileForSelectedArena.name) && t.category === 'Mensalidade')
+          .map(t => ({
+            id: `plan-payment-${t.id}`,
+            date: t.created_at,
+            description: t.description,
+            amount: t.amount,
+          }));
+
+        const combinedPayments = [...reservationPayments, ...planPayments]
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        setPaymentHistory(combinedPayments);
+
         if (settings?.is_enabled) {
             setLevels((levelsRes.data || []).sort((a, b) => a.points_required - b.points_required));
             setRewards((rewardsRes.data || []).filter(r => r.is_active));
@@ -182,7 +208,7 @@ const ClientDashboard: React.FC = () => {
             setUnlockedAchievements((unlockedAchievementsRes.data || []).filter(ua => ua.aluno_id === alunoProfileForSelectedArena.id));
         }
       } else {
-        setCreditHistory([]); setGamificationHistory([]);
+        setCreditHistory([]); setGamificationHistory([]); setPaymentHistory([]);
       }
 
     } catch (error: any) {
@@ -596,7 +622,7 @@ const ClientDashboard: React.FC = () => {
       <AnimatePresence>{isHirePlayerModalOpen && reservationToHireFor && (<HirePlayerModal isOpen={isHirePlayerModalOpen} onClose={() => setIsHirePlayerModalOpen(false)} onConfirm={(profId) => handleHireProfessional(reservationToHireFor.id, profId)} reserva={reservationToHireFor} />)}</AnimatePresence>
       <AnimatePresence>{isAssignModalOpen && atletaToAssign && (<AssignToReservationModal isOpen={isAssignModalOpen} onClose={() => setIsAssignModalOpen(false)} onConfirm={(reservaId) => handleHireProfessional(reservaId, atletaToAssign.id)} profissional={atletaToAssign} minhasReservas={upcomingReservations} quadras={quadras} />)}</AnimatePresence>
       <AnimatePresence>{isPaymentModalOpen && (<PaymentModal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} onConfirm={handleConfirmPayment} reservation={paymentInfo?.reservation || null} amountToPay={paymentInfo?.amount || 0} isProcessing={isPaymentProcessing} />)}</AnimatePresence>
-      <AnimatePresence>{isProfileModalOpen && (<ProfileDetailModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} initialTab={profileModalInitialTab} aluno={alunoProfileForSelectedArena} creditHistory={creditHistory} gamificationHistory={gamificationHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} />)}</AnimatePresence>
+      <AnimatePresence>{isProfileModalOpen && (<ProfileDetailModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} initialTab={profileModalInitialTab} aluno={alunoProfileForSelectedArena} creditHistory={creditHistory} gamificationHistory={gamificationHistory} paymentHistory={paymentHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} />)}</AnimatePresence>
       <AnimatePresence>{isAttendanceModalOpen && alunoProfileForSelectedArena && (<AttendanceReportModal isOpen={isAttendanceModalOpen} onClose={() => setIsAttendanceModalOpen(false)} aluno={alunoProfileForSelectedArena} turmas={turmas} />)}</AnimatePresence>
     </div>
   );
@@ -619,8 +645,9 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
         {reservations.map(res => {
           const isOrganizer = res.profile_id === profileId;
           const isInvited = res.participants?.some(p => p.profile_id === profileId) && !isOrganizer;
+          const isClickable = !isPast || res.status === 'aguardando_pagamento';
           return (
-            <li key={res.id} onClick={() => onDetail(res)} className={`p-4 sm:p-6 transition-colors ${!isPast || res.status === 'aguardando_pagamento' ? 'hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer' : 'cursor-default opacity-70'}`}>
+            <li key={res.id} onClick={() => isClickable && onDetail(res)} className={`p-4 sm:p-6 transition-colors ${isClickable ? 'hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer' : 'cursor-default opacity-70'}`}>
               <div className="flex flex-col sm:flex-row justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
@@ -663,7 +690,7 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
   </div>
 );
 
-const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], levels: GamificationLevel[], rewards: GamificationReward[], onOpenProfileModal: (tab: 'credits' | 'gamification') => void, nextReservation?: Reserva, pendingReservations: Reserva[], onDetail: (reserva: Reserva) => void, onDataChange: () => void, nextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, selectedArena: Arena | null, onOpenAttendanceModal: () => void }> = ({ alunoProfile, planos, levels, rewards, onOpenProfileModal, nextReservation, pendingReservations, onDetail, onDataChange, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, selectedArena, onOpenAttendanceModal }) => { 
+const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], levels: GamificationLevel[], rewards: GamificationReward[], onOpenProfileModal: (tab: 'credits' | 'gamification' | 'payments') => void, nextReservation?: Reserva, pendingReservations: Reserva[], onDetail: (reserva: Reserva) => void, onDataChange: () => void, nextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, selectedArena: Arena | null, onOpenAttendanceModal: () => void }> = ({ alunoProfile, planos, levels, rewards, onOpenProfileModal, nextReservation, pendingReservations, onDetail, onDataChange, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, selectedArena, onOpenAttendanceModal }) => { 
   const [favoriteQuadras, setFavoriteQuadras] = useState<string[]>([]);
   const [timeUntilNext, setTimeUntilNext] = useState<string | null>(null);
 
@@ -845,18 +872,20 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
             <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCurrency(alunoProfile?.credit_balance || 0)}</p>
             <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 mt-1">Seu saldo para usar em reservas.</p>
         </button>
-        <button onClick={onOpenAttendanceModal} className="w-full text-left bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700 hover:shadow-lg hover:border-brand-blue-500 transition-all">
-          <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><Calendar className="h-5 w-5 mr-2 text-purple-500" /> Meu Progresso de Aulas</h4>
-          <div className="flex justify-around text-center">
-            <div><p className="text-2xl font-bold text-brand-gray-900 dark:text-white">{attendanceSummary.total}</p><p className="text-xs text-brand-gray-500">Aulas Dadas</p></div>
-            <div><p className="text-2xl font-bold text-green-500">{attendanceSummary.presencas}</p><p className="text-xs text-brand-gray-500">Presenças</p></div>
-            <div><p className="text-2xl font-bold text-red-500">{attendanceSummary.faltas}</p><p className="text-xs text-brand-gray-500">Faltas</p></div>
-          </div>
-          <div className="w-full bg-brand-gray-200 dark:bg-brand-gray-700 rounded-full h-2.5 mt-4">
-            <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${attendanceSummary.total > 0 ? (attendanceSummary.presencas / attendanceSummary.total) * 100 : 0}%` }}></div>
-          </div>
-          <p className="text-xs text-right mt-1 text-brand-gray-500">Frequência de {attendanceSummary.total > 0 ? ((attendanceSummary.presencas / attendanceSummary.total) * 100).toFixed(0) : 0}%</p>
-        </button>
+        {alunoProfile?.plan_id && (
+          <button onClick={onOpenAttendanceModal} className="w-full text-left bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700 hover:shadow-lg hover:border-brand-blue-500 transition-all">
+            <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><Calendar className="h-5 w-5 mr-2 text-purple-500" /> Meu Progresso de Aulas</h4>
+            <div className="flex justify-around text-center">
+              <div><p className="text-2xl font-bold text-brand-gray-900 dark:text-white">{attendanceSummary.total}</p><p className="text-xs text-brand-gray-500">Aulas Dadas</p></div>
+              <div><p className="text-2xl font-bold text-green-500">{attendanceSummary.presencas}</p><p className="text-xs text-brand-gray-500">Presenças</p></div>
+              <div><p className="text-2xl font-bold text-red-500">{attendanceSummary.faltas}</p><p className="text-xs text-brand-gray-500">Faltas</p></div>
+            </div>
+            <div className="w-full bg-brand-gray-200 dark:bg-brand-gray-700 rounded-full h-2.5 mt-4">
+              <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${attendanceSummary.total > 0 ? (attendanceSummary.presencas / attendanceSummary.total) * 100 : 0}%` }}></div>
+            </div>
+            <p className="text-xs text-right mt-1 text-brand-gray-500">Frequência de {attendanceSummary.total > 0 ? ((attendanceSummary.presencas / attendanceSummary.total) * 100).toFixed(0) : 0}%</p>
+          </button>
+        )}
       </div>
 
       <QuickBookingWidget quadras={sortedQuadras} reservas={reservas} onSlotClick={onSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} favoriteQuadras={favoriteQuadras} toggleFavorite={toggleFavorite} profile={profile} /> 

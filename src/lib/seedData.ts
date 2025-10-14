@@ -21,14 +21,14 @@ const createMinimalPricingRule = (quadraId: string, arenaId: string): PricingRul
 ];
 
 export const seedInitialData = async () => {
-  localStorage.clear();
+  // localStorage.clear(); // This was causing data loss on reload. It is now removed.
   console.log("Seeding initial data. All previous data cleared.");
   
   // 1. Profiles
   const adminProfile: Profile = { id: 'profile_admin_01', name: 'Admin MatchPlay', email: 'admin@matchplay.com', role: 'admin_arena', avatar_url: null, created_at: new Date().toISOString() };
-  const viniProfile: Profile = { id: 'profile_vini_01', name: 'Vini Bleinat', email: 'vini@bleinat.com.br', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(11) 98765-4321' };
-  const anaProfile: Profile = { id: 'profile_ana_01', name: 'Ana Pereira', email: 'ana@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(21) 91234-5678' };
-  const brunoProfile: Profile = { id: 'profile_bruno_01', name: 'Bruno Lima', email: 'bruno@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(31) 95555-4444' };
+  const viniProfile: Profile = { id: 'profile_vini_01', name: 'Vini Bleinat', email: 'vini@bleinat.com.br', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(11) 98765-4321', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
+  const anaProfile: Profile = { id: 'profile_ana_01', name: 'Ana Pereira', email: 'ana@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(21) 91234-5678', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
+  const brunoProfile: Profile = { id: 'profile_bruno_01', name: 'Bruno Lima', email: 'bruno@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(31) 95555-4444', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
   
   await localApi.upsert('profiles', [adminProfile, viniProfile, anaProfile, brunoProfile], 'all', true);
 

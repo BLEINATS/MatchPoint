@@ -32,7 +32,7 @@ import FilterPanel from '../components/Reservations/FilterPanel';
 import { startOfDay, format, startOfMonth, endOfMonth, isBefore, parse, addYears, subDays, getDay, addDays, endOfDay, addMinutes } from 'date-fns';
 import { expandRecurringReservations } from '../utils/reservationUtils';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
-import { processReservationCompletion, reverseReservationPoints } from '../utils/gamificationUtils';
+import { awardPointsForReservation, processCancellation } from '../utils/gamificationUtils';
 import { formatCurrency } from '../utils/formatters';
 
 type ViewMode = 'agenda' | 'calendar' | 'list';
@@ -225,8 +225,8 @@ const Reservations: React.FC = () => {
       const { data: savedReservas } = await localApi.upsert('reservas', [dataToUpsert], arena.id);
       const savedReserva = savedReservas[0];
   
-      if (savedReserva && alunoForReservation && !isEditing) {
-        await processReservationCompletion(savedReserva, alunoForReservation, arena.id);
+      if (savedReserva && !isEditing && savedReserva.status === 'confirmada') {
+        await awardPointsForReservation(savedReserva, arena.id);
       }
 
       if (savedReserva && savedReserva.credit_used && savedReserva.credit_used > 0) {
@@ -278,30 +278,7 @@ const Reservations: React.FC = () => {
         const reserva = reservas.find(r => r.id === reservaId);
         if (!reserva) throw new Error('Reserva não encontrada.');
 
-        const pointsToDeduct = await reverseReservationPoints(reserva, arena.id);
-        
-        let targetAluno = reserva.profile_id ? alunos.find(a => a.profile_id === reserva.profile_id) : alunos.find(a => a.name === reserva.clientName);
-        
-        if (targetAluno) {
-            const { data: updatedAlunos } = await localApi.select<Aluno>('alunos', arena.id);
-            const latestAlunoState = updatedAlunos.find(a => a.id === targetAluno!.id);
-            if (latestAlunoState) {
-                const updatedAluno = { ...latestAlunoState };
-                let hasChanges = false;
-                if (creditAmount > 0) {
-                    updatedAluno.credit_balance = (updatedAluno.credit_balance || 0) + creditAmount;
-                    await localApi.upsert('credit_transactions', [{ aluno_id: targetAluno.id, arena_id: arena.id, amount: creditAmount, type: 'cancellation_credit', description: `Crédito (${reason}) da reserva #${reserva.id.substring(0, 8)}`, related_reservation_id: reserva.id }], arena.id);
-                    hasChanges = true;
-                }
-                if (pointsToDeduct > 0) {
-                    updatedAluno.gamification_points = (updatedAluno.gamification_points || 0) - pointsToDeduct;
-                    hasChanges = true;
-                }
-                if (hasChanges) {
-                    await localApi.upsert('alunos', [updatedAluno], arena.id);
-                }
-            }
-        }
+        const { pointsDeducted } = await processCancellation(reserva, arena.id);
         
         const updatePayload: Partial<Reserva> = { status: 'cancelada' };
         if (creditAmount === 0 && reserva.total_price && reserva.total_price > 0) {
@@ -311,7 +288,7 @@ const Reservations: React.FC = () => {
         
         addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
         if (creditAmount > 0) addToast({ message: `${formatCurrency(creditAmount)} de crédito aplicado.`, type: 'info' });
-        if (pointsToDeduct > 0) addToast({ message: `${pointsToDeduct} pontos deduzidos.`, type: 'info' });
+        if (pointsDeducted > 0) addToast({ message: `${pointsDeducted} pontos deduzidos.`, type: 'info' });
 
     } catch (error: any) {
         addToast({ message: `Erro ao processar cancelamento: ${error.message}`, type: 'error' });

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Aluno, CreditTransaction, GamificationPointTransaction, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement } from '../../types';
-import { X, CreditCard, Gift } from 'lucide-react';
+import { X, CreditCard, Gift, Banknote } from 'lucide-react';
 import Button from '../Forms/Button';
 import RewardsTab from './RewardsTab';
 import { formatCurrency } from '../../utils/formatters';
 import { format } from 'date-fns';
+import PaymentsHistoryTab from './PaymentsHistoryTab';
 
 const ClientCreditsTab: React.FC<{balance: number, history: CreditTransaction[]}> = ({balance, history}) => {
     return (
@@ -45,10 +46,11 @@ const ClientCreditsTab: React.FC<{balance: number, history: CreditTransaction[]}
 interface ProfileDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab: 'credits' | 'gamification';
+  initialTab: 'credits' | 'gamification' | 'payments';
   aluno: Aluno | null;
   creditHistory: CreditTransaction[];
   gamificationHistory: GamificationPointTransaction[];
+  paymentHistory: { id: string; date: string; description: string; amount: number }[];
   levels: GamificationLevel[];
   rewards: GamificationReward[];
   achievements: GamificationAchievement[];
@@ -63,6 +65,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   aluno,
   creditHistory,
   gamificationHistory,
+  paymentHistory,
   levels,
   rewards,
   achievements,
@@ -74,6 +77,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   const tabs = [
     { id: 'credits', label: 'Créditos', icon: CreditCard },
     { id: 'gamification', label: 'Gamificação', icon: Gift },
+    { id: 'payments', label: 'Pagamentos', icon: Banknote },
   ];
 
   const renderContent = () => {
@@ -92,6 +96,8 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
             history={gamificationHistory}
           />
         ) : <p>O sistema de gamificação não está ativo para esta arena.</p>;
+      case 'payments':
+        return <PaymentsHistoryTab history={paymentHistory} />;
       default:
         return null;
     }
@@ -118,7 +124,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 {tabs.map(tab => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id as 'credits' | 'gamification')}
+                    onClick={() => setActiveTab(tab.id as 'credits' | 'gamification' | 'payments')}
                     className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${
                       activeTab === tab.id
                         ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400'

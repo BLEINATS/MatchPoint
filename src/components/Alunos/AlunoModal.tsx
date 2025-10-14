@@ -11,6 +11,8 @@ import GamificationTab from './GamificationTab';
 import CreditsTab from './CreditsTab';
 import { localApi } from '../../lib/localApi';
 import { formatCurrency } from '../../utils/formatters';
+import ConfirmationModal from '../Shared/ConfirmationModal';
+import { useAuth } from '../../context/AuthContext';
 
 interface AlunoModalProps {
   isOpen: boolean;
@@ -28,6 +30,7 @@ interface AlunoModalProps {
 const DEFAULT_SPORTS = ['Beach Tennis', 'Futevôlei', 'Futebol Society', 'Vôlei', 'Tênis', 'Padel', 'Funcional'];
 
 const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDelete, initialData, availableSports, planos, modalType, allAlunos, onDataChange }) => {
+  const { arena } = useAuth();
   const [formData, setFormData] = useState<Partial<Omit<Aluno, 'id' | 'arena_id' | 'created_at'>>>({
     name: '',
     email: '',
@@ -42,6 +45,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState<'details' | 'credits' | 'gamification'>('details');
   const [internalAluno, setInternalAluno] = useState<Aluno | null>(initialData);
+  const [isRenewConfirmOpen, setIsRenewConfirmOpen] = useState(false);
   
   const isEditing = !!initialData;
 
@@ -58,6 +62,8 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   }, [formData.plan_id, planos]);
 
   const isUnlimitedPlan = useMemo(() => selectedPlan?.num_aulas === null, [selectedPlan]);
+
+  const canRenew = isEditing && formData.plan_id && selectedPlan && selectedPlan.price > 0;
 
   const refreshInternalData = useCallback(async () => {
     if (!initialData?.id || !initialData?.arena_id) return;
@@ -131,7 +137,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
       ...formData,
       plan_name: selectedPlan?.name || 'Avulso',
       monthly_fee: selectedPlan?.price || 0,
-      aulas_restantes: isUnlimitedPlan ? null : (formData.aulas_restantes || 0),
+      aulas_restantes: isUnlimitedPlan ? null : (formData.aulas_restantes ?? 0),
     };
 
     if (isEditing && internalAluno) {
@@ -144,6 +150,43 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   const handleDelete = () => {
     if (initialData) {
       onDelete(initialData.id);
+    }
+  };
+
+  const handleRenewCredits = () => {
+    setIsRenewConfirmOpen(true);
+  };
+
+  const handleConfirmRenew = async () => {
+    if (!arena || !internalAluno || !selectedPlan) {
+      addToast({ message: 'Erro: Dados do aluno ou plano incompletos.', type: 'error' });
+      return;
+    }
+    
+    try {
+      // 1. Create financial transaction
+      await localApi.upsert('finance_transactions', [{
+          arena_id: arena.id,
+          description: `Renovação Plano: ${selectedPlan.name} - ${internalAluno.name}`,
+          amount: selectedPlan.price,
+          type: 'receita' as 'receita',
+          category: 'Mensalidade',
+          date: format(new Date(), 'yyyy-MM-dd'),
+      }], arena.id);
+
+      // 2. Reset student credits
+      const creditsToRenew = selectedPlan.num_aulas === null ? null : selectedPlan.num_aulas;
+      const updatedAluno = { ...internalAluno, aulas_restantes: creditsToRenew };
+      
+      await localApi.upsert('alunos', [updatedAluno], arena.id);
+      
+      addToast({ message: 'Créditos renovados e pagamento registrado!', type: 'success' });
+      
+      // 3. Refresh data and close modals
+      handleInternalDataChange(); // This should refresh the data inside the modal
+      setIsRenewConfirmOpen(false);
+    } catch (error: any) {
+      addToast({ message: `Erro ao renovar créditos: ${error.message}`, type: 'error' });
     }
   };
 
@@ -178,131 +221,148 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   ];
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50" onClick={onClose}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white dark:bg-brand-gray-900 rounded-lg w-full max-w-2xl shadow-xl flex flex-col max-h-[90vh]"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center p-6 border-b border-brand-gray-200 dark:border-brand-gray-700">
-              <h3 className="text-xl font-semibold text-brand-gray-900 dark:text-white">
-                {modalTitle}
-              </h3>
-              <button onClick={onClose} className="p-1 rounded-full hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
-                <X className="h-5 w-5 text-brand-gray-500" />
-              </button>
-            </div>
-
-            {isEditing && (
-              <div className="border-b border-brand-gray-200 dark:border-brand-gray-700">
-                <nav className="-mb-px flex space-x-4 px-6" aria-label="Tabs">
-                  {tabs.map(tab => (
-                    <button
-                      key={tab.id}
-                      onClick={() => handleTabChange(tab.id as 'details' | 'credits' | 'gamification')}
-                      className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${
-                        activeTab === tab.id
-                          ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400'
-                          : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700 hover:border-brand-gray-300 dark:text-brand-gray-400 dark:hover:text-brand-gray-200 dark:hover:border-brand-gray-600'
-                      }`}
-                    >
-                      <tab.icon className="mr-2 h-5 w-5" />
-                      {tab.label}
-                    </button>
-                  ))}
-                </nav>
+    <>
+      <AnimatePresence>
+        {isOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50" onClick={onClose}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white dark:bg-brand-gray-900 rounded-lg w-full max-w-2xl shadow-xl flex flex-col max-h-[90vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center p-6 border-b border-brand-gray-200 dark:border-brand-gray-700">
+                <h3 className="text-xl font-semibold text-brand-gray-900 dark:text-white">
+                  {modalTitle}
+                </h3>
+                <button onClick={onClose} className="p-1 rounded-full hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
+                  <X className="h-5 w-5 text-brand-gray-500" />
+                </button>
               </div>
-            )}
 
-            <div className="p-6 space-y-4 overflow-y-auto">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeTab}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {activeTab === 'details' && (
-                    <div className="space-y-4">
-                      <Input label="Nome Completo" name="name" value={formData.name} onChange={handleChange} icon={<User className="h-4 w-4 text-brand-gray-400"/>} required />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <Input label="E-mail" name="email" type="email" value={formData.email || ''} onChange={handleChange} icon={<Mail className="h-4 w-4 text-brand-gray-400"/>} />
-                        <Input label="Telefone" name="phone" value={formData.phone || ''} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} />
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Status</label>
-                          <select name="status" value={formData.status} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
-                            <option value="ativo">Ativo</option>
-                            <option value="inativo">Inativo</option>
-                            <option value="experimental">Experimental</option>
-                          </select>
-                        </div>
-                        <Input label="Data de Início" name="join_date" type="date" value={formData.join_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte</label>
-                          <select name="sport" value={formData.sport || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
-                            <option value="">Selecione um esporte</option>
-                            {allSports.map(sport => <option key={sport} value={sport}>{sport}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Plano Contratado</label>
-                          <select name="plan_id" value={formData.plan_id || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
-                            <option value="">Nenhum (Avulso)</option>
-                            {activePlanOptions.map(plan => <option key={plan.id} value={plan.id}>{plan.name} ({formatCurrency(plan.price)})</option>)}
-                          </select>
-                        </div>
-                      </div>
-                      <Input
-                        label="Aulas Restantes (Créditos)"
-                        name="aulas_restantes"
-                        type="number"
-                        value={isUnlimitedPlan ? '' : (formData.aulas_restantes ?? 0).toString()}
-                        onChange={handleChange}
-                        icon={<Hash className="h-4 w-4 text-brand-gray-400" />}
-                        placeholder={isUnlimitedPlan ? 'Ilimitado' : 'Ex: 8'}
-                        disabled={isUnlimitedPlan}
-                      />
-                    </div>
-                  )}
-                  {activeTab === 'credits' && internalAluno && (
-                    <CreditsTab aluno={internalAluno} onDataChange={handleInternalDataChange} />
-                  )}
-                  {activeTab === 'gamification' && internalAluno && (
-                    <GamificationTab aluno={internalAluno} onDataChange={handleInternalDataChange} />
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </div>
+              {isEditing && (
+                <div className="border-b border-brand-gray-200 dark:border-brand-gray-700">
+                  <nav className="-mb-px flex space-x-4 px-6" aria-label="Tabs">
+                    {tabs.map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => handleTabChange(tab.id as 'details' | 'credits' | 'gamification')}
+                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${
+                          activeTab === tab.id
+                            ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400'
+                            : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700 hover:border-brand-gray-300 dark:text-brand-gray-400 dark:hover:text-brand-gray-200 dark:hover:border-brand-gray-600'
+                        }`}
+                      >
+                        <tab.icon className="mr-2 h-5 w-5" />
+                        {tab.label}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+              )}
 
-            <div className="p-6 mt-auto border-t border-brand-gray-200 dark:border-brand-gray-700 flex justify-between items-center">
-              <div>
-                {isEditing && (
-                  <Button variant="outline" onClick={handleDelete} className="text-red-500 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Excluir
+              <div className="p-6 space-y-4 overflow-y-auto">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {activeTab === 'details' && (
+                      <div className="space-y-4">
+                        <Input label="Nome Completo" name="name" value={formData.name} onChange={handleChange} icon={<User className="h-4 w-4 text-brand-gray-400"/>} required />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <Input label="E-mail" name="email" type="email" value={formData.email || ''} onChange={handleChange} icon={<Mail className="h-4 w-4 text-brand-gray-400"/>} />
+                          <Input label="Telefone" name="phone" value={formData.phone || ''} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Status</label>
+                            <select name="status" value={formData.status} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                              <option value="ativo">Ativo</option>
+                              <option value="inativo">Inativo</option>
+                              <option value="experimental">Experimental</option>
+                            </select>
+                          </div>
+                          <Input label="Data de Início" name="join_date" type="date" value={formData.join_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte</label>
+                            <select name="sport" value={formData.sport || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                              <option value="">Selecione um esporte</option>
+                              {allSports.map(sport => <option key={sport} value={sport}>{sport}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Plano Contratado</label>
+                            <select name="plan_id" value={formData.plan_id || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                              <option value="">Nenhum (Avulso)</option>
+                              {activePlanOptions.map(plan => <option key={plan.id} value={plan.id}>{plan.name} ({formatCurrency(plan.price)})</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        <Input
+                          label="Aulas Restantes (Créditos)"
+                          name="aulas_restantes"
+                          type="number"
+                          value={isUnlimitedPlan ? '' : (formData.aulas_restantes ?? 0).toString()}
+                          onChange={handleChange}
+                          icon={<Hash className="h-4 w-4 text-brand-gray-400" />}
+                          placeholder={isUnlimitedPlan ? 'Ilimitado' : 'Ex: 8'}
+                          disabled={isUnlimitedPlan}
+                        />
+                      </div>
+                    )}
+                    {activeTab === 'credits' && internalAluno && (
+                      <CreditsTab aluno={internalAluno} onDataChange={handleInternalDataChange} />
+                    )}
+                    {activeTab === 'gamification' && internalAluno && (
+                      <GamificationTab aluno={internalAluno} onDataChange={handleInternalDataChange} />
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              <div className="p-6 mt-auto border-t border-brand-gray-200 dark:border-brand-gray-700 flex justify-between items-center">
+                <div className="flex gap-3">
+                  {isEditing && (
+                    <Button variant="outline" onClick={handleDelete} className="text-red-500 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Excluir
+                    </Button>
+                  )}
+                  {canRenew && (
+                    <Button variant="secondary" onClick={handleRenewCredits}>
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Renovar Créditos
+                    </Button>
+                  )}
+                </div>
+                <div className="flex justify-end gap-3">
+                  <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                  <Button onClick={handleSave}>
+                    <Save className="h-4 w-4 mr-2"/> {isEditing ? 'Salvar Alterações' : 'Adicionar'}
                   </Button>
-                )}
+                </div>
               </div>
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={onClose}>Cancelar</Button>
-                <Button onClick={handleSave}>
-                  <Save className="h-4 w-4 mr-2"/> {isEditing ? 'Salvar Alterações' : 'Adicionar'}
-                </Button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <ConfirmationModal
+        isOpen={isRenewConfirmOpen}
+        onClose={() => setIsRenewConfirmOpen(false)}
+        onConfirm={handleConfirmRenew}
+        title="Confirmar Renovação?"
+        message={<p>Isso registrará um pagamento de <strong>{formatCurrency(selectedPlan?.price || 0)}</strong> e redefinirá os créditos de aula de {formData.name}. Deseja continuar?</p>}
+        confirmText="Sim, Renovar"
+        icon={<DollarSign className="h-10 w-10 text-green-500" />}
+      />
+    </>
   );
 };
 

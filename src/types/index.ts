@@ -15,6 +15,13 @@ export interface User {
   created_at: string;
 }
 
+export interface CreditCardInfo {
+  id: string;
+  last4: string;
+  brand: string;
+  cardholder_name: string;
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -26,6 +33,12 @@ export interface Profile {
   birth_date?: string;
   gender?: 'masculino' | 'feminino' | 'outro' | 'nao_informado';
   created_at: string;
+  credit_cards?: CreditCardInfo[];
+  notification_preferences?: {
+    game_invites?: boolean;
+    friend_requests?: boolean;
+    arena_news?: boolean;
+  };
 }
 
 export interface Arena {

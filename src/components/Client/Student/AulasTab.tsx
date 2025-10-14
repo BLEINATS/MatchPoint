@@ -1,12 +1,18 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Aluno, Turma, Professor, Quadra, PlanoAula } from '../../../types';
-import { Calendar, Clock, GraduationCap, MapPin, Users, RefreshCw } from 'lucide-react';
-import { format, isAfter, isSameDay, parse, getDay, isPast, addMinutes, startOfDay } from 'date-fns';
+import { Calendar, Clock, GraduationCap, MapPin, Users, RefreshCw, AlertTriangle, Info } from 'lucide-react';
+import { format, isAfter, isSameDay, parse, getDay, isPast, addMinutes, startOfDay, addMonths, addYears, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DatePickerCalendar from '../DatePickerCalendar';
 import { parseDateStringAsLocal } from '../../../utils/dateUtils';
 import ClassParticipantsModal from './ClassParticipantsModal';
+import RenewPlanModal from './RenewPlanModal';
+import Button from '../../Forms/Button';
+import ConfirmationModal from '../../Shared/ConfirmationModal';
+import { useToast } from '../../../context/ToastContext';
+import { localApi } from '../../../lib/localApi';
+import Alert from '../../Shared/Alert';
 
 interface AulasTabProps {
   aluno: Aluno;
@@ -21,10 +27,41 @@ interface AulasTabProps {
 const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professores, quadras, planos, onDataChange }) => {
   const [selectedDate, setSelectedDate] = useState(startOfDay(new Date()));
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState<any | null>(null);
+  const [isCancelPlanConfirmOpen, setIsCancelPlanConfirmOpen] = useState(false);
+  const { addToast } = useToast();
 
   const currentPlan = useMemo(() => planos.find(p => p.id === aluno.plan_id), [planos, aluno.plan_id]);
   const isUnlimited = useMemo(() => currentPlan?.num_aulas === null, [currentPlan]);
+
+  const { expirationDateObject, isExpired } = useMemo(() => {
+    if (!currentPlan || !aluno.join_date || currentPlan.duration_type === 'avulso') {
+        return { expirationDateObject: null, isExpired: false };
+    }
+    const joinDate = parseDateStringAsLocal(aluno.join_date);
+    let expiry: Date;
+    switch (currentPlan.duration_type) {
+        case 'mensal':
+            expiry = addMonths(joinDate, 1);
+            break;
+        case 'trimestral':
+            expiry = addMonths(joinDate, 3);
+            break;
+        case 'semestral':
+            expiry = addMonths(joinDate, 6);
+            break;
+        case 'anual':
+            expiry = addYears(joinDate, 1);
+            break;
+        default:
+            return { expirationDateObject: null, isExpired: false };
+    }
+    const expired = isBefore(expiry, startOfDay(new Date()));
+    return { expirationDateObject: expiry, isExpired: expired };
+  }, [currentPlan, aluno.join_date]);
+
+  const expirationDateString = expirationDateObject ? format(expirationDateObject, "dd/MM/yyyy") : null;
 
   const getSlotsForTurma = useCallback((turma: Turma) => {
     const slots = [];
@@ -113,20 +150,77 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
     setSelectedClass(classData);
     setIsModalOpen(true);
   };
+
+  const handleCancelPlan = async () => {
+    try {
+        const updatedAluno = {
+            ...aluno,
+            plan_id: null,
+            plan_name: 'Avulso',
+            monthly_fee: 0,
+            aulas_restantes: 0,
+        };
+        await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
+        addToast({ message: 'Seu plano foi cancelado.', type: 'success' });
+        onDataChange();
+    } catch (e) {
+        addToast({ message: 'Erro ao cancelar o plano.', type: 'error' });
+    } finally {
+        setIsCancelPlanConfirmOpen(false);
+    }
+  };
   
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-          <h3 className="text-xl font-bold">{currentPlan?.name || 'Plano Avulso'}</h3>
-          <p className="text-sm text-brand-gray-500">Seu plano de aulas atual.</p>
-          <div className="mt-4 text-4xl font-bold text-brand-blue-500">
-            {isUnlimited ? '∞' : (aluno.aulas_restantes ?? 0)}
-            <span className="text-lg font-medium text-brand-gray-600 dark:text-brand-gray-400 ml-2">aulas restantes</span>
-          </div>
+      <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+        <div className="flex justify-between items-start">
+            <h3 className="text-xl font-bold">{currentPlan?.name || 'Plano Avulso'}</h3>
+            {currentPlan && (
+                isExpired ? (
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">Vencido</span>
+                ) : (
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">Ativo</span>
+                )
+            )}
+        </div>
+        <p className="text-sm text-brand-gray-500">Seu plano de aulas atual.</p>
+        <div className="mt-4 text-4xl font-bold text-brand-blue-500">
+          {isUnlimited ? '∞' : (aluno.aulas_restantes ?? 0)}
+          <span className="text-lg font-medium text-brand-gray-600 dark:text-brand-gray-400 ml-2">aulas restantes</span>
+        </div>
+        {expirationDateString && (
+          <p className="text-xs text-brand-gray-500 mt-1">
+            {isExpired ? 'Venceu em:' : 'Renovação automática em:'} {expirationDateString}
+          </p>
+        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setIsRenewModalOpen(true)}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Renovar / Trocar Plano
+          </Button>
+          {currentPlan && (
+            <Button variant="outline" size="sm" className="text-red-500 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={() => setIsCancelPlanConfirmOpen(true)}>
+                Cancelar Plano
+            </Button>
+          )}
         </div>
       </div>
       
+      {isExpired && (
+        <Alert
+            type="warning"
+            title="Seu plano está vencido!"
+            message={
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                    <p>Para continuar agendando aulas, por favor, renove seu plano.</p>
+                    <Button size="sm" onClick={() => setIsRenewModalOpen(true)} className="mt-2 sm:mt-0">
+                        Renovar Agora
+                    </Button>
+                </div>
+            }
+        />
+      )}
+
       <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
         <h3 className="text-xl font-semibold mb-4">Minhas Próximas Aulas</h3>
         {scheduledClasses.length > 0 ? (
@@ -155,7 +249,7 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
               <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
                 {availableSlots.map(slot => {
                   const isFull = slot.enrolledCount >= slot.capacity;
-                  const isDisabled = slot.isPast || isFull;
+                  const isDisabled = slot.isPast || isFull || isExpired;
                   return (
                     <button 
                       key={slot.id} 
@@ -180,6 +274,8 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
                           <span className="font-bold text-brand-gray-500">Encerrado</span>
                         ) : isFull ? (
                           <span className="font-bold text-red-500">Lotado</span>
+                        ) : isExpired ? (
+                          <span className="font-bold text-yellow-500">Plano Vencido</span>
                         ) : (
                           <>
                               <Users className="h-4 w-4"/>
@@ -210,6 +306,31 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
           />
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {isRenewModalOpen && (
+            <RenewPlanModal
+                isOpen={isRenewModalOpen}
+                onClose={() => setIsRenewModalOpen(false)}
+                aluno={aluno}
+                planos={planos}
+                onDataChange={onDataChange}
+            />
+        )}
+      </AnimatePresence>
+      <ConfirmationModal
+        isOpen={isCancelPlanConfirmOpen}
+        onClose={() => setIsCancelPlanConfirmOpen(false)}
+        onConfirm={handleCancelPlan}
+        title="Cancelar Plano?"
+        message={
+            <>
+                <p>Você tem certeza que deseja cancelar seu plano?</p>
+                <p className="mt-2 font-bold text-red-500">Todos os seus créditos de aula restantes serão perdidos.</p>
+            </>
+        }
+        confirmText="Sim, Cancelar Plano"
+        icon={<AlertTriangle className="h-10 w-10 text-red-500" />}
+      />
     </div>
   );
 };

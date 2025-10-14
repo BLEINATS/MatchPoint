@@ -1,13 +1,15 @@
 import React from 'react';
-import { Aluno, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, CreditTransaction, GamificationPointTransaction, AtletaAluguel } from '../../types';
+import { Aluno, CreditTransaction, GamificationPointTransaction, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, Profile } from '../../types';
 import AtletasTab from './AtletasTab';
 import RewardsTab from './RewardsTab';
 import { formatCurrency } from '../../utils/formatters';
 import { CreditCard, CheckCircle, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
+import PaymentMethodsTab from './PaymentMethodsTab';
 
 interface ClientProfileViewProps {
   aluno: Aluno | null;
+  profile: Profile | null;
   creditHistory: CreditTransaction[];
   gamificationHistory: GamificationPointTransaction[];
   levels: GamificationLevel[];
@@ -17,10 +19,12 @@ interface ClientProfileViewProps {
   gamificationEnabled: boolean;
   atletas: AtletaAluguel[];
   onHireAtleta: (atleta: AtletaAluguel) => void;
+  onProfileUpdate: (updatedProfile: Partial<Profile>) => void;
 }
 
 const ClientProfileView: React.FC<ClientProfileViewProps> = ({
   aluno,
+  profile,
   creditHistory,
   gamificationHistory,
   levels,
@@ -29,8 +33,11 @@ const ClientProfileView: React.FC<ClientProfileViewProps> = ({
   unlockedAchievements,
   gamificationEnabled,
   atletas,
-  onHireAtleta
+  onHireAtleta,
+  onProfileUpdate
 }) => {
+  if (!profile) return null;
+  
   return (
     <div className="space-y-8">
       <h2 className="text-2xl font-bold text-brand-gray-800 dark:text-white">Meu Perfil</h2>
@@ -51,6 +58,10 @@ const ClientProfileView: React.FC<ClientProfileViewProps> = ({
           />
         </div>
       )}
+
+      <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+        <PaymentMethodsTab profile={profile} onProfileUpdate={onProfileUpdate} />
+      </div>
 
       <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
         <AtletasTab atletas={atletas} onHire={onHireAtleta} />
@@ -74,7 +85,7 @@ const CreditsTab: React.FC<{balance: number, history: CreditTransaction[]}> = ({
             <div>
                 <h4 className="font-semibold mb-3">Histórico de Transações</h4>
                 {history.length > 0 ? (
-                    <ul className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700 max-h-60 overflow-y-auto">
+                    <ul className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700 max-h-60 overflow-y-auto pr-2">
                         {history.map(item => (
                         <li key={item.id} className="py-3 flex justify-between items-center">
                             <div>
@@ -93,6 +104,5 @@ const CreditsTab: React.FC<{balance: number, history: CreditTransaction[]}> = ({
         </div>
     );
 };
-
 
 export default ClientProfileView;

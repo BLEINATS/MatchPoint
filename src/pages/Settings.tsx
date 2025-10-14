@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Building, FileText, BarChart2, CheckCircle, Save, ArrowLeft, User, Lock, CreditCard, DollarSign } from 'lucide-react';
+import { Building, FileText, BarChart2, CheckCircle, Save, ArrowLeft, User, Lock, CreditCard, DollarSign, Bell } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { Arena, Profile } from '../types';
@@ -12,9 +12,11 @@ import OperationTab from '../components/Settings/OperationTab';
 import PlanTab from '../components/Settings/PlanTab';
 import PaymentSettingsTab from '../components/Settings/PaymentSettingsTab';
 import PlanosAulasTab from '../components/Settings/PlanosAulasTab';
+import NotificationSettingsTab from './Settings/NotificationSettingsTab';
+import SecurityTab from '../components/Settings/SecurityTab';
 
 type AdminTabType = 'profile' | 'operation' | 'payments' | 'planos_aulas' | 'plan';
-type ClientTabType = 'my-profile' | 'security';
+type ClientTabType = 'my-profile' | 'notifications' | 'security';
 
 const Settings: React.FC = () => {
   const { arena, updateArena, profile, updateProfile, isLoading: isAuthLoading } = useAuth();
@@ -37,6 +39,7 @@ const Settings: React.FC = () => {
 
   const clientTabs: { id: ClientTabType; label: string; icon: React.ElementType }[] = [
     { id: 'my-profile', label: 'Meu Perfil', icon: User },
+    { id: 'notifications', label: 'Notificações', icon: Bell },
     { id: 'security', label: 'Segurança', icon: Lock },
   ];
 
@@ -90,13 +93,10 @@ const Settings: React.FC = () => {
       switch (activeTab) {
         case 'my-profile':
           return <ClientProfileSettingsTab formData={profileFormData} setFormData={setProfileFormData} />;
+        case 'notifications':
+          return <NotificationSettingsTab profile={profileFormData} setProfile={setProfileFormData} />;
         case 'security':
-          return (
-            <div>
-              <h3 className="text-lg font-semibold text-brand-gray-900 dark:text-white">Alterar Senha</h3>
-              <p className="mt-2 text-brand-gray-500 dark:text-brand-gray-400">Funcionalidade de alteração de senha em desenvolvimento.</p>
-            </div>
-          );
+          return <SecurityTab />;
         default:
           return null;
       }
@@ -113,7 +113,7 @@ const Settings: React.FC = () => {
     );
   }
   
-  const canSave = isAdmin ? (activeTab === 'profile' || activeTab === 'operation' || activeTab === 'payments') : (activeTab === 'my-profile');
+  const canSave = isAdmin ? (activeTab === 'profile' || activeTab === 'operation' || activeTab === 'payments') : (activeTab === 'my-profile' || activeTab === 'notifications');
 
   return (
     <Layout>
@@ -124,7 +124,7 @@ const Settings: React.FC = () => {
             className="inline-flex items-center text-sm font-medium text-brand-gray-600 dark:text-brand-gray-400 hover:text-brand-blue-500 dark:hover:text-brand-blue-400 transition-colors mb-4"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar para o Dashboard
+            Voltar para o Painel
           </Link>
           <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Configurações</h1>
           <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">

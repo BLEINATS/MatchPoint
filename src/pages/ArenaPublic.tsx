@@ -14,7 +14,7 @@ import ReservationModal from '../components/Reservations/ReservationModal';
 import { localApi } from '../lib/localApi';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/formatters';
-import { processReservationCompletion } from '../utils/gamificationUtils';
+import { awardPointsForReservation } from '../utils/gamificationUtils';
 
 const ArenaPublic: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -123,7 +123,7 @@ const ArenaPublic: React.FC = () => {
         const savedReserva = savedReservas[0];
 
         if (savedReserva && alunoProfileForSelectedArena) {
-            await processReservationCompletion(savedReserva, alunoProfileForSelectedArena, arena.id);
+            await awardPointsForReservation(savedReserva, arena.id);
         }
 
         addToast({ message: 'Reserva criada com sucesso!', type: 'success' });

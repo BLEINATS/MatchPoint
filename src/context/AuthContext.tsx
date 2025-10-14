@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const initializeSession = async () => {
       setIsLoading(true);
       try {
-        const seedKey = 'initial_data_seeded_v13_gamification_final';
+        const seedKey = 'initial_data_seeded_v14_persistent';
         if (!localStorage.getItem(seedKey)) {
           await seedInitialData();
           localStorage.setItem(seedKey, 'true');
@@ -190,6 +190,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateProfile = async (updatedProfile: Partial<Profile>) => {
     if (!profile) return;
     const newProfile = { ...profile, ...updatedProfile };
+    await localApi.upsert('profiles', [newProfile], 'all');
     setProfile(newProfile);
     localStorage.setItem('loggedInUser', JSON.stringify(newProfile));
     addToast({ message: 'Perfil atualizado!', type: 'success' });
