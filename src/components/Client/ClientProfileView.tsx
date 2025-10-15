@@ -87,13 +87,13 @@ const CreditsTab: React.FC<{balance: number, history: CreditTransaction[]}> = ({
                 {history.length > 0 ? (
                     <ul className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700 max-h-60 overflow-y-auto pr-2">
                         {history.map(item => (
-                        <li key={item.id} className="py-3 flex justify-between items-center">
-                            <div>
-                            <p className={`font-medium text-sm ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{item.amount > 0 ? 'Crédito Adicionado' : 'Crédito Utilizado'}</p>
-                            <p className="text-xs text-brand-gray-500">{item.description}</p>
-                            <p className="text-xs text-brand-gray-400 mt-1">{item.created_at ? format(new Date(item.created_at), 'dd/MM/yyyy HH:mm') : ''}</p>
+                        <li key={item.id} className="py-3 flex justify-between items-center gap-4">
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-medium text-sm truncate ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{item.amount > 0 ? 'Crédito Adicionado' : 'Crédito Utilizado'}</p>
+                              <p className="text-xs text-brand-gray-500 truncate">{item.description}</p>
+                              <p className="text-xs text-brand-gray-400 mt-1">{item.created_at ? format(new Date(item.created_at), 'dd/MM/yyyy HH:mm') : ''}</p>
                             </div>
-                            <p className={`text-lg font-bold ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}> {item.amount > 0 ? '+' : ''}{formatCurrency(item.amount)} </p>
+                            <p className={`text-base font-bold whitespace-nowrap ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}> {item.amount > 0 ? '+' : ''}{formatCurrency(item.amount)} </p>
                         </li>
                         ))}
                     </ul>

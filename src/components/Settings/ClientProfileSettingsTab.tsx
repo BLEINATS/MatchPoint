@@ -4,9 +4,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import Input from '../Forms/Input';
 import Button from '../Forms/Button';
-import { User, Mail, Loader2, Image as ImageIcon, Trash2, Phone } from 'lucide-react';
+import { User, Mail, Loader2, Image as ImageIcon, Trash2, Phone, Hash, Calendar } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
-import { maskPhone } from '../../utils/masks';
+import { maskPhone, maskCPFOrCNPJ } from '../../utils/masks';
 
 interface ClientProfileSettingsTabProps {
   formData: Partial<Profile>;
@@ -19,11 +19,13 @@ const ClientProfileSettingsTab: React.FC<ClientProfileSettingsTabProps> = ({ for
   const [isUploading, setIsUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     let processedValue = value;
     if (name === 'phone') {
       processedValue = maskPhone(value);
+    } else if (name === 'cpf') {
+      processedValue = maskCPFOrCNPJ(value);
     }
     setFormData(prev => ({ ...prev, [name]: processedValue }));
   };
@@ -137,6 +139,36 @@ const ClientProfileSettingsTab: React.FC<ClientProfileSettingsTabProps> = ({ for
           placeholder="(00) 90000-0000" 
           icon={<Phone className="h-4 w-4 text-brand-gray-400" />} 
         />
+        <Input 
+          label="CPF" 
+          name="cpf" 
+          value={formData.cpf || ''}
+          onChange={handleChange}
+          placeholder="000.000.000-00" 
+          icon={<Hash className="h-4 w-4 text-brand-gray-400" />} 
+        />
+        <Input 
+          label="Data de Nascimento" 
+          name="birth_date" 
+          type="date"
+          value={formData.birth_date || ''}
+          onChange={handleChange}
+          icon={<Calendar className="h-4 w-4 text-brand-gray-400" />} 
+        />
+        <div>
+          <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Gênero</label>
+          <select 
+            name="gender" 
+            value={formData.gender || 'nao_informado'} 
+            onChange={handleChange}
+            className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500"
+          >
+            <option value="nao_informado">Não informar</option>
+            <option value="masculino">Masculino</option>
+            <option value="feminino">Feminino</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
       </div>
     </div>
   );

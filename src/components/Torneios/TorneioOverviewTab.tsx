@@ -58,9 +58,24 @@ const TorneioOverviewTab: React.FC<{ torneio: Torneio }> = ({ torneio }) => {
       : ''
     );
   
-  const totalArrecadado = (torneio.participants?.length || 0) * torneio.registration_fee;
-  const totalVagas = (torneio.max_participants || 0) * (torneio.categories?.length || 0);
-  const totalPotencial = totalVagas * torneio.registration_fee;
+  const getPlayersPerEntry = (modality: TorneioModality, team_size?: number): number => {
+    switch (modality) {
+      case 'individual': return 1;
+      case 'duplas': return 2;
+      case 'equipes': return team_size || 1;
+      default: return 1;
+    }
+  };
+
+  const playersPerEntry = getPlayersPerEntry(torneio.modality, torneio.team_size);
+
+  const totalArrecadado = (torneio.participants?.filter(p => p.payment_status === 'pago').reduce((total, p) => {
+    const playerCount = p.players.filter(pl => pl.name).length || 1;
+    return total + (playerCount * torneio.registration_fee);
+  }, 0)) || 0;
+
+  const totalVagas = (torneio.max_participants || 0) * (torneio.categories?.length || 1);
+  const totalPotencial = totalVagas * torneio.registration_fee * playersPerEntry;
 
   return (
     <div className="space-y-8">

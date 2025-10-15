@@ -25,13 +25,13 @@ const ClientCreditsTab: React.FC<{balance: number, history: CreditTransaction[]}
                 {history.length > 0 ? (
                     <ul className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700 max-h-60 overflow-y-auto pr-2">
                         {history.map(item => (
-                        <li key={item.id} className="py-3 flex justify-between items-center">
-                            <div>
-                            <p className={`font-medium text-sm ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{item.amount > 0 ? 'Crédito Adicionado' : 'Crédito Utilizado'}</p>
-                            <p className="text-xs text-brand-gray-500">{item.description}</p>
-                            <p className="text-xs text-brand-gray-400 mt-1">{item.created_at ? format(new Date(item.created_at), 'dd/MM/yyyy HH:mm') : ''}</p>
+                        <li key={item.id} className="py-3 flex justify-between items-start gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-medium text-sm truncate ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{item.amount > 0 ? 'Crédito Adicionado' : 'Crédito Utilizado'}</p>
+                              <p className="text-xs text-brand-gray-500 truncate">{item.description}</p>
+                              <p className="text-xs text-brand-gray-400 mt-1">{item.created_at ? format(new Date(item.created_at), 'dd/MM/yyyy HH:mm') : ''}</p>
                             </div>
-                            <p className={`text-lg font-bold ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}> {item.amount > 0 ? '+' : ''}{formatCurrency(item.amount)} </p>
+                            <p className={`text-base font-bold text-right ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}> {item.amount > 0 ? '+' : ''}{formatCurrency(item.amount)} </p>
                         </li>
                         ))}
                     </ul>
@@ -111,7 +111,7 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white dark:bg-brand-gray-900 rounded-lg w-full max-w-2xl shadow-xl flex flex-col max-h-[85vh]"
+            className="bg-white dark:bg-brand-gray-900 rounded-lg w-full max-w-lg shadow-xl flex flex-col max-h-[85vh]"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-between items-center p-6 border-b border-brand-gray-200 dark:border-brand-gray-700">
@@ -120,12 +120,12 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
             </div>
 
             <div className="border-b border-brand-gray-200 dark:border-brand-gray-700">
-              <nav className="-mb-px flex space-x-4 px-6">
+              <nav className="-mb-px flex space-x-2 sm:space-x-4 px-2 sm:px-4 overflow-x-auto no-scrollbar">
                 {tabs.map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as 'credits' | 'gamification' | 'payments')}
-                    className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${
+                    className={`whitespace-nowrap py-4 px-2 border-b-2 font-medium text-sm flex items-center transition-colors ${
                       activeTab === tab.id
                         ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400'
                         : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700 dark:hover:text-brand-gray-300'

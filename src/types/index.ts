@@ -30,8 +30,9 @@ export interface Profile {
   role: 'cliente' | 'admin_arena' | 'professor' | 'atleta';
   phone?: string | null;
   clientType?: 'cliente' | 'aluno' | 'mensalista';
-  birth_date?: string;
-  gender?: 'masculino' | 'feminino' | 'outro' | 'nao_informado';
+  birth_date?: string | null;
+  gender?: 'masculino' | 'feminino' | 'outro' | 'nao_informado' | null;
+  cpf?: string | null;
   created_at: string;
   credit_cards?: CreditCardInfo[];
   notification_preferences?: {
@@ -124,6 +125,9 @@ export interface Aluno {
   name: string;
   email: string | null;
   phone: string | null;
+  cpf?: string | null;
+  birth_date?: string | null;
+  gender?: 'masculino' | 'feminino' | 'outro' | 'nao_informado' | null;
   status: 'ativo' | 'inativo' | 'experimental';
   sport: string | null;
   plan_id: string | null;
@@ -325,6 +329,8 @@ export interface Torneio {
   registration_fee: number;
   participants: Participant[];
   matches: Match[];
+  expenses?: { id: string; description: string; amount: number }[];
+  sponsors?: { id: string; name: string; amount: number }[];
   created_at: string;
 }
 
@@ -372,6 +378,8 @@ export interface Participant {
   checked_in: boolean;
   on_waitlist?: boolean;
   ranking_points?: number;
+  payment_status?: 'pendente' | 'pago';
+  payment_method?: 'pix' | 'cartao' | 'dinheiro' | null;
 }
 
 export interface Match {

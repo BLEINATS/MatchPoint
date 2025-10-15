@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, Link, useNavigate, useBlocker } from 'react-router-dom';
-import { ArrowLeft, Save, Trash2, CheckCircle, Trophy, Users, BarChart3, Image as ImageIcon, Edit, AlertTriangle, Share2, X, Send } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, CheckCircle, Trophy, Users, BarChart3, Image as ImageIcon, Edit, AlertTriangle, Share2, X, Send, CreditCard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Layout from '../components/Layout/Layout';
@@ -22,8 +22,9 @@ import CommunicationModal from '../components/Torneios/CommunicationModal';
 import { isWithinInterval, parseDateStringAsLocal, endOfDay } from '../utils/dateUtils';
 import { syncTournamentReservations } from '../utils/bookingSyncUtils';
 import { format } from 'date-fns';
+import FinanceiroTab from '../components/Torneios/FinanceiroTab';
 
-type TabType = 'overview' | 'participants' | 'bracket' | 'results';
+type TabType = 'overview' | 'participants' | 'bracket' | 'financial' | 'results';
 
 const TorneioDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -302,6 +303,7 @@ const TorneioDetail: React.FC = () => {
     { id: 'overview', label: 'Visão Geral', icon: Trophy },
     { id: 'participants', label: 'Inscritos', icon: Users },
     { id: 'bracket', label: 'Chaves', icon: BarChart3 },
+    { id: 'financial', label: 'Financeiro', icon: CreditCard },
     { id: 'results', label: 'Resultados', icon: ImageIcon },
   ];
 
@@ -311,6 +313,7 @@ const TorneioDetail: React.FC = () => {
       case 'overview': return <TorneioOverviewTab torneio={torneio} />;
       case 'participants': return <ParticipantsTab torneio={torneio} setTorneio={handleTorneioUpdate} alunos={alunos} onAddParticipant={handleOpenParticipantModal} onEditParticipant={handleOpenParticipantModal} onGenerateBracket={handleGenerateBracket} onDeleteBracket={handleRequestDeleteBracket} />;
       case 'bracket': return <BracketTab torneio={torneio} setTorneio={handleTorneioUpdate} quadras={quadras} />;
+      case 'financial': return <FinanceiroTab torneio={torneio} setTorneio={handleTorneioUpdate} />;
       case 'results': return <ResultsTab torneio={torneio} setTorneio={handleTorneioUpdate} />;
       default: return null;
     }

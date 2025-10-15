@@ -26,9 +26,9 @@ export const seedInitialData = async () => {
   
   // 1. Profiles
   const adminProfile: Profile = { id: 'profile_admin_01', name: 'Admin MatchPlay', email: 'admin@matchplay.com', role: 'admin_arena', avatar_url: null, created_at: new Date().toISOString() };
-  const viniProfile: Profile = { id: 'profile_vini_01', name: 'Vini Bleinat', email: 'vini@bleinat.com.br', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(11) 98765-4321', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
-  const anaProfile: Profile = { id: 'profile_ana_01', name: 'Ana Pereira', email: 'ana@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(21) 91234-5678', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
-  const brunoProfile: Profile = { id: 'profile_bruno_01', name: 'Bruno Lima', email: 'bruno@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(31) 95555-4444', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
+  const viniProfile: Profile = { id: 'profile_vini_01', name: 'Vini Bleinat', email: 'vini@bleinat.com.br', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(11) 98765-4321', cpf: '111.222.333-44', birth_date: '1990-01-15', gender: 'masculino', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
+  const anaProfile: Profile = { id: 'profile_ana_01', name: 'Ana Pereira', email: 'ana@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(21) 91234-5678', cpf: '222.333.444-55', birth_date: '1992-05-20', gender: 'feminino', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
+  const brunoProfile: Profile = { id: 'profile_bruno_01', name: 'Bruno Lima', email: 'bruno@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(31) 95555-4444', cpf: '333.444.555-66', birth_date: '1988-11-30', gender: 'masculino', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
   
   await localApi.upsert('profiles', [adminProfile, viniProfile, anaProfile, brunoProfile], 'all', true);
 
@@ -110,7 +110,7 @@ export const seedInitialData = async () => {
   // 7. Alunos e Clientes
   const alunos: Omit<Aluno, 'id' | 'created_at'>[] = [
     {
-      arena_id: arenaId, profile_id: viniProfile.id, name: viniProfile.name, email: viniProfile.email, phone: viniProfile.phone, status: 'ativo',
+      arena_id: arenaId, profile_id: viniProfile.id, name: viniProfile.name, email: viniProfile.email, phone: viniProfile.phone, cpf: viniProfile.cpf, birth_date: viniProfile.birth_date, gender: viniProfile.gender, status: 'ativo',
       sport: 'Beach Tennis', plan_id: planoAnualLivre.id, plan_name: planoAnualLivre.name, monthly_fee: planoAnualLivre.price / 12,
       aulas_restantes: null, 
       aulas_agendadas: [
@@ -123,12 +123,12 @@ export const seedInitialData = async () => {
       credit_balance: 50, gamification_points: 1250,
     },
     {
-      arena_id: arenaId, profile_id: anaProfile.id, name: anaProfile.name, email: anaProfile.email, phone: anaProfile.phone, status: 'ativo',
+      arena_id: arenaId, profile_id: anaProfile.id, name: anaProfile.name, email: anaProfile.email, phone: anaProfile.phone, cpf: anaProfile.cpf, birth_date: anaProfile.birth_date, gender: anaProfile.gender, status: 'ativo',
       sport: 'Beach Tennis', plan_id: planoMensal1x.id, plan_name: planoMensal1x.name, monthly_fee: planoMensal1x.price,
       aulas_restantes: 4, aulas_agendadas: [], join_date: new Date().toISOString().split('T')[0], credit_balance: 0, gamification_points: 800,
     },
     {
-      arena_id: arenaId, profile_id: brunoProfile.id, name: brunoProfile.name, email: brunoProfile.email, phone: brunoProfile.phone, status: 'ativo',
+      arena_id: arenaId, profile_id: brunoProfile.id, name: brunoProfile.name, email: brunoProfile.email, phone: brunoProfile.phone, cpf: brunoProfile.cpf, birth_date: brunoProfile.birth_date, gender: brunoProfile.gender, status: 'ativo',
       sport: 'Futevôlei', plan_id: null, plan_name: 'Avulso', monthly_fee: 0,
       aulas_restantes: 0, aulas_agendadas: [], join_date: new Date().toISOString().split('T')[0], credit_balance: 15, gamification_points: 200,
     },

@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, Trophy, Calendar, Clock, Info, Users, DollarSign, Users2, AlertTriangle } from 'lucide-react';
-import { Torneio, Quadra, TorneioTipo, TorneioStatus, TorneioModality, TorneioCategory, Reserva } from '../../types';
-import Button from '../Forms/Button';
-import Input from '../Forms/Input';
+import { Torneio, Quadra, TorneioTipo, TorneioStatus, TorneioModality, TorneioCategory, Reserva } from '../types';
+import Button from '../components/Forms/Button';
+import Input from '../components/Forms/Input';
 import { format, eachDayOfInterval, isSameDay, isBefore } from 'date-fns';
-import CategoryManager from './CategoryManager';
+import CategoryManager from '../components/Torneios/CategoryManager';
 import { v4 as uuidv4 } from 'uuid';
-import { parseDateStringAsLocal } from '../../utils/dateUtils';
-import { expandRecurringReservations } from '../../utils/reservationUtils';
+import { parseDateStringAsLocal } from '../utils/dateUtils';
+import { expandRecurringReservations } from '../utils/reservationUtils';
 
 interface TorneioModalProps {
   isOpen: boolean;
@@ -234,7 +234,7 @@ const TorneioModal: React.FC<TorneioModalProps> = ({ isOpen, onClose, onSave, in
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <Input label="Máx. de Inscritos (por categoria)" name="max_participants" type="number" value={formData.max_participants.toString()} onChange={handleChange} icon={<Users className="h-4 w-4 text-brand-gray-400"/>} />
-                <Input label="Taxa de Inscrição (por jogador)" name="registration_fee" type="number" value={formData.registration_fee.toString()} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} />
+                <Input label="Taxa de Inscrição (R$)" name="registration_fee" type="number" value={formData.registration_fee.toString()} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

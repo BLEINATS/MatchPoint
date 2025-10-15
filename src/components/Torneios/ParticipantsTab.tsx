@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Torneio, Participant, Aluno } from '../../types';
 import Button from '../Forms/Button';
-import { Check, UserPlus, BarChart3, X, Edit, Trash2, AlertTriangle, ArrowUpCircle, Clock, MessageSquare, CheckCircle } from 'lucide-react';
+import { Check, UserPlus, Send, BarChart3, Users, X, Edit, Trash2, AlertTriangle, ArrowUpCircle, Clock, MessageSquare, CheckCircle, DollarSign, Banknote, CreditCard } from 'lucide-react';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import { useToast } from '../../context/ToastContext';
 import Input from '../Forms/Input';
+import PaymentConfirmationModal from './PaymentConfirmationModal';
 
 interface ParticipantsTabProps {
   torneio: Torneio;
@@ -20,6 +21,8 @@ interface ParticipantsTabProps {
 const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, onAddParticipant, onEditParticipant, onGenerateBracket, onDeleteBracket }) => {
   const [participantToDelete, setParticipantToDelete] = useState<Participant | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [participantToUpdatePayment, setParticipantToUpdatePayment] = useState<Participant | null>(null);
   const { addToast } = useToast();
 
   const handleParticipantDetailChange = (participantId: string, field: keyof Participant, value: any) => {
@@ -64,6 +67,26 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
 
     handleParticipantDetailChange(participant.id, 'on_waitlist', false);
     addToast({ message: `${participant.name} foi promovido para a lista de inscritos.`, type: 'success' });
+  };
+
+  const handlePaymentStatusClick = (participant: Participant) => {
+    if (participant.payment_status === 'pago') {
+      if (window.confirm(`Deseja reverter o status de pagamento de ${participant.name} para "Pendente"?`)) {
+        handleParticipantDetailChange(participant.id, 'payment_status', 'pendente');
+        handleParticipantDetailChange(participant.id, 'payment_method', null);
+      }
+    } else {
+      setParticipantToUpdatePayment(participant);
+      setIsPaymentModalOpen(true);
+    }
+  };
+
+  const handleConfirmPayment = (method: 'pix' | 'cartao' | 'dinheiro') => {
+    if (!participantToUpdatePayment) return;
+    handleParticipantDetailChange(participantToUpdatePayment.id, 'payment_status', 'pago');
+    handleParticipantDetailChange(participantToUpdatePayment.id, 'payment_method', method);
+    setIsPaymentModalOpen(false);
+    setParticipantToUpdatePayment(null);
   };
 
   return (
@@ -134,6 +157,7 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
               onEdit={onEditParticipant}
               onDelete={handleDeleteRequest}
               onParticipantDetailChange={handleParticipantDetailChange}
+              onPaymentStatusClick={handlePaymentStatusClick}
             />
 
             {waitlistParticipants.length > 0 && (
@@ -148,6 +172,7 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
                   onPromote={handlePromoteFromWaitlist}
                   isMainListFull={isFull}
                   onParticipantDetailChange={handleParticipantDetailChange}
+                  onPaymentStatusClick={handlePaymentStatusClick}
                 />
               </div>
             )}
@@ -163,6 +188,12 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
         message={<p>Tem certeza que deseja remover <strong>{participantToDelete?.name}</strong> da lista de inscritos?</p>}
         confirmText="Sim, Remover"
       />
+      <PaymentConfirmationModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        onConfirm={handleConfirmPayment}
+        participantName={participantToUpdatePayment?.name || ''}
+      />
     </div>
   );
 };
@@ -176,13 +207,23 @@ interface ParticipantTableProps {
     onPromote?: (p: Participant) => void;
     isMainListFull?: boolean;
     onParticipantDetailChange: (participantId: string, field: keyof Participant, value: any) => void;
+    onPaymentStatusClick: (participant: Participant) => void;
 }
 
-const ParticipantTable: React.FC<ParticipantTableProps> = ({ participants, torneio, onToggleCheckIn, onEdit, onDelete, onPromote, isMainListFull, onParticipantDetailChange }) => {
+const ParticipantTable: React.FC<ParticipantTableProps> = ({ participants, torneio, onToggleCheckIn, onEdit, onDelete, onPromote, isMainListFull, onParticipantDetailChange, onPaymentStatusClick }) => {
     
     const handleInvite = (phone: string, name: string) => {
         const message = encodeURIComponent(`Olá ${name}, você foi inscrito no torneio "${torneio.name}". Crie sua conta em nossa plataforma para acompanhar os jogos e receber notificações: ${window.location.origin}/auth`);
         window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${message}`, '_blank');
+    };
+
+    const getPaymentMethodIcon = (method?: 'pix' | 'cartao' | 'dinheiro' | null) => {
+        switch (method) {
+            case 'pix': return <DollarSign className="h-3 w-3" />;
+            case 'cartao': return <CreditCard className="h-3 w-3" />;
+            case 'dinheiro': return <Banknote className="h-3 w-3" />;
+            default: return <CheckCircle className="h-3 w-3 mr-1" />;
+        }
     };
 
     return (
@@ -193,6 +234,7 @@ const ParticipantTable: React.FC<ParticipantTableProps> = ({ participants, torne
                         <tr>
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase tracking-wider">Nome</th>
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase tracking-wider">Ranking</th>
+                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase tracking-wider">Pagamento</th>
                             <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase tracking-wider">Check-in</th>
                             <th scope="col" className="relative px-6 py-3"><span className="sr-only">Ações</span></th>
                         </tr>
@@ -243,6 +285,23 @@ const ParticipantTable: React.FC<ParticipantTableProps> = ({ participants, torne
                                             onParticipantDetailChange(participant.id, 'ranking_points', e.target.value === '' ? undefined : parseInt(e.target.value, 10));
                                         }}
                                     />
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                    {!isOnWaitlist && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onPaymentStatusClick(participant); }}
+                                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                                                participant.payment_status === 'pago'
+                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                                                    : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+                                            }`}
+                                        >
+                                            {participant.payment_status === 'pago' ? 
+                                                <>{getPaymentMethodIcon(participant.payment_method)} <span className="ml-1.5 capitalize">{participant.payment_method || 'Pago'}</span></> : 
+                                                <><DollarSign className="h-3 w-3 mr-1" />Pendente</>
+                                            }
+                                        </button>
+                                    )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-center">
                                     {!isOnWaitlist && (

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   LogOut, Sun, Moon, Settings, Bookmark, LayoutGrid, 
   User as UserIcon, LayoutDashboard, GraduationCap, Trophy, 
-  PartyPopper, Calendar, ChevronDown, Loader2, Bell, Gift, DollarSign
+  PartyPopper, Calendar, ChevronDown, Loader2, Bell, Gift, DollarSign, Clock
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -13,6 +13,7 @@ import { localApi } from '../../lib/localApi';
 import { Notificacao } from '../../types';
 import NotificationsPanel from './NotificationsPanel';
 import { useToast } from '../../context/ToastContext';
+import { format } from 'date-fns';
 
 const Header: React.FC = () => {
   const { user, arena, profile, signOut, isLoading, selectedArenaContext } = useAuth();
@@ -23,11 +24,19 @@ const Header: React.FC = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notificacao[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [currentTime, setCurrentTime] = useState(new Date());
   
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
   const isAdminView = profile?.role === 'admin_arena' && (!selectedArenaContext || arena?.id === selectedArenaContext.id);
+
+  useEffect(() => {
+    const timerId = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timerId);
+  }, []);
 
   const handleOutsideClick = useCallback((event: MouseEvent) => {
     if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
@@ -151,6 +160,11 @@ const Header: React.FC = () => {
                 <span className="font-semibold text-sm text-brand-gray-800 dark:text-brand-gray-200">
                   {arena.name}
                 </span>
+                <div className="w-px h-6 bg-brand-gray-300 dark:bg-brand-gray-600"></div>
+                <div className="flex items-center gap-2 text-sm font-mono text-brand-gray-600 dark:text-brand-gray-400" title="Horário Atual">
+                  <Clock className="h-4 w-4" />
+                  <span>{format(currentTime, 'HH:mm:ss')}</span>
+                </div>
               </div>
             )}
           </div>

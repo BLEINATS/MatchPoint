@@ -200,14 +200,14 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
             {history.length > 0 ? (
               <ul className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
                 {history.map(tx => (
-                  <li key={tx.id} className="p-4 flex justify-between items-center">
-                    <div>
-                      <p className="font-medium text-sm text-brand-gray-800 dark:text-brand-gray-200">{tx.description}</p>
+                  <li key={tx.id} className="p-4 flex justify-between items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm text-brand-gray-800 dark:text-brand-gray-200 truncate">{tx.description}</p>
                       <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400 mt-1">
                         {tx.created_at ? format(new Date(tx.created_at), 'dd/MM/yyyy HH:mm') : ''}
                       </p>
                     </div>
-                    <span className={`font-bold text-lg ${tx.points >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <span className={`font-bold text-base whitespace-nowrap ${tx.points >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {tx.points >= 0 ? '+' : ''}{tx.points}
                     </span>
                   </li>

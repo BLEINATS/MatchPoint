@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Mail, Phone, Calendar, Award, Dribbble, DollarSign, Trash2, Gift, ClipboardList, Hash } from 'lucide-react';
+import { X, Save, User, Mail, Phone, Calendar, Award, Dribbble, DollarSign, Trash2, Gift, ClipboardList, Hash, Users } from 'lucide-react';
 import { Aluno, PlanoAula } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { format } from 'date-fns';
-import { maskPhone } from '../../utils/masks';
+import { maskPhone, maskCPFOrCNPJ } from '../../utils/masks';
 import { useToast } from '../../context/ToastContext';
 import GamificationTab from './GamificationTab';
 import CreditsTab from './CreditsTab';
@@ -32,15 +32,9 @@ const DEFAULT_SPORTS = ['Beach Tennis', 'Futevôlei', 'Futebol Society', 'Vôlei
 const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDelete, initialData, availableSports, planos, modalType, allAlunos, onDataChange }) => {
   const { arena } = useAuth();
   const [formData, setFormData] = useState<Partial<Omit<Aluno, 'id' | 'arena_id' | 'created_at'>>>({
-    name: '',
-    email: '',
-    phone: '',
-    status: 'ativo',
-    sport: '',
-    plan_id: null,
-    aulas_restantes: 0,
-    join_date: format(new Date(), 'yyyy-MM-dd'),
-    monthly_fee: 0,
+    name: '', email: '', phone: '', status: 'ativo', sport: '', plan_id: null,
+    aulas_restantes: 0, join_date: format(new Date(), 'yyyy-MM-dd'), monthly_fee: 0,
+    cpf: '', birth_date: '', gender: 'nao_informado'
   });
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState<'details' | 'credits' | 'gamification'>('details');
@@ -83,11 +77,21 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
       setInternalAluno(initialData);
       setActiveTab('details');
       
+      const baseData = {
+        name: '', email: '', phone: '', status: 'ativo', sport: '', plan_id: null,
+        aulas_restantes: 0, join_date: format(new Date(), 'yyyy-MM-dd'), monthly_fee: 0,
+        cpf: '', birth_date: '', gender: 'nao_informado' as Aluno['gender']
+      };
+
       if (initialData) {
         setFormData({
+          ...baseData,
           name: initialData.name,
           email: initialData.email || '',
           phone: initialData.phone || '',
+          cpf: initialData.cpf || '',
+          birth_date: initialData.birth_date || '',
+          gender: initialData.gender || 'nao_informado',
           status: initialData.status,
           sport: initialData.sport || '',
           plan_id: initialData.plan_id,
@@ -96,10 +100,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
           monthly_fee: initialData.monthly_fee || 0,
         });
       } else {
-        setFormData({
-          name: '', email: '', phone: '', status: 'ativo', sport: '', plan_id: null, aulas_restantes: 0,
-          join_date: format(new Date(), 'yyyy-MM-dd'), monthly_fee: 0
-        });
+        setFormData(baseData);
       }
     }
   }, [initialData, isOpen]);
@@ -164,7 +165,6 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
     }
     
     try {
-      // 1. Create financial transaction
       await localApi.upsert('finance_transactions', [{
           arena_id: arena.id,
           description: `Renovação Plano: ${selectedPlan.name} - ${internalAluno.name}`,
@@ -174,7 +174,6 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
           date: format(new Date(), 'yyyy-MM-dd'),
       }], arena.id);
 
-      // 2. Reset student credits
       const creditsToRenew = selectedPlan.num_aulas === null ? null : selectedPlan.num_aulas;
       const updatedAluno = { ...internalAluno, aulas_restantes: creditsToRenew };
       
@@ -182,8 +181,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
       
       addToast({ message: 'Créditos renovados e pagamento registrado!', type: 'success' });
       
-      // 3. Refresh data and close modals
-      handleInternalDataChange(); // This should refresh the data inside the modal
+      handleInternalDataChange();
       setIsRenewConfirmOpen(false);
     } catch (error: any) {
       addToast({ message: `Erro ao renovar créditos: ${error.message}`, type: 'error' });
@@ -194,9 +192,8 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
     const { name, value } = e.target;
     let finalValue: string | number | null = value;
 
-    if (name === 'phone') {
-      finalValue = maskPhone(value);
-    }
+    if (name === 'phone') finalValue = maskPhone(value);
+    if (name === 'cpf') finalValue = maskCPFOrCNPJ(value);
 
     if (name === 'plan_id') {
       const newSelectedPlan = activePlanOptions.find(p => p.id === value);
@@ -229,7 +226,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white dark:bg-brand-gray-900 rounded-lg w-full max-w-2xl shadow-xl flex flex-col max-h-[90vh]"
+              className="bg-white dark:bg-brand-gray-900 rounded-lg w-full max-w-3xl shadow-xl flex flex-col max-h-[90vh]"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center p-6 border-b border-brand-gray-200 dark:border-brand-gray-700">
@@ -243,7 +240,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
 
               {isEditing && (
                 <div className="border-b border-brand-gray-200 dark:border-brand-gray-700">
-                  <nav className="-mb-px flex space-x-4 px-6" aria-label="Tabs">
+                  <nav className="-mb-px flex space-x-4 px-6 overflow-x-auto no-scrollbar" aria-label="Tabs">
                     {tabs.map(tab => (
                       <button
                         key={tab.id}
@@ -279,6 +276,19 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                           <Input label="Telefone" name="phone" value={formData.phone || ''} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} />
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <Input label="CPF" name="cpf" value={formData.cpf || ''} onChange={handleChange} icon={<Hash className="h-4 w-4 text-brand-gray-400"/>} />
+                          <Input label="Data de Nascimento" name="birth_date" type="date" value={formData.birth_date || ''} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Gênero</label>
+                            <select name="gender" value={formData.gender || 'nao_informado'} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                              <option value="nao_informado">Não informar</option>
+                              <option value="masculino">Masculino</option>
+                              <option value="feminino">Feminino</option>
+                              <option value="outro">Outro</option>
+                            </select>
+                          </div>
                           <div>
                             <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Status</label>
                             <select name="status" value={formData.status} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
@@ -287,23 +297,23 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                               <option value="experimental">Experimental</option>
                             </select>
                           </div>
-                          <Input label="Data de Início" name="join_date" type="date" value={formData.join_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <Input label="Data de Início" name="join_date" type="date" value={formData.join_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
                           <div>
-                            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte</label>
+                            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte Principal</label>
                             <select name="sport" value={formData.sport || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
                               <option value="">Selecione um esporte</option>
                               {allSports.map(sport => <option key={sport} value={sport}>{sport}</option>)}
                             </select>
                           </div>
-                          <div>
-                            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Plano Contratado</label>
-                            <select name="plan_id" value={formData.plan_id || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
-                              <option value="">Nenhum (Avulso)</option>
-                              {activePlanOptions.map(plan => <option key={plan.id} value={plan.id}>{plan.name} ({formatCurrency(plan.price)})</option>)}
-                            </select>
-                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Plano Contratado</label>
+                          <select name="plan_id" value={formData.plan_id || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                            <option value="">Nenhum (Avulso)</option>
+                            {activePlanOptions.map(plan => <option key={plan.id} value={plan.id}>{plan.name} ({formatCurrency(plan.price)})</option>)}
+                          </select>
                         </div>
                         <Input
                           label="Aulas Restantes (Créditos)"

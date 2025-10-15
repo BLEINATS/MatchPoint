@@ -106,6 +106,7 @@ const ParticipantModal: React.FC<ParticipantModalProps> = ({ isOpen, onClose, on
       players: players,
       checked_in: initialData?.checked_in || false,
       on_waitlist: initialData?.on_waitlist || onWaitlist,
+      payment_status: initialData?.payment_status || 'pendente',
     });
   };
   
