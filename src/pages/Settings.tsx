@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Building, FileText, BarChart2, CheckCircle, Save, ArrowLeft, User, Lock, CreditCard, DollarSign, Bell } from 'lucide-react';
+import { Building, FileText, BarChart2, CheckCircle, Save, ArrowLeft, User, Lock, CreditCard, DollarSign, Bell, Users as UsersIcon, Star } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { Arena, Profile } from '../types';
@@ -14,9 +14,11 @@ import PaymentSettingsTab from '../components/Settings/PaymentSettingsTab';
 import PlanosAulasTab from '../components/Settings/PlanosAulasTab';
 import NotificationSettingsTab from './Settings/NotificationSettingsTab';
 import SecurityTab from '../components/Settings/SecurityTab';
+import TeamSettingsTab from '../components/Settings/TeamSettingsTab';
 
-type AdminTabType = 'profile' | 'operation' | 'payments' | 'planos_aulas' | 'plan';
+type AdminTabType = 'profile' | 'operation' | 'payments' | 'planos_aulas' | 'team' | 'plan';
 type ClientTabType = 'my-profile' | 'notifications' | 'security';
+type StaffTabType = 'planos_aulas'; // Staff can only see what they have permissions for
 
 const Settings: React.FC = () => {
   const { arena, updateArena, profile, updateProfile, isLoading: isAuthLoading } = useAuth();
@@ -28,12 +30,14 @@ const Settings: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
 
   const isAdmin = profile?.role === 'admin_arena';
+  const isStaff = profile?.role === 'funcionario';
 
   const adminTabs: { id: AdminTabType; label: string; icon: React.ElementType }[] = [
     { id: 'profile', label: 'Perfil da Arena', icon: Building },
     { id: 'operation', label: 'Operação e Políticas', icon: FileText },
     { id: 'payments', label: 'Pagamentos', icon: CreditCard },
     { id: 'planos_aulas', label: 'Planos de Aulas', icon: DollarSign },
+    { id: 'team', label: 'Equipe', icon: UsersIcon },
     { id: 'plan', label: 'Plano e Faturamento', icon: BarChart2 },
   ];
 
@@ -42,9 +46,17 @@ const Settings: React.FC = () => {
     { id: 'notifications', label: 'Notificações', icon: Bell },
     { id: 'security', label: 'Segurança', icon: Lock },
   ];
+  
+  const staffTabs: { id: AdminTabType | ClientTabType; label: string; icon: React.ElementType }[] = [
+    { id: 'my-profile', label: 'Meu Perfil', icon: User },
+    { id: 'security', label: 'Segurança', icon: Lock },
+  ];
+  if (profile?.permissions?.planos_aulas === 'edit') {
+    staffTabs.push({ id: 'planos_aulas', label: 'Planos de Aulas', icon: DollarSign });
+  }
 
-  const tabs = isAdmin ? adminTabs : clientTabs;
-  const [activeTab, setActiveTab] = useState(tabs[0].id);
+  const tabs = isAdmin ? adminTabs : (isStaff ? staffTabs : clientTabs);
+  const [activeTab, setActiveTab] = useState(tabs.length > 0 ? tabs[0].id : '');
 
   useEffect(() => {
     if (arena && isAdmin) {
@@ -76,29 +88,21 @@ const Settings: React.FC = () => {
   const renderContent = () => {
     if (isAdmin) {
       switch (activeTab) {
-        case 'profile':
-          return <ProfileTab formData={arenaFormData} setFormData={setArenaFormData} />;
-        case 'operation':
-          return <OperationTab formData={arenaFormData} setFormData={setArenaFormData} />;
-        case 'payments':
-          return <PaymentSettingsTab formData={arenaFormData} setFormData={setArenaFormData} />;
-        case 'planos_aulas':
-          return <PlanosAulasTab />;
-        case 'plan':
-          return <PlanTab />;
-        default:
-          return null;
+        case 'profile': return <ProfileTab formData={arenaFormData} setFormData={setArenaFormData} />;
+        case 'operation': return <OperationTab formData={arenaFormData} setFormData={setArenaFormData} />;
+        case 'payments': return <PaymentSettingsTab formData={arenaFormData} setFormData={setArenaFormData} />;
+        case 'planos_aulas': return <PlanosAulasTab />;
+        case 'team': return <TeamSettingsTab />;
+        case 'plan': return <PlanTab />;
+        default: return null;
       }
-    } else {
+    } else { // Client or Staff
       switch (activeTab) {
-        case 'my-profile':
-          return <ClientProfileSettingsTab formData={profileFormData} setFormData={setProfileFormData} />;
-        case 'notifications':
-          return <NotificationSettingsTab profile={profileFormData} setProfile={setProfileFormData} />;
-        case 'security':
-          return <SecurityTab />;
-        default:
-          return null;
+        case 'my-profile': return <ClientProfileSettingsTab formData={profileFormData} setFormData={setProfileFormData} />;
+        case 'notifications': return <NotificationSettingsTab profile={profileFormData} setProfile={setProfileFormData} />;
+        case 'security': return <SecurityTab />;
+        case 'planos_aulas': return isStaff ? <PlanosAulasTab /> : null;
+        default: return null;
       }
     }
   };
@@ -113,7 +117,7 @@ const Settings: React.FC = () => {
     );
   }
   
-  const canSave = isAdmin ? (activeTab === 'profile' || activeTab === 'operation' || activeTab === 'payments') : (activeTab === 'my-profile' || activeTab === 'notifications');
+  const canSave = isAdmin ? (activeTab === 'profile' || activeTab === 'operation' || activeTab === 'payments') : (activeTab === 'my-profile' || activeTab === 'notifications' || activeTab === 'security');
 
   return (
     <Layout>

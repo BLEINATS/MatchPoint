@@ -1,15 +1,3 @@
-{/*
-  ====================================================================
-  || ATENÇÃO: CÓDIGO PROTEGIDO (BLINDADO) POR SOLICITAÇÃO DO USUÁRIO ||
-  ====================================================================
-  || Este arquivo contém a lógica crítica para salvar e cancelar     ||
-  || reservas, incluindo a aplicação de créditos.                   ||
-  ||                                                                ||
-  || NÃO FAÇA ALTERAÇÕES NESTA LÓGICA SEM CONFIRMAÇÃO EXPLÍCITA.    ||
-  || Antes de qualquer mudança, pergunte ao usuário:                ||
-  || "Você confirma que deseja alterar a lógica de crédito/reserva?"  ||
-  ====================================================================
-*/}
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -38,7 +26,7 @@ import { formatCurrency } from '../utils/formatters';
 type ViewMode = 'agenda' | 'calendar' | 'list';
 
 const Reservations: React.FC = () => {
-  const { arena, profile } = useAuth();
+  const { selectedArenaContext, profile } = useAuth();
   const { addToast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -68,15 +56,22 @@ const Reservations: React.FC = () => {
   const [isManualCancelModalOpen, setIsManualCancelModalOpen] = useState(false);
   const [reservationToCancel, setReservationToCancel] = useState<Reserva | null>(null);
 
+  const canEdit = useMemo(() => 
+    profile?.role === 'admin_arena' || profile?.permissions?.reservas === 'edit', 
+  [profile]);
+
   const loadData = useCallback(async () => {
-    if (!arena) return;
+    if (!selectedArenaContext) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const [quadrasRes, reservasRes, alunosRes, atletasRes] = await Promise.all([
-        localApi.select<Quadra>('quadras', arena.id),
-        localApi.select<Reserva>('reservas', arena.id),
-        localApi.select<Aluno>('alunos', arena.id),
-        localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
+        localApi.select<Quadra>('quadras', selectedArenaContext.id),
+        localApi.select<Reserva>('reservas', selectedArenaContext.id),
+        localApi.select<Aluno>('alunos', selectedArenaContext.id),
+        localApi.select<AtletaAluguel>('atletas_aluguel', selectedArenaContext.id),
       ]);
       
       const now = new Date();
@@ -92,7 +87,7 @@ const Reservations: React.FC = () => {
       });
 
       if (updated) {
-        await localApi.upsert('reservas', reservationsData, arena.id, true);
+        await localApi.upsert('reservas', reservationsData, selectedArenaContext.id, true);
         addToast({ message: 'Algumas reservas pendentes expiraram e foram canceladas.', type: 'info' });
       }
 
@@ -105,7 +100,7 @@ const Reservations: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [arena, addToast]);
+  }, [selectedArenaContext, addToast]);
 
   useEffect(() => {
     loadData();
@@ -128,11 +123,15 @@ const Reservations: React.FC = () => {
       setIsFilterPanelOpen(true); setViewMode('agenda'); stateHandled = true;
     }
     if (location.state?.openModal) {
+      if (!canEdit) {
+        addToast({ message: 'Você não tem permissão para criar novas reservas.', type: 'error' });
+        return;
+      }
       setNewReservationSlot({ quadraId: '', time: '', type: location.state.type || 'avulsa' });
       setSelectedReservation(null); setIsModalOpen(true); stateHandled = true;
     }
     if (stateHandled) navigate(location.pathname, { replace: true });
-  }, [location.state, navigate]);
+  }, [location.state, navigate, canEdit, addToast]);
 
   const displayedReservations = useMemo(() => {
     let sourceReservas = reservas;
@@ -181,7 +180,7 @@ const Reservations: React.FC = () => {
   const handleClearFilters = () => { setFilters({ status: 'all', type: 'all', clientName: '', quadraId: 'all', startDate: '', endDate: '' }); setIsFilterPanelOpen(false); };
 
   const handleSaveReservation = async (reservaData: Omit<Reserva, 'id' | 'created_at'> | Reserva) => {
-    if (!arena || !profile) return;
+    if (!selectedArenaContext || !profile) return;
     const isEditing = !!(reservaData as Reserva).id;
     try {
       const startTime = parse(reservaData.start_time, 'HH:mm', new Date());
@@ -194,16 +193,16 @@ const Reservations: React.FC = () => {
         if (existingAluno) { 
             alunoForReservation = existingAluno; 
         } else {
-          const { data: newAlunos } = await localApi.upsert('alunos', [{ arena_id: arena.id, name: reservaData.clientName, phone: reservaData.clientPhone || null, status: 'ativo', plan_name: 'Avulso', join_date: format(new Date(), 'yyyy-MM-dd') }], arena.id);
+          const { data: newAlunos } = await localApi.upsert('alunos', [{ arena_id: selectedArenaContext.id, name: reservaData.clientName, phone: reservaData.clientPhone || null, status: 'ativo', plan_name: 'Avulso', join_date: format(new Date(), 'yyyy-MM-dd') }], selectedArenaContext.id);
           if (newAlunos && newAlunos[0]) { 
             alunoForReservation = newAlunos[0]; 
-            const { data: allAlunos } = await localApi.select<Aluno>('alunos', arena.id);
+            const { data: allAlunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
             setAlunos(allAlunos);
           }
         }
       }
   
-      let dataToUpsert: Partial<Reserva> = { ...reservaData, arena_id: arena.id, profile_id: alunoForReservation?.profile_id || null };
+      let dataToUpsert: Partial<Reserva> = { ...reservaData, arena_id: selectedArenaContext.id, profile_id: alunoForReservation?.profile_id || null };
       if (!isEditing) {
         dataToUpsert.created_by_name = profile.name;
         if (dataToUpsert.total_price && dataToUpsert.total_price > 0) {
@@ -222,22 +221,22 @@ const Reservations: React.FC = () => {
         delete dataToUpsert.payment_deadline;
       }
 
-      const { data: savedReservas } = await localApi.upsert('reservas', [dataToUpsert], arena.id);
+      const { data: savedReservas } = await localApi.upsert('reservas', [dataToUpsert], selectedArenaContext.id);
       const savedReserva = savedReservas[0];
   
       if (savedReserva && !isEditing && savedReserva.status === 'confirmada') {
-        await awardPointsForReservation(savedReserva, arena.id);
+        await awardPointsForReservation(savedReserva, selectedArenaContext.id);
       }
 
       if (savedReserva && savedReserva.credit_used && savedReserva.credit_used > 0) {
         const newlyAppliedCredit = savedReserva.credit_used - ((reservaData as any).originalCreditUsed || 0);
         if (newlyAppliedCredit > 0 && alunoForReservation?.id) {
-          const { data: allAlunos } = await localApi.select<Aluno>('alunos', arena.id);
+          const { data: allAlunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
           const targetAluno = allAlunos.find(a => a.id === alunoForReservation!.id);
           if (targetAluno) {
             targetAluno.credit_balance = (targetAluno.credit_balance || 0) - newlyAppliedCredit;
-            await localApi.upsert('alunos', [targetAluno], arena.id);
-            await localApi.upsert('credit_transactions', [{ aluno_id: targetAluno.id, arena_id: arena.id, amount: -newlyAppliedCredit, type: 'reservation_payment', description: `Pagamento da reserva #${savedReserva.id.substring(0, 8)}`, related_reservation_id: savedReserva.id }], arena.id);
+            await localApi.upsert('alunos', [targetAluno], selectedArenaContext.id);
+            await localApi.upsert('credit_transactions', [{ aluno_id: targetAluno.id, arena_id: selectedArenaContext.id, amount: -newlyAppliedCredit, type: 'reservation_payment', description: `Pagamento da reserva #${savedReserva.id.substring(0, 8)}`, related_reservation_id: savedReserva.id }], selectedArenaContext.id);
           }
         }
       }
@@ -259,13 +258,13 @@ const Reservations: React.FC = () => {
   };
 
   const handleConfirmManualCancel = async (reservaId: string) => {
-    if (!arena) return;
+    if (!selectedArenaContext) return;
     try {
         const reserva = reservas.find(r => r.id === reservaId);
         if (!reserva) throw new Error("Reserva não encontrada");
         const updatePayload: Partial<Reserva> = { status: 'cancelada' };
         if (reserva.total_price && reserva.total_price > 0) updatePayload.payment_status = 'pago';
-        await localApi.upsert('reservas', [{ ...reserva, ...updatePayload }], arena.id);
+        await localApi.upsert('reservas', [{ ...reserva, ...updatePayload }], selectedArenaContext.id);
         addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
         await loadData();
     } catch (error: any) { addToast({ message: `Erro ao cancelar reserva: ${error.message}`, type: 'error' }); }
@@ -273,18 +272,18 @@ const Reservations: React.FC = () => {
   };
 
   const handleConfirmCancellation = async (reservaId: string, creditAmount: number, reason: string) => {
-    if (!arena) return;
+    if (!selectedArenaContext) return;
     try {
         const reserva = reservas.find(r => r.id === reservaId);
         if (!reserva) throw new Error('Reserva não encontrada.');
 
-        const { pointsDeducted } = await processCancellation(reserva, arena.id);
+        const { pointsDeducted } = await processCancellation(reserva, selectedArenaContext.id);
         
         const updatePayload: Partial<Reserva> = { status: 'cancelada' };
         if (creditAmount === 0 && reserva.total_price && reserva.total_price > 0) {
             updatePayload.payment_status = 'pago';
         }
-        await localApi.upsert('reservas', [{ ...reserva, ...updatePayload }], arena.id);
+        await localApi.upsert('reservas', [{ ...reserva, ...updatePayload }], selectedArenaContext.id);
         
         addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
         if (creditAmount > 0) addToast({ message: `${formatCurrency(creditAmount)} de crédito aplicado.`, type: 'info' });
@@ -299,9 +298,38 @@ const Reservations: React.FC = () => {
     }
   };
 
-  const openNewReservationModal = (quadraId: string, time: string) => { setNewReservationSlot({ quadraId, time, type: 'avulsa' }); setSelectedReservation(null); setIsModalOpen(true); };
-  const openNewReservationOnDay = (date: Date, time?: string) => { setSelectedDate(date); setNewReservationSlot({ quadraId: filters.quadraId !== 'all' ? filters.quadraId : '', time: time || '' }); setSelectedReservation(null); setIsModalOpen(true); };
-  const openEditReservationModal = (reserva: Reserva) => { const master = reserva.masterId ? reservas.find(r => r.id === reserva.masterId) : reserva; setSelectedReservation(master || null); setNewReservationSlot(null); setIsModalOpen(true); };
+  const openNewReservationModal = (quadraId: string, time: string) => {
+    if (!canEdit) {
+      addToast({ message: 'Você não tem permissão para criar novas reservas.', type: 'error' });
+      return;
+    }
+    setNewReservationSlot({ quadraId, time, type: 'avulsa' });
+    setSelectedReservation(null);
+    setIsModalOpen(true);
+  };
+  
+  const openNewReservationOnDay = (date: Date, time?: string) => {
+    if (!canEdit) {
+      addToast({ message: 'Você não tem permissão para criar novas reservas.', type: 'error' });
+      return;
+    }
+    setSelectedDate(date);
+    setNewReservationSlot({ quadraId: filters.quadraId !== 'all' ? filters.quadraId : '', time: time || '' });
+    setSelectedReservation(null);
+    setIsModalOpen(true);
+  };
+  
+  const openEditReservationModal = (reserva: Reserva) => {
+    if (!canEdit) {
+      addToast({ message: 'Você tem permissão apenas para visualizar as reservas.', type: 'info' });
+      return;
+    }
+    const master = reserva.masterId ? reservas.find(r => r.id === reserva.masterId) : reserva;
+    setSelectedReservation(master || null);
+    setNewReservationSlot(null);
+    setIsModalOpen(true);
+  };
+
   const closeModal = () => { setIsModalOpen(false); setSelectedReservation(null); setNewReservationSlot(null); };
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => { const newDate = parseDateStringAsLocal(e.target.value); if (!isNaN(newDate.getTime())) setSelectedDate(newDate); };
 
@@ -317,11 +345,15 @@ const Reservations: React.FC = () => {
                 {sortOrder === 'asc' ? 'Mais Antigas Primeiro' : 'Mais Recentes Primeiro'}
             </Button>
         )}
-        <div className="relative"><Button variant={activeFilterCount > 0 ? 'primary' : 'outline'} onClick={() => setIsFilterPanelOpen(prev => !prev)}><SlidersHorizontal className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Filtros</span>{activeFilterCount > 0 && <span className="ml-2 bg-white dark:bg-brand-gray-900 text-brand-blue-500 dark:text-brand-blue-400 text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">{activeFilterCount}</span>}</Button></div><Button onClick={() => openNewReservationModal(filters.quadraId !== 'all' ? filters.quadraId : '', '')}><Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Nova Reserva</span></Button></div></div><AnimatePresence>{isFilterPanelOpen && <FilterPanel filters={filters} onFilterChange={setFilters} onClearFilters={handleClearFilters} quadras={quadras}/>}</AnimatePresence></div>
+        <div className="relative"><Button variant={activeFilterCount > 0 ? 'primary' : 'outline'} onClick={() => setIsFilterPanelOpen(prev => !prev)}><SlidersHorizontal className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Filtros</span>{activeFilterCount > 0 && <span className="ml-2 bg-white dark:bg-brand-gray-900 text-brand-blue-500 dark:text-brand-blue-400 text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">{activeFilterCount}</span>}</Button></div>
+        <Button onClick={() => openNewReservationModal(filters.quadraId !== 'all' ? filters.quadraId : '', '')} disabled={!canEdit} title={!canEdit ? "Você não tem permissão para criar reservas" : ""}>
+          <Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Nova Reserva</span>
+        </Button>
+        </div></div><AnimatePresence>{isFilterPanelOpen && <FilterPanel filters={filters} onFilterChange={setFilters} onClearFilters={handleClearFilters} quadras={quadras}/>}</AnimatePresence></div>
         <ReservationLegend />
         <AnimatePresence mode="wait"><motion.div key={viewMode + filters.quadraId} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>{isLoading ? <div className="text-center py-16"><Loader2 className="w-8 h-8 border-4 border-brand-blue-500 border-t-transparent rounded-full animate-spin mx-auto" /></div> : (() => { switch (viewMode) { case 'agenda': return <AgendaView quadras={filteredQuadras} reservas={displayedReservations} selectedDate={selectedDate} onSlotClick={openNewReservationModal} onReservationClick={openEditReservationModal} onDataChange={loadData} />; case 'calendar': return <CalendarView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} selectedDate={selectedDate} onDateChange={setSelectedDate} onDayDoubleClick={openNewReservationOnDay} onSlotClick={openNewReservationOnDay} />; case 'list': return <ListView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} />; default: return null; } })()}</motion.div></AnimatePresence>
       </div>
-      <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={arena?.id || ''} selectedDate={selectedDate} profissionais={atletas} />}</AnimatePresence>
+      <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={selectedArenaContext?.id || ''} selectedDate={selectedDate} profissionais={atletas} />}</AnimatePresence>
       <AnimatePresence>{isCancellationModalOpen && (<CancellationModal isOpen={isCancellationModalOpen} onClose={() => { setIsCancellationModalOpen(false); setReservationToCancel(null); }} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} />)}</AnimatePresence>
       <AnimatePresence>{isManualCancelModalOpen && (<ManualCancellationModal isOpen={isManualCancelModalOpen} onClose={() => { setIsManualCancelModalOpen(false); setReservationToCancel(null); }} onConfirm={() => reservationToCancel && handleConfirmManualCancel(reservationToCancel.id)} reservaName={reservationToCancel?.clientName || 'Reserva'} />)}</AnimatePresence>
     </Layout>

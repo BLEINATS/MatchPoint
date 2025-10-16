@@ -29,6 +29,9 @@ const AnalyticsDashboard: React.FC = () => {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const canManageReservas = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.reservas === 'edit', [profile]);
+  const canManageAlunos = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.gerenciamento_arena === 'edit', [profile]);
+
   const loadData = useCallback(async () => {
     if (!arena) {
         setIsLoading(false);
@@ -238,12 +241,24 @@ const AnalyticsDashboard: React.FC = () => {
   const handleActionClick = (action: string) => {
     switch (action) {
       case 'Nova Reserva':
+        if (!canManageReservas) {
+          addToast({ message: 'Você não tem permissão para criar reservas.', type: 'error' });
+          return;
+        }
         navigate('/reservas', { state: { openModal: true, type: 'avulsa' } });
         break;
       case 'Bloquear Horário':
+        if (!canManageReservas) {
+          addToast({ message: 'Você não tem permissão para bloquear horários.', type: 'error' });
+          return;
+        }
         navigate('/reservas', { state: { openModal: true, type: 'bloqueio' } });
         break;
       case 'Novo Aluno':
+        if (!canManageAlunos) {
+          addToast({ message: 'Você não tem permissão para adicionar clientes.', type: 'error' });
+          return;
+        }
         navigate('/alunos', { state: { openModal: true } });
         break;
       case 'Notificação':

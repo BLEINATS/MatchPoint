@@ -26,7 +26,7 @@ type TabType = 'clientes' | 'alunos' | 'professores' | 'atletas' | 'turmas';
 type ProfessoresViewMode = 'list' | 'agenda';
 
 const Alunos: React.FC = () => {
-  const { arena } = useAuth();
+  const { selectedArenaContext: arena, profile, isLoading: isAuthLoading } = useAuth();
   const { addToast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -56,10 +56,15 @@ const Alunos: React.FC = () => {
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'aluno' | 'professor' | 'atleta' | 'turma' } | null>(null);
+  
+  const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.clientes === 'edit', [profile]);
 
   const loadData = useCallback(async () => {
-    if (!arena) return;
     setIsLoading(true);
+    if (!arena) {
+        setIsLoading(false);
+        return;
+    }
     try {
       const [alunosRes, professoresRes, turmasRes, quadrasRes, atletasRes, planosRes] = await Promise.all([
         localApi.select<Aluno>('alunos', arena.id),
@@ -83,8 +88,10 @@ const Alunos: React.FC = () => {
   }, [arena, addToast]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (!isAuthLoading) {
+      loadData();
+    }
+  }, [isAuthLoading, loadData]);
   
   const handleDataChange = useCallback(() => {
     loadData();
@@ -308,8 +315,8 @@ const Alunos: React.FC = () => {
   const renderContent = () => {
     if (isLoading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>;
     switch (activeTab) {
-      case 'clientes': return <AlunosList alunos={filteredClientes} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} />;
-      case 'alunos': return <AlunosList alunos={filteredAlunos} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} />;
+      case 'clientes': return <AlunosList alunos={filteredClientes} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} canEdit={canEdit} />;
+      case 'alunos': return <AlunosList alunos={filteredAlunos} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} canEdit={canEdit} />;
       case 'professores':
         return (
           <div>
@@ -318,14 +325,14 @@ const Alunos: React.FC = () => {
               <Button variant={professoresViewMode === 'agenda' ? 'primary' : 'outline'} size="sm" onClick={() => setProfessoresViewMode('agenda')}><Calendar className="h-4 w-4 mr-2"/>Agenda</Button>
             </div>
             {professoresViewMode === 'list' ? (
-              <ProfessoresList professores={filteredProfessores} onEdit={setEditingProfessor} onDelete={(id, name) => handleDeleteRequest(id, name, 'professor')} />
+              <ProfessoresList professores={filteredProfessores} onEdit={setEditingProfessor} onDelete={(id, name) => handleDeleteRequest(id, name, 'professor')} canEdit={canEdit} />
             ) : (
               <ProfessorAgendaView professores={professores} turmas={turmas} quadras={quadras} isGeneralView={true} />
             )}
           </div>
         );
-      case 'atletas': return <AtletasAluguelList atletas={filteredAtletasAluguel} onEdit={setEditingAtletaAluguel} onDelete={(id, name) => handleDeleteRequest(id, name, 'atleta')} />;
-      case 'turmas': return <TurmasList turmas={filteredTurmas} professores={professores} quadras={quadras} onEdit={setEditingTurma} onDelete={(id, name) => handleDeleteRequest(id, name, 'turma')} />;
+      case 'atletas': return <AtletasAluguelList atletas={filteredAtletasAluguel} onEdit={setEditingAtletaAluguel} onDelete={(id, name) => handleDeleteRequest(id, name, 'atleta')} canEdit={canEdit} />;
+      case 'turmas': return <TurmasList turmas={filteredTurmas} professores={professores} quadras={quadras} onEdit={setEditingTurma} onDelete={(id, name) => handleDeleteRequest(id, name, 'turma')} canEdit={canEdit} />;
       default: return null;
     }
   };
@@ -339,6 +346,28 @@ const Alunos: React.FC = () => {
   useEffect(() => { if (editingTurma) setIsTurmaModalOpen(true); }, [editingTurma]);
   useEffect(() => { if (!isTurmaModalOpen) setEditingTurma(null); }, [isTurmaModalOpen]);
 
+  if (isAuthLoading) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (profile?.role === 'funcionario' && profile.permissions?.clientes === 'none') {
+    return (
+      <Layout>
+        <div className="text-center p-8">
+          <h2 className="text-2xl font-bold">Acesso Negado</h2>
+          <p className="text-brand-gray-500">Você não tem permissão para acessar esta área.</p>
+          <Link to="/dashboard"><Button className="mt-4">Voltar para o Painel</Button></Link>
+        </div>
+      </Layout>
+    );
+  }
+  
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -355,7 +384,7 @@ const Alunos: React.FC = () => {
         <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-4 mb-8 border border-brand-gray-200 dark:border-brand-gray-700">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="w-full sm:w-auto sm:flex-1"><Input placeholder={searchPlaceholder} icon={<Search className="h-4 w-4 text-brand-gray-400" />} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-            <Button onClick={() => { if (activeTab.startsWith('cliente') || activeTab.startsWith('aluno')) setIsAlunoModalOpen(true); else if (activeTab === 'professores') setIsProfessorModalOpen(true); else if (activeTab === 'atletas') setIsAtletaAluguelModalOpen(true); else setIsTurmaModalOpen(true); }}><Plus className="h-4 w-4 mr-2" />{addButtonLabel}</Button>
+            <Button onClick={() => { if (activeTab.startsWith('cliente') || activeTab.startsWith('aluno')) setIsAlunoModalOpen(true); else if (activeTab === 'professores') setIsProfessorModalOpen(true); else if (activeTab === 'atletas') setIsAtletaAluguelModalOpen(true); else setIsTurmaModalOpen(true); }} disabled={!canEdit}><Plus className="h-4 w-4 mr-2" />{addButtonLabel}</Button>
           </div>
         </div>
         <AnimatePresence mode="wait"><motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>{renderContent()}</motion.div></AnimatePresence>
@@ -369,44 +398,7 @@ const Alunos: React.FC = () => {
   );
 };
 
-const ActionMenu: React.FC<{ aluno: Aluno; onPromoteToProfessor: () => void; onPromoteToAtleta: () => void }> = ({ aluno, onPromoteToProfessor, onPromoteToAtleta }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  return (
-    <div className="relative" ref={menuRef}>
-      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} className="p-2">
-        <MoreVertical className="h-4 w-4" />
-      </Button>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute right-0 mt-1 w-56 origin-top-right bg-white dark:bg-brand-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-10">
-            <div className="py-1">
-              <button onClick={(e) => { e.stopPropagation(); onPromoteToProfessor(); setIsOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
-                <Briefcase className="h-4 w-4 mr-3" /> Promover a Professor
-              </button>
-              <button onClick={(e) => { e.stopPropagation(); onPromoteToAtleta(); setIsOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
-                <Handshake className="h-4 w-4 mr-3" /> Promover a Atleta
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
-
-const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, onPromoteToProfessor: (aluno: Aluno) => void, onPromoteToAtleta: (aluno: Aluno) => void }> = ({ alunos, onEdit, onPromoteToProfessor, onPromoteToAtleta }) => {
+const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, onPromoteToProfessor: (aluno: Aluno) => void, onPromoteToAtleta: (aluno: Aluno) => void, canEdit: boolean }> = ({ alunos, onEdit, onPromoteToProfessor, onPromoteToAtleta, canEdit }) => {
   if (alunos.length === 0) return <PlaceholderTab title="Nenhum cliente/aluno encontrado" description="Cadastre novos clientes ou alunos para vê-los aqui." />;
   
   const getStatusProps = (status: Aluno['status']) => ({
@@ -440,7 +432,7 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, on
               const statusProps = getStatusProps(aluno.status);
               const levelName = (aluno.gamification_levels as { name: string } | null)?.name || 'Iniciante';
               return (
-                <motion.tr key={aluno.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05 }} onClick={() => onEdit(aluno)} className="hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer">
+                <motion.tr key={aluno.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05 }} onClick={() => canEdit && onEdit(aluno)} className="hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer">
                   <td className="px-6 py-4 whitespace-nowrap"><div className="flex items-center"><div className="flex-shrink-0 h-10 w-10">{aluno.avatar_url ? (<img className="h-10 w-10 rounded-full object-cover" src={aluno.avatar_url} alt={aluno.name} />) : (<div className="h-10 w-10 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center text-brand-gray-500 font-bold">{aluno.name ? aluno.name.charAt(0).toUpperCase() : '?'}</div>)}</div><div className="ml-4"><div className="text-sm font-medium text-brand-gray-900 dark:text-white">{aluno.name}</div><div className="text-sm text-brand-gray-500 dark:text-brand-gray-400">{aluno.email}</div></div></div></td>
                   <td className="px-6 py-4 whitespace-nowrap"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusProps.color.replace('text-','bg-').replace('-500','-100')} dark:${statusProps.color.replace('text-','bg-').replace('-500','-900/50')} ${statusProps.color}`}><statusProps.icon className="h-3 w-3 mr-1.5" />{aluno.status.charAt(0).toUpperCase() + aluno.status.slice(1)}</span></td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -458,9 +450,9 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, on
                   <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-brand-gray-900 dark:text-white flex items-center"><Star className="h-4 w-4 mr-1 text-yellow-400" />{levelName}</div><div className="text-sm text-brand-gray-500">{aluno.gamification_points || 0} pontos</div></td>
                   <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-brand-gray-900 dark:text-white">{aluno.plan_name}</div></td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    {aluno.profile_id ? (
+                    {aluno.profile_id && canEdit ? (
                       <ActionMenu aluno={aluno} onPromoteToProfessor={() => onPromoteToProfessor(aluno)} onPromoteToAtleta={() => onPromoteToAtleta(aluno)} />
-                    ) : aluno.phone ? (
+                    ) : aluno.phone && canEdit ? (
                       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleInvite(aluno.phone!, aluno.name); }} title="Convidar cliente via WhatsApp" className="text-green-500 hover:bg-green-100 dark:hover:bg-green-900/50 p-2">
                         <MessageSquare className="h-5 w-5" />
                       </Button>
@@ -478,7 +470,7 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, on
   );
 };
 
-const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Professor) => void, onDelete: (id: string, name: string) => void }> = ({ professores, onEdit, onDelete }) => {
+const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Professor) => void, onDelete: (id: string, name: string) => void, canEdit: boolean }> = ({ professores, onEdit, onDelete, canEdit }) => {
   if (professores.length === 0) return <PlaceholderTab title="Nenhum professor encontrado" description="Cadastre os professores que dão aulas na sua arena." />;
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -498,10 +490,12 @@ const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Profe
                   </span>
                 </div>
               </div>
-              <div className="flex space-x-1">
-                <Button variant="ghost" size="sm" onClick={() => onEdit(prof)} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => onDelete(prof.id, prof.name)} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
-              </div>
+              {canEdit && (
+                <div className="flex space-x-1">
+                  <Button variant="ghost" size="sm" onClick={() => onEdit(prof)} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => onDelete(prof.id, prof.name)} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              )}
             </div>
             <div className="space-y-3 text-sm mb-4 border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
               {prof.email && <div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><Mail className="h-4 w-4 mr-2 text-brand-gray-400" /><span>{prof.email}</span></div>}
@@ -532,7 +526,7 @@ const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Profe
   );
 };
 
-const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: AtletaAluguel) => void, onDelete: (id: string, name: string) => void }> = ({ atletas, onEdit, onDelete }) => {
+const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: AtletaAluguel) => void, onDelete: (id: string, name: string) => void, canEdit: boolean }> = ({ atletas, onEdit, onDelete, canEdit }) => {
   if (atletas.length === 0) return <PlaceholderTab title="Nenhum atleta encontrado" description="Cadastre jogadores que podem ser contratados por seus clientes." />;
   
   const getStatusProps = (status: AtletaAluguel['status']) => ({
@@ -561,10 +555,12 @@ const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: At
                   <p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{atleta.phone}</p>
                 </div>
               </div>
-              <div className="flex space-x-1">
-                <Button variant="ghost" size="sm" onClick={() => onEdit(atleta)} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => onDelete(atleta.id, atleta.name)} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
-              </div>
+              {canEdit && (
+                <div className="flex space-x-1">
+                  <Button variant="ghost" size="sm" onClick={() => onEdit(atleta)} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => onDelete(atleta.id, atleta.name)} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              )}
             </div>
             <div className="mb-4">
               <h4 className="text-xs font-medium text-brand-gray-500 dark:text-brand-gray-400 mb-1">Especialidades</h4>
@@ -591,11 +587,48 @@ const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: At
   );
 };
 
-const TurmasList: React.FC<{ turmas: Turma[], professores: Professor[], quadras: Quadra[], onEdit: (turma: Turma) => void, onDelete: (id: string, name: string) => void }> = ({ turmas, professores, quadras, onEdit, onDelete }) => {
+const TurmasList: React.FC<{ turmas: Turma[], professores: Professor[], quadras: Quadra[], onEdit: (turma: Turma) => void, onDelete: (id: string, name: string) => void, canEdit: boolean }> = ({ turmas, professores, quadras, onEdit, onDelete, canEdit }) => {
   if (turmas.length === 0) return <PlaceholderTab title="Nenhuma turma encontrada" description="Clique em 'Adicionar Turma' para criar sua primeira turma e começar a agendar aulas." />;
-  return (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{turmas.map((turma, index) => (<TurmaCard key={turma.id} turma={turma} professor={professores.find(p => p.id === turma.professor_id)} quadra={quadras.find(q => q.id === turma.quadra_id)} onEdit={() => onEdit(turma)} onDelete={() => onDelete(turma.id, turma.name)} index={index} />))}</div>);
+  return (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{turmas.map((turma, index) => (<TurmaCard key={turma.id} turma={turma} professor={professores.find(p => p.id === turma.professor_id)} quadra={quadras.find(q => q.id === turma.quadra_id)} onEdit={() => canEdit && onEdit(turma)} onDelete={() => canEdit && onDelete(turma.id, turma.name)} index={index} />))}</div>);
 };
 
 const PlaceholderTab: React.FC<{ title: string, description: string }> = ({ title, description }) => (<div className="text-center py-16"><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="max-w-md mx-auto"><div className="flex justify-center items-center w-16 h-16 bg-brand-gray-100 dark:bg-brand-gray-800 rounded-full mx-auto mb-6"><Users className="h-8 w-8 text-brand-gray-400" /></div><h3 className="text-xl font-bold text-brand-gray-900 dark:text-white mb-2">{title}</h3><p className="text-brand-gray-600 dark:text-brand-gray-400">{description}</p></motion.div></div>);
+
+const ActionMenu: React.FC<{ aluno: Aluno, onPromoteToProfessor: () => void, onPromoteToAtleta: () => void }> = ({ aluno, onPromoteToProfessor, onPromoteToAtleta }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setIsOpen(p => !p); }} className="p-2">
+        <MoreVertical className="h-5 w-5" />
+      </Button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="absolute right-0 mt-1 w-48 bg-white dark:bg-brand-gray-900 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-10">
+            <div className="py-1">
+              <button onClick={(e) => { e.stopPropagation(); onPromoteToProfessor(); setIsOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800">
+                <Briefcase className="h-4 w-4 mr-3" /> Tornar Professor
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); onPromoteToAtleta(); setIsOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800">
+                <Handshake className="h-4 w-4 mr-3" /> Tornar Atleta
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 export default Alunos;

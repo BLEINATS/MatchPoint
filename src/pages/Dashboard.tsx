@@ -1,18 +1,38 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout/Layout';
 import AnalyticsDashboard from '../components/Dashboard/AnalyticsDashboard';
 import ClientDashboard from '../components/Client/ClientDashboard';
+import { useToast } from '../context/ToastContext';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
   const { profile } = useAuth();
+  const { addToast } = useToast();
+  const navigate = useNavigate();
+
+  const canManageReservations = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.reservas === 'edit', [profile]);
+
+  const handleActionClick = (action: string) => {
+    switch (action) {
+      case 'Nova Reserva':
+        if (!canManageReservations) {
+          addToast({ message: 'Você não tem permissão para criar novas reservas.', type: 'error' });
+          return;
+        }
+        navigate('/reservas', { state: { openModal: true, type: 'avulsa' } });
+        break;
+      // Handle other actions...
+      default:
+        break;
+    }
+  };
   
   const renderDashboard = () => {
-    if (profile?.role === 'admin_arena') {
+    if (profile?.role === 'admin_arena' || profile?.role === 'funcionario') {
       return <AnalyticsDashboard />;
     }
     if (profile?.role === 'cliente') {
-      // Redirecionado para a página de perfil do cliente
       return <ClientDashboard />;
     }
     return (

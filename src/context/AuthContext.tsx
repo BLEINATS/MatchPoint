@@ -51,9 +51,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           localStorage.setItem(seedKey, 'true');
         }
 
-        const { data: existingArenas } = await localApi.select<Arena>('arenas', 'all');
-        const currentArenas = existingArenas || [];
-        setAllArenas(currentArenas);
+        const { data: currentArenas } = await localApi.select<Arena>('arenas', 'all');
+        setAllArenas(currentArenas || []);
 
         const loggedInUserStr = localStorage.getItem('loggedInUser');
         if (!loggedInUserStr) {
@@ -68,16 +67,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProfile(loggedInProfile);
 
         if (loggedInProfile.role === 'admin_arena') {
-            const userArena = currentArenas.find(a => a.owner_id === loggedInProfile.id);
+            const userArena = (currentArenas || []).find(a => a.owner_id === loggedInProfile.id);
             if (userArena) {
                 setArena(userArena);
                 setSelectedArenaContext(userArena);
             }
-        } else {
-            const defaultArena = currentArenas[0];
-            if (defaultArena) {
-                setSelectedArenaContext(defaultArena);
-                setMemberships([{ profile_id: loggedInProfile.id, arena_id: defaultArena.id }]);
+        } else if (loggedInProfile.role === 'funcionario') {
+            const employeeArena = (currentArenas || []).find(a => a.id === loggedInProfile.arena_id);
+            if (employeeArena) {
+              setArena(null);
+              setSelectedArenaContext(employeeArena);
+            }
+        } else { // cliente
+            const { data: allAlunos } = await localApi.select<Aluno>('alunos', 'all');
+            const myArenaIds = new Set((allAlunos || []).filter(a => a.profile_id === loggedInProfile.id).map(a => a.arena_id));
+            const myArenas = (currentArenas || []).filter(a => myArenaIds.has(a.id));
+            setMemberships(myArenas.map(a => ({ profile_id: loggedInProfile.id, arena_id: a.id })));
+            
+            if (myArenas.length > 0) {
+                setSelectedArenaContext(myArenas[0]);
+            } else if (currentArenas && currentArenas.length > 0) {
+                setSelectedArenaContext(currentArenas[0]);
             }
         }
       } catch (error) {
@@ -111,74 +121,48 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signIn = async (email: string, password: string) => {
     setIsLoading(true);
-    let userProfile: Profile;
-    let alunoForArena: Aluno | null = null;
+    try {
+        const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+        const userProfile = allProfiles.find(p => p.email.toLowerCase() === email.toLowerCase());
 
-    const { data: arenas } = await localApi.select<Arena>('arenas', 'all');
-    const defaultArena = arenas[0];
+        if (!userProfile) {
+            throw new Error("Usuário ou senha inválidos.");
+        }
 
-    if (email.toLowerCase() === 'admin@matchplay.com') {
-      const { data: adminProfiles } = await localApi.select<Profile>('profiles', 'all');
-      const adminProfile = adminProfiles.find(p => p.email === email.toLowerCase());
-      if (!adminProfile) {
+        const { data: arenas } = await localApi.select<Arena>('arenas', 'all');
+        setAllArenas(arenas || []);
+
+        if (userProfile.role === 'admin_arena') {
+            const userArena = (arenas || []).find(a => a.owner_id === userProfile.id);
+            setArena(userArena || null);
+            setSelectedArenaContext(userArena || null);
+        } else if (userProfile.role === 'funcionario') {
+            const employeeArena = (arenas || []).find(a => a.id === userProfile.arena_id);
+            setArena(null);
+            setSelectedArenaContext(employeeArena || null);
+        } else { // cliente
+            const { data: allAlunos } = await localApi.select<Aluno>('alunos', 'all');
+            const myArenaIds = new Set((allAlunos || []).filter(a => a.profile_id === userProfile.id).map(a => a.arena_id));
+            const myArenas = (arenas || []).filter(a => myArenaIds.has(a.id));
+            setMemberships(myArenas.map(a => ({ profile_id: userProfile.id, arena_id: a.id })));
+            
+            if (myArenas.length > 0) {
+                setSelectedArenaContext(myArenas[0]);
+            } else if (arenas && arenas.length > 0) {
+                setSelectedArenaContext(arenas[0]);
+            }
+        }
+        
+        const loggedInUser: User = { id: userProfile.id, email: userProfile.email, created_at: userProfile.created_at };
+        localStorage.setItem('loggedInUser', JSON.stringify(userProfile));
+        setUser(loggedInUser);
+        setProfile(userProfile);
+    } catch (error) {
         setIsLoading(false);
-        throw new Error("Perfil de administrador não encontrado.");
-      }
-      userProfile = adminProfile;
-      const userArena = arenas.find(a => a.owner_id === userProfile.id);
-      setArena(userArena || null);
-      setSelectedArenaContext(userArena || null);
-    } else {
-      if (!defaultArena) {
+        throw error;
+    } finally {
         setIsLoading(false);
-        throw new Error("Nenhuma arena configurada no sistema.");
-      }
-      
-      const [{ data: allProfiles }, { data: allAlunos }] = await Promise.all([
-          localApi.select<Profile>('profiles', 'all'),
-          localApi.select<Aluno>('alunos', defaultArena.id)
-      ]);
-
-      let existingProfile = allProfiles.find(p => p.email.toLowerCase() === email.toLowerCase());
-      let existingAluno = existingProfile ? allAlunos.find(a => a.profile_id === existingProfile!.id) : null;
-
-      if (!existingProfile) {
-          // New user, create Profile
-          const newProfile: Profile = {
-              id: `profile_${uuidv4()}`, name: `Cliente ${email.split('@')[0]}`, email: email,
-              role: 'cliente', created_at: new Date().toISOString(), avatar_url: null
-          };
-          await localApi.upsert('profiles', [newProfile], 'all');
-          userProfile = newProfile;
-      } else {
-          userProfile = existingProfile;
-      }
-
-      if (!existingAluno) {
-          // Aluno record does not exist for this user in this arena, create it
-          const newAlunoPayload: Omit<Aluno, 'id' | 'created_at'> = {
-              arena_id: defaultArena.id, profile_id: userProfile.id, name: userProfile.name, email: userProfile.email,
-              phone: userProfile.phone || null, status: 'ativo', plan_name: 'Avulso', plan_id: null, monthly_fee: 0,
-              aulas_restantes: 0, aulas_agendadas: [], join_date: format(new Date(), 'yyyy-MM-dd'),
-              credit_balance: 0, gamification_points: 0,
-          };
-          const { data: createdAlunos } = await localApi.upsert('alunos', [newAlunoPayload], defaultArena.id);
-          alunoForArena = createdAlunos[0];
-      } else {
-          alunoForArena = existingAluno;
-      }
-      
-      setSelectedArenaContext(defaultArena);
-      setMemberships([{ profile_id: userProfile.id, arena_id: defaultArena.id }]);
     }
-    
-    const loggedInUser: User = { id: userProfile.id, email: userProfile.email, created_at: userProfile.created_at };
-    localStorage.setItem('loggedInUser', JSON.stringify(userProfile));
-    setUser(loggedInUser);
-    setProfile(userProfile);
-    setAlunoProfileForSelectedArena(alunoForArena);
-    
-    setIsLoading(false);
   };
 
   const signOut = async () => {

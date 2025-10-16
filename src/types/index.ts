@@ -1,5 +1,18 @@
 import { PostgrestError } from "@supabase/supabase-js";
 
+export type PermissionLevel = 'none' | 'view' | 'edit';
+
+export interface ProfilePermissions {
+  reservas: PermissionLevel;
+  quadras: PermissionLevel;
+  gerenciamento_arena: PermissionLevel;
+  torneios: PermissionLevel;
+  eventos: PermissionLevel;
+  financeiro: PermissionLevel;
+  gamification: 'none' | 'edit';
+  planos_aulas: 'none' | 'edit';
+}
+
 export interface AuthState {
   user: User | null;
   profile: Profile | null;
@@ -27,7 +40,9 @@ export interface Profile {
   name: string;
   email: string;
   avatar_url: string | null;
-  role: 'cliente' | 'admin_arena' | 'professor' | 'atleta';
+  role: 'cliente' | 'admin_arena' | 'professor' | 'atleta' | 'funcionario';
+  arena_id?: string;
+  permissions?: ProfilePermissions;
   phone?: string | null;
   clientType?: 'cliente' | 'aluno' | 'mensalista';
   birth_date?: string | null;

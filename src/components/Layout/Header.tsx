@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   LogOut, Sun, Moon, Settings, Bookmark, LayoutGrid, 
   User as UserIcon, LayoutDashboard, GraduationCap, Trophy, 
-  PartyPopper, Calendar, ChevronDown, Loader2, Bell, Gift, DollarSign, Clock
+  PartyPopper, Calendar, ChevronDown, Loader2, Bell, Gift, DollarSign, Clock, Users, BarChart2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -29,7 +29,8 @@ const Header: React.FC = () => {
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
-  const isAdminView = profile?.role === 'admin_arena' && (!selectedArenaContext || arena?.id === selectedArenaContext.id);
+  const isAdminView = profile?.role === 'admin_arena';
+  const isStaffView = profile?.role === 'funcionario';
 
   useEffect(() => {
     const timerId = setInterval(() => {
@@ -53,14 +54,14 @@ const Header: React.FC = () => {
   }, [handleOutsideClick]);
 
   useEffect(() => {
-    if (!profile || !arena) {
+    if (!profile || !selectedArenaContext) {
       setNotifications([]);
       setUnreadCount(0);
       return;
     }
 
     const fetchNotifications = async () => {
-      const { data, error } = await localApi.select<Notificacao>('notificacoes', arena.id);
+      const { data, error } = await localApi.select<Notificacao>('notificacoes', selectedArenaContext.id);
 
       if (error) {
         console.error("Erro ao buscar notificações:", error);
@@ -68,16 +69,11 @@ const Header: React.FC = () => {
         let filteredData = data || [];
 
         if (profile.role === 'admin_arena') {
-          // Admin sees their own notifications OR arena-wide notifications
-          filteredData = filteredData.filter(n => 
-            n.profile_id === profile.id || !n.profile_id
-          );
+          filteredData = filteredData.filter(n => n.profile_id === profile.id || !n.profile_id);
         } else {
-          // Client sees only their own notifications
           filteredData = filteredData.filter(n => n.profile_id === profile.id);
         }
 
-        // Sort and limit after filtering
         const sortedAndLimitedData = filteredData
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           .slice(0, 20);
@@ -88,18 +84,15 @@ const Header: React.FC = () => {
     };
 
     fetchNotifications();
+  }, [profile, selectedArenaContext, addToast]);
 
-    // The real-time part is mocked and won't work in local mode, which is expected.
-    // No changes needed here.
-
-  }, [profile, arena, addToast]);
 
   const handleMarkAsRead = async (id: string) => {
-    if (!arena) return;
+    if (!selectedArenaContext) return;
     const notificationToUpdate = notifications.find(n => n.id === id);
     if (!notificationToUpdate) return;
 
-    const { error } = await localApi.upsert('notificacoes', [{ ...notificationToUpdate, read: true }], arena.id);
+    const { error } = await localApi.upsert('notificacoes', [{ ...notificationToUpdate, read: true }], selectedArenaContext.id);
     if (!error) {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
@@ -107,13 +100,13 @@ const Header: React.FC = () => {
   };
   
   const handleMarkAllAsRead = async () => {
-    if (!arena) return;
+    if (!selectedArenaContext) return;
     const unreadNotifications = notifications.filter(n => !n.read);
     if (unreadNotifications.length === 0) return;
     
     const updatedNotifications = unreadNotifications.map(n => ({ ...n, read: true }));
 
-    const { error } = await localApi.upsert('notificacoes', updatedNotifications, arena.id);
+    const { error } = await localApi.upsert('notificacoes', updatedNotifications, selectedArenaContext.id);
     if (!error) {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
@@ -140,25 +133,26 @@ const Header: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <Link to={profile?.role === 'admin_arena' ? "/dashboard" : "/perfil"} className="flex items-center">
+            <Link to={profile?.role === 'admin_arena' || profile?.role === 'funcionario' ? "/dashboard" : "/perfil"} className="flex items-center">
               <Calendar className="h-8 w-8 text-brand-blue-500" />
               <span className="ml-2 text-xl font-bold text-brand-gray-900 dark:text-white">
                 MatchPlay
               </span>
             </Link>
-            {isAdminView && arena && (
+            {(isAdminView || isStaffView) && selectedArenaContext && (
               <div className="ml-4 pl-4 border-l border-brand-gray-300 dark:border-brand-gray-600 hidden sm:flex items-center gap-3">
-                {arena.logo_url ? (
+                {selectedArenaContext.logo_url ? (
                   <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center overflow-hidden border border-brand-gray-200 dark:border-brand-gray-700">
-                    <img src={arena.logo_url} alt={`Logo de ${arena.name}`} className="h-full w-full object-contain" />
+                    <img src={selectedArenaContext.logo_url} alt={`Logo de ${selectedArenaContext.name}`} className="h-full w-full object-contain" />
                   </div>
                 ) : (
                   <div className="h-8 w-8 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center text-brand-gray-500 font-bold">
-                    {arena.name ? arena.name.charAt(0).toUpperCase() : '?'}
+                    {selectedArenaContext.name ? selectedArenaContext.name.charAt(0).toUpperCase() : '?'}
                   </div>
                 )}
                 <span className="font-semibold text-sm text-brand-gray-800 dark:text-brand-gray-200">
-                  {arena.name}
+                  {selectedArenaContext.name}
+                  {isStaffView && profile && <span className="font-normal text-brand-gray-500"> • {profile.name}</span>}
                 </span>
                 <div className="w-px h-6 bg-brand-gray-300 dark:bg-brand-gray-600"></div>
                 <div className="flex items-center gap-2 text-sm font-mono text-brand-gray-600 dark:text-brand-gray-400" title="Horário Atual">
@@ -178,11 +172,22 @@ const Header: React.FC = () => {
                   <>
                     <NavIconButton to="/quadras" title="Minhas Quadras"><LayoutGrid className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/reservas" title="Reservas"><Bookmark className="h-5 w-5" /></NavIconButton>
-                    <NavIconButton to="/alunos" title="Clientes e Alunos"><GraduationCap className="h-5 w-5" /></NavIconButton>
+                    <NavIconButton to="/alunos" title="Gerenciamento"><GraduationCap className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/torneios" title="Torneios"><Trophy className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/eventos" title="Eventos"><PartyPopper className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/financeiro" title="Financeiro"><DollarSign className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/gamification" title="Gamificação"><Gift className="h-5 w-5" /></NavIconButton>
+                  </>
+                )}
+                {isStaffView && (
+                  <>
+                    {profile.permissions?.reservas !== 'none' && <NavIconButton to="/reservas" title="Reservas"><Bookmark className="h-5 w-5" /></NavIconButton>}
+                    {profile.permissions?.quadras !== 'none' && <NavIconButton to="/quadras" title="Quadras"><LayoutGrid className="h-5 w-5" /></NavIconButton>}
+                    {profile.permissions?.gerenciamento_arena !== 'none' && <NavIconButton to="/alunos" title="Gerenciamento"><GraduationCap className="h-5 w-5" /></NavIconButton>}
+                    {profile.permissions?.torneios !== 'none' && <NavIconButton to="/torneios" title="Torneios"><Trophy className="h-5 w-5" /></NavIconButton>}
+                    {profile.permissions?.eventos !== 'none' && <NavIconButton to="/eventos" title="Eventos"><PartyPopper className="h-5 w-5" /></NavIconButton>}
+                    {profile.permissions?.financeiro !== 'none' && <NavIconButton to="/financeiro" title="Financeiro"><DollarSign className="h-5 w-5" /></NavIconButton>}
+                    {profile.permissions?.gamification !== 'none' && <NavIconButton to="/gamification" title="Gamificação"><Gift className="h-5 w-5" /></NavIconButton>}
                   </>
                 )}
                 
@@ -215,7 +220,7 @@ const Header: React.FC = () => {
                         <UserIcon className="h-5 w-5 text-brand-gray-500" />
                       )}
                     </div>
-                    {!isAdminView && (
+                    {(!isAdminView && !isStaffView) && (
                       <span className="font-semibold text-sm text-brand-gray-800 dark:text-brand-gray-200 hidden sm:block">
                         {profile.name}
                       </span>
@@ -230,7 +235,7 @@ const Header: React.FC = () => {
                           <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 truncate">{profile.email}</p>
                         </div>
                         <div className="py-1 border-t border-brand-gray-200 dark:border-brand-gray-700">
-                          <Link to={profile?.role === 'admin_arena' ? '/dashboard' : '/perfil'} onClick={() => setIsProfileMenuOpen(false)} className="flex items-center w-full px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
+                          <Link to={profile?.role === 'admin_arena' || profile?.role === 'funcionario' ? '/dashboard' : '/perfil'} onClick={() => setIsProfileMenuOpen(false)} className="flex items-center w-full px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
                             <LayoutDashboard className="h-4 w-4 mr-3" /> Meu Painel
                           </Link>
                           <Link to="/settings" onClick={() => setIsProfileMenuOpen(false)} className="flex items-center w-full px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
