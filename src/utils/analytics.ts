@@ -1,42 +1,30 @@
 import { Quadra, Reserva } from '../types';
-import { getDay, parse, addDays, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, startOfDay } from 'date-fns';
+import { format, getDay, parse, addDays, isSameDay, startOfDay, addMinutes, isPast } from 'date-fns';
 import { parseDateStringAsLocal } from './dateUtils';
 
-const timeStringToMinutes = (time: string): number => {
-  if (!time || !time.includes(':')) return 0;
-  const [hours, minutes] = time.split(':').map(Number);
-  return hours * 60 + minutes;
-};
-
-const minutesToTimeString = (minutes: number): string => {
-  const h = Math.floor(minutes / 60).toString().padStart(2, '0');
-  const m = (minutes % 60).toString().padStart(2, '0');
-  return `${h}:${m}`;
-};
-
-type CourtAvailability = {
+export type CourtAvailabilitySlots = {
   courtId: string;
   courtName: string;
-  ranges: string[];
+  slots: { start: string; end: string }[];
 };
 
-export const getAvailableTimeRangesForDay = (
+export const getAvailableSlotsForDay = (
   quadras: Quadra[],
   reservas: Reserva[],
   date: Date
-): CourtAvailability[] => {
+): CourtAvailabilitySlots[] => {
   const activeQuadras = quadras.filter(q => q.status === 'ativa');
   if (activeQuadras.length === 0) return [];
 
   const dayOfWeek = getDay(date);
-  const today = startOfDay(new Date());
-  const isToday = isSameDay(date, today);
-  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  const isToday = isSameDay(date, startOfDay(new Date()));
 
   const dailyReservas = reservas.filter(r => isSameDay(parseDateStringAsLocal(r.date), date) && r.status !== 'cancelada');
 
-  const availabilityByCourt: CourtAvailability[] = activeQuadras.map(quadra => {
-    const timeline: boolean[] = Array(48).fill(false); // true = available
+  const availabilityByCourt: CourtAvailabilitySlots[] = activeQuadras.map(quadra => {
+    const availableSlots: { start: string; end: string }[] = [];
+    const bookingDuration = 60; // Forçar duração de 1 hora
+    const slotIncrement = 60; // Verificar a cada 60 minutos
 
     let horario;
     if (dayOfWeek === 0) horario = quadra.horarios?.sunday;
@@ -44,93 +32,68 @@ export const getAvailableTimeRangesForDay = (
     else horario = quadra.horarios?.weekday;
 
     if (horario && horario.start && horario.end) {
-      const startMinutes = timeStringToMinutes(horario.start);
-      let endMinutes = timeStringToMinutes(horario.end);
-      if (endMinutes === 0 && horario.end === '00:00') endMinutes = 24 * 60;
-      if (endMinutes <= startMinutes) endMinutes += 24 * 60;
-
-      for (let min = startMinutes; min < endMinutes; min += 30) {
-        const slotIndex = Math.floor(min / 30);
-        if (slotIndex < 48) {
-          timeline[slotIndex] = true;
-        }
-      }
-    }
-
-    const quadraReservas = dailyReservas.filter(r => r.quadra_id === quadra.id);
-    quadraReservas.forEach(reserva => {
-      const startMinutes = timeStringToMinutes(reserva.start_time);
-      let endMinutes = timeStringToMinutes(reserva.end_time);
-      if (endMinutes === 0 && reserva.end_time === '00:00') endMinutes = 24 * 60;
-      if (endMinutes <= startMinutes) endMinutes += 24 * 60;
-
-      for (let min = startMinutes; min < endMinutes; min += 30) {
-        const slotIndex = Math.floor(min / 30);
-        if (slotIndex < 48) {
-          timeline[slotIndex] = false;
-        }
-      }
-    });
-
-    const ranges: string[] = [];
-    let startRange: number | null = null;
-
-    for (let i = 0; i < 48; i++) {
-      const slotMinutes = i * 30;
-
-      if (isToday && slotMinutes < nowMinutes) {
-        if (startRange !== null) {
-          const endRangeTime = minutesToTimeString(i * 30);
-          if (minutesToTimeString(startRange) !== endRangeTime) {
-             ranges.push(`${minutesToTimeString(startRange)} - ${endRangeTime}`);
-          }
-          startRange = null;
-        }
-        continue;
+      let currentTime = parse(horario.start, 'HH:mm', date);
+      let operatingEndTime = parse(horario.end, 'HH:mm', date);
+      if (operatingEndTime <= currentTime && horario.end !== '00:00') {
+          operatingEndTime = addDays(operatingEndTime, 1);
+      } else if (horario.end === '00:00') {
+          operatingEndTime = addDays(startOfDay(date), 1);
       }
 
-      if (timeline[i] && startRange === null) {
-        startRange = slotMinutes;
-      } else if (!timeline[i] && startRange !== null) {
-        const endRangeTime = minutesToTimeString(i * 30);
-        if (minutesToTimeString(startRange) !== endRangeTime) {
-            ranges.push(`${minutesToTimeString(startRange)} - ${endRangeTime}`);
-        }
-        startRange = null;
-      }
-    }
 
-    if (startRange !== null) {
-      const endRangeTime = '00:00';
-      if (minutesToTimeString(startRange) !== endRangeTime) {
-         ranges.push(`${minutesToTimeString(startRange)} - ${endRangeTime}`);
+      while (currentTime < operatingEndTime) {
+        const slotStart = currentTime;
+        const slotEnd = addMinutes(slotStart, bookingDuration);
+
+        if (slotEnd > operatingEndTime) {
+          break; // Slot exceeds operating hours
+        }
+
+        if (isToday && isPast(slotStart)) {
+          currentTime = addMinutes(currentTime, slotIncrement);
+          continue;
+        }
+
+        const hasConflict = dailyReservas.some(r => {
+          if (r.quadra_id !== quadra.id) return false;
+          
+          const resStartTime = parse(r.start_time, 'HH:mm', date);
+          let resEndTime = parse(r.end_time, 'HH:mm', date);
+          if (resEndTime <= resStartTime) resEndTime = addDays(resEndTime, 1);
+          
+          return slotStart < resEndTime && slotEnd > resStartTime;
+        });
+
+        if (!hasConflict) {
+          availableSlots.push({
+            start: format(slotStart, 'HH:mm'),
+            end: format(slotEnd, 'HH:mm'),
+          });
+        }
+
+        currentTime = addMinutes(currentTime, slotIncrement);
       }
     }
 
     return {
       courtId: quadra.id,
       courtName: quadra.name,
-      ranges,
+      slots: availableSlots,
     };
-  }).filter(court => court.ranges.length > 0);
+  }).filter(court => court.slots.length > 0);
 
   return availabilityByCourt;
 };
 
-
-export const getAvailableSlotsForDay = (quadra: Quadra, date: Date): number => {
+const calculateTotalSlotsForDay = (quadra: Quadra, date: Date): number => {
   if (quadra.status !== 'ativa' || !quadra.horarios) return 0;
 
   const dayOfWeek = getDay(date);
   
   let horario;
-  if (dayOfWeek === 0) {
-    horario = quadra.horarios.sunday;
-  } else if (dayOfWeek === 6) {
-    horario = quadra.horarios.saturday;
-  } else {
-    horario = quadra.horarios.weekday;
-  }
+  if (dayOfWeek === 0) horario = quadra.horarios.sunday;
+  else if (dayOfWeek === 6) horario = quadra.horarios.saturday;
+  else horario = quadra.horarios.weekday;
 
   if (!horario || !horario.start || !horario.end) return 0;
 
@@ -138,17 +101,13 @@ export const getAvailableSlotsForDay = (quadra: Quadra, date: Date): number => {
     const startTime = parse(horario.start, 'HH:mm', date);
     let endTime = parse(horario.end, 'HH:mm', date);
 
-    if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
-        return 0;
-    }
-
+    if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) return 0;
     if (endTime <= startTime) endTime = addDays(endTime, 1);
     
-    const intervalMinutes = quadra.booking_duration_minutes || 60;
-    if (intervalMinutes <= 0) return 0;
-
+    const slotIncrement = 30; // Assume 30 min increments for occupancy calculation
+    
     const diffMinutes = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
-    const slots = Math.floor(diffMinutes / intervalMinutes);
+    const slots = Math.floor(diffMinutes / slotIncrement);
     return isNaN(slots) ? 0 : slots;
   } catch (e) {
     console.error("Erro ao parsear horário:", horario);
@@ -171,7 +130,7 @@ export const calculateDailyOccupancy = (
   }
 
   const totalSlotsForDay = relevantQuadras.reduce((acc, quadra) => {
-    return acc + getAvailableSlotsForDay(quadra, date);
+    return acc + calculateTotalSlotsForDay(quadra, date);
   }, 0);
 
   const bookedSlotsForDay = allReservas.filter(reserva => {

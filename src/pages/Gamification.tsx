@@ -16,7 +16,7 @@ import AchievementsSettings from '../components/Gamification/AchievementsSetting
 type TabType = 'general' | 'levels' | 'rewards' | 'achievements';
 
 const Gamification: React.FC = () => {
-  const { arena } = useAuth();
+  const { selectedArenaContext: arena } = useAuth();
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [isLoading, setIsLoading] = useState(true);

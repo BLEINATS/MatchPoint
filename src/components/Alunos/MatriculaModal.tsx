@@ -212,6 +212,7 @@ const MatriculaModal: React.FC<MatriculaModalProps> = ({ isOpen, onClose, onSave
         confirmText="Sim, Atribuir Plano"
         cancelText="Cancelar"
         icon={<GraduationCap className="h-10 w-10 text-brand-blue-500" />}
+        confirmVariant="primary"
       />
       <AssignPlanModal
         isOpen={isAssignPlanModalOpen}

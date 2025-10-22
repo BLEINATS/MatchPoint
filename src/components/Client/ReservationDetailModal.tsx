@@ -22,9 +22,10 @@ interface ReservationDetailModalProps {
   onUpdateParticipantStatus: (reservaId: string, profileId: string, status: 'accepted' | 'declined') => void;
   onUpdateReservation: (reserva: Reserva) => void;
   friends: Profile[];
+  onPay: (reserva: Reserva, amount: number, isPartial: boolean) => void;
 }
 
-const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen, onClose, reserva: initialReserva, quadra, arenaName, onCancel, onUpdateParticipantStatus, onUpdateReservation, friends }) => {
+const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen, onClose, reserva: initialReserva, quadra, arenaName, onCancel, onUpdateParticipantStatus, onUpdateReservation, friends, onPay }) => {
   const { profile } = useAuth();
   const [reserva, setReserva] = useState(initialReserva);
   const [isAddingFriends, setIsAddingFriends] = useState(false);
@@ -50,15 +51,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
 
   const handlePayMyPart = () => {
     if (!profile || !reserva.participants) return;
-    const updatedParticipants = reserva.participants.map(p =>
-      p.profile_id === profile.id ? { ...p, payment_status: 'pago' as 'pago' } : p
-    );
-    const allAcceptedHavePaid = updatedParticipants.filter(p => p.status === 'accepted').every(p => p.payment_status === 'pago');
-    const newPaymentStatus = allAcceptedHavePaid ? 'pago' : 'confirmada'; // Should be 'pago'
-    const newReservationStatus = allAcceptedHavePaid ? 'confirmada' : reserva.status;
-    
-    const updatedReserva = { ...reserva, participants: updatedParticipants, payment_status: newPaymentStatus, status: newReservationStatus };
-    onUpdateReservation(updatedReserva);
+    const valorPorJogador = (reserva.total_price || 0) / (reserva.participants.filter(p => p.status === 'accepted').length || 1);
+    onPay(reserva, valorPorJogador, true);
   };
 
   const handleAddParticipant = (friend: Profile) => {
@@ -231,6 +225,7 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
         }
         confirmText={lockAction === 'lock' ? 'Sim, Fechar' : 'Sim, Reabrir'}
         icon={lockAction === 'lock' ? <Lock className="h-10 w-10 text-brand-blue-500" /> : <Unlock className="h-10 w-10 text-yellow-500" />}
+        confirmVariant="primary"
       />
     </>
   );

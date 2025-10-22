@@ -16,7 +16,7 @@ import { useToast } from '../context/ToastContext';
 import { v4 as uuidv4 } from 'uuid';
 
 const Torneios: React.FC = () => {
-  const { arena } = useAuth();
+  const { selectedArenaContext: arena } = useAuth();
   const { addToast } = useToast();
   const [torneios, setTorneios] = useState<Torneio[]>([]);
   const [quadras, setQuadras] = useState<Quadra[]>([]);

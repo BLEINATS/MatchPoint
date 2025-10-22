@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Loader2, LayoutGrid, ShoppingBag, Percent } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import Button from '../components/Forms/Button';
 import QuadraCard from '../components/Dashboard/QuadraCard';
-import QuadraFormTabs from '../components/Forms/QuadraFormTabs';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Quadra, PricingRule } from '../types';
+import { Quadra, PricingRule, Reserva } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { v4 as uuidv4 } from 'uuid';
 import { parse, addDays, eachDayOfInterval, startOfMonth, endOfMonth, getDay } from 'date-fns';
 import RentalItemsTab from '../components/Quadras/RentalItemsTab';
 import DiscountsTab from '../components/Quadras/DiscountsTab';
-import { localApi } from '../lib/localApi';
+import { localApi, localUploadPhoto, localDeletePhoto } from '../lib/localApi';
+import QuadraFormTabs from '../components/Forms/QuadraFormTabs';
 
 const Quadras: React.FC = () => {
-  const { user, arena } = useAuth();
+  const { user, selectedArenaContext: arena, profile } = useAuth();
   const { addToast } = useToast();
   const [quadras, setQuadras] = useState<Quadra[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,8 +23,13 @@ const Quadras: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'quadras' | 'itens' | 'promocoes'>('quadras');
 
+  const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.quadras === 'edit', [profile]);
+
   const fetchQuadras = useCallback(async () => {
-    if (!arena) return;
+    if (!arena) {
+        setIsLoading(false);
+        return;
+    }
     setIsLoading(true);
     try {
       const { data, error } = await localApi.select<Quadra>('quadras', arena.id);
@@ -70,8 +75,6 @@ const Quadras: React.FC = () => {
           finalPhotoUrls = finalPhotoUrls.filter(url => !photosToDelete.includes(url));
       }
 
-      // We do not persist new photos (blobs) in local storage.
-      // The user is notified about this limitation.
       const finalQuadraPayload = {
         ...quadraPayload,
         id: quadraId,
@@ -171,7 +174,7 @@ const Quadras: React.FC = () => {
       <main className="flex-1 p-4 sm:p-6 bg-brand-gray-50 dark:bg-brand-gray-950">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-brand-gray-800 dark:text-white">Gerenciamento de Quadras</h1>
-          {activeTab === 'quadras' && (
+          {activeTab === 'quadras' && canEdit && (
             <Button onClick={() => handleOpenModal()}>
               <Plus className="h-4 w-4 mr-2" />
               Adicionar Quadra
@@ -239,8 +242,8 @@ const Quadras: React.FC = () => {
                           key={quadra.id}
                           index={index}
                           quadra={quadra}
-                          onEdit={() => handleOpenModal(quadra)}
-                          onDelete={() => handleDeleteQuadra(quadra.id)}
+                          onEdit={() => canEdit && handleOpenModal(quadra)}
+                          onDelete={() => canEdit && handleDeleteQuadra(quadra.id)}
                           monthlyEstimatedRevenue={revenue}
                         />
                       );
@@ -250,20 +253,22 @@ const Quadras: React.FC = () => {
                   <div className="text-center py-12 px-6 bg-white dark:bg-brand-gray-900 rounded-lg shadow-sm">
                     <h3 className="text-lg font-medium text-brand-gray-800 dark:text-white">Nenhuma quadra cadastrada</h3>
                     <p className="mt-2 text-sm text-brand-gray-500 dark:text-brand-gray-400">Comece adicionando sua primeira quadra para gerenciar reservas e horários.</p>
-                    <Button className="mt-4" onClick={() => handleOpenModal()}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Adicionar Primeira Quadra
-                    </Button>
+                    {canEdit && (
+                      <Button className="mt-4" onClick={() => handleOpenModal()}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Adicionar Primeira Quadra
+                      </Button>
+                    )}
                   </div>
                 )}
               </>
             ) : activeTab === 'itens' ? (
               <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-                <RentalItemsTab />
+                <RentalItemsTab canEdit={canEdit} />
               </div>
             ) : (
               <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-                <DiscountsTab />
+                <DiscountsTab canEdit={canEdit} />
               </div>
             )}
           </motion.div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Plus, PartyPopper, Loader2 } from 'lucide-react';
@@ -15,7 +15,7 @@ import { useToast } from '../context/ToastContext';
 import { v4 as uuidv4 } from 'uuid';
 
 const Eventos: React.FC = () => {
-  const { arena } = useAuth();
+  const { selectedArenaContext: arena, profile } = useAuth();
   const { addToast } = useToast();
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [quadras, setQuadras] = useState<Quadra[]>([]);
@@ -25,8 +25,14 @@ const Eventos: React.FC = () => {
   const [editingEvento, setEditingEvento] = useState<Evento | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const canView = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.eventos === 'view' || profile?.permissions?.eventos === 'edit', [profile]);
+  const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.eventos === 'edit', [profile]);
+
   const loadData = useCallback(async () => {
-    if (!arena) return;
+    if (!arena) {
+        setIsLoading(false);
+        return;
+    }
     setIsLoading(true);
     try {
       const [eventosRes, quadrasRes, reservasRes] = await Promise.all([
@@ -125,6 +131,18 @@ const Eventos: React.FC = () => {
     setEditingEvento(null);
   }
 
+  if (!canView) {
+    return (
+      <Layout>
+        <div className="text-center p-8">
+          <h2 className="text-2xl font-bold">Acesso Negado</h2>
+          <p className="text-brand-gray-500">Você não tem permissão para acessar esta área.</p>
+          <Link to="/dashboard"><Button className="mt-4">Voltar para o Painel</Button></Link>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -138,10 +156,12 @@ const Eventos: React.FC = () => {
                   <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Gestão de Eventos Privados</h1>
                   <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Gerencie orçamentos e locações de espaço para festas, aniversários e mais.</p>
               </div>
-              <Button onClick={() => setIsModalOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Novo Orçamento
-              </Button>
+              {canEdit && (
+                <Button onClick={() => setIsModalOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Novo Orçamento
+                </Button>
+              )}
           </div>
         </motion.div>
 

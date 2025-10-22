@@ -7,15 +7,22 @@ import { Loader2, Plus, Trash2, Edit, Save, X, Percent, Clock, Tag } from 'lucid
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 
-const DiscountsTab: React.FC = () => {
-  const { arena } = useAuth();
+interface DiscountsTabProps {
+  canEdit: boolean;
+}
+
+const DiscountsTab: React.FC<DiscountsTabProps> = ({ canEdit }) => {
+  const { selectedArenaContext: arena } = useAuth();
   const { addToast } = useToast();
   const [discounts, setDiscounts] = useState<DurationDiscount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState<Partial<DurationDiscount> | null>(null);
 
   const loadDiscounts = useCallback(async () => {
-    if (!arena) return;
+    if (!arena) {
+        setIsLoading(false);
+        return;
+    }
     setIsLoading(true);
     try {
       const { data, error } = await localApi.select<DurationDiscount>('duration_discounts', arena.id);
@@ -65,6 +72,10 @@ const DiscountsTab: React.FC = () => {
     });
   };
 
+  if (isLoading) {
+    return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-brand-blue-500" /></div>;
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -77,19 +88,19 @@ const DiscountsTab: React.FC = () => {
         </p>
       </div>
 
-      <div className="flex justify-end">
-        <Button onClick={handleAddNew}><Plus className="h-4 w-4 mr-2" />Nova Promoção</Button>
-      </div>
+      {canEdit && (
+        <div className="flex justify-end">
+          <Button onClick={handleAddNew}><Plus className="h-4 w-4 mr-2" />Nova Promoção</Button>
+        </div>
+      )}
 
-      {isLoading ? (
-        <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-brand-blue-500" /></div>
-      ) : isEditing ? (
+      {isEditing ? (
         <EditDiscountForm discount={isEditing} onSave={handleSave} onCancel={() => setIsEditing(null)} />
       ) : (
         <div className="space-y-3">
           {discounts.length > 0 ? (
             discounts.map(d => (
-              <DiscountItem key={d.id} discount={d} onEdit={() => setIsEditing(d)} onDelete={() => handleDelete(d.id)} />
+              <DiscountItem key={d.id} discount={d} onEdit={() => canEdit && setIsEditing(d)} onDelete={() => canEdit && handleDelete(d.id)} canEdit={canEdit} />
             ))
           ) : (
             <p className="text-center text-brand-gray-500 py-8">Nenhuma promoção por duração cadastrada.</p>
@@ -100,7 +111,7 @@ const DiscountsTab: React.FC = () => {
   );
 };
 
-const DiscountItem: React.FC<{ discount: DurationDiscount, onEdit: () => void, onDelete: () => void }> = ({ discount, onEdit, onDelete }) => (
+const DiscountItem: React.FC<{ discount: DurationDiscount, onEdit: () => void, onDelete: () => void, canEdit: boolean }> = ({ discount, onEdit, onDelete, canEdit }) => (
   <div className={`p-4 rounded-lg border flex items-center justify-between gap-4 ${discount.is_active ? 'bg-white dark:bg-brand-gray-800' : 'bg-brand-gray-100 dark:bg-brand-gray-800/50 opacity-70'}`}>
     <div className="flex-1 flex items-center gap-4 md:gap-8">
       <div className="flex items-center text-brand-gray-800 dark:text-white">
@@ -116,8 +127,12 @@ const DiscountItem: React.FC<{ discount: DurationDiscount, onEdit: () => void, o
       <span className={`px-2 py-0.5 text-xs rounded-full ${discount.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
         {discount.is_active ? 'Ativa' : 'Inativa'}
       </span>
-      <Button variant="ghost" size="sm" onClick={onEdit}><Edit className="h-4 w-4" /></Button>
-      <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+      {canEdit && (
+        <>
+          <Button variant="ghost" size="sm" onClick={onEdit}><Edit className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+        </>
+      )}
     </div>
   </div>
 );

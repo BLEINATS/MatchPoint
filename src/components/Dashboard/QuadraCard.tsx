@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { Quadra } from '../../types';
 import Button from '../Forms/Button';
 import { 
-  Edit2, Trash2, Users, Shield, MapPin, 
-  TrendingUp, Clock, Layers, Zap, ArrowLeft, ArrowRight, Bookmark, DollarSign
+  Edit2, Trash2, Users, MapPin, 
+  ArrowLeft, ArrowRight, Bookmark, DollarSign, Clock
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -45,20 +45,43 @@ const QuadraCard: React.FC<QuadraCardProps> = ({ quadra, onEdit, onDelete, index
   const hasPhotos = photosToShow.length > 0;
   const hasMultiplePhotos = photosToShow.length > 1;
 
-  const priceRange = useMemo(() => {
+  const priceDisplay = useMemo(() => {
     if (!quadra.pricing_rules || quadra.pricing_rules.length === 0) {
-      return "Preço a definir";
+      return { single: 'A definir', normal: null, specific: null };
     }
-    const activePrices = quadra.pricing_rules.filter(r => r.is_active).map(r => r.price_single);
-    if (activePrices.length === 0) return "Preço a definir";
-
-    const minPrice = Math.min(...activePrices);
-    const maxPrice = Math.max(...activePrices);
-
-    if (minPrice === maxPrice) {
-      return formatCurrency(minPrice);
+    const activeRules = quadra.pricing_rules.filter(r => r.is_active);
+    if (activeRules.length === 0) {
+      return { single: 'A definir', normal: null, specific: null };
     }
-    return `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`;
+
+    const allPrices = [...new Set(activeRules.map(r => r.price_single))];
+    if (allPrices.length === 1) {
+      return { single: formatCurrency(allPrices[0]), normal: null, specific: null };
+    }
+
+    const defaultRule = activeRules.find(r => r.is_default);
+    const specificRules = activeRules.filter(r => !r.is_default);
+
+    const normal = defaultRule ? formatCurrency(defaultRule.price_single) : null;
+
+    let specific = null;
+    if (specificRules.length > 0) {
+      const specificPrices = specificRules.map(r => r.price_single);
+      const minSpecific = Math.min(...specificPrices);
+      const maxSpecific = Math.max(...specificPrices);
+      if (minSpecific === maxSpecific) {
+        specific = formatCurrency(minSpecific);
+      } else {
+        specific = `${formatCurrency(minSpecific)} - ${formatCurrency(maxSpecific)}`;
+      }
+    }
+
+    // If there's no default rule, but there are specific rules, we should not show a single price.
+    if (!normal && !specific) {
+      return { single: 'A definir', normal: null, specific: null };
+    }
+
+    return { normal, specific, single: null };
   }, [quadra.pricing_rules]);
 
   const nextPhoto = (e: React.MouseEvent) => {
@@ -75,13 +98,24 @@ const QuadraCard: React.FC<QuadraCardProps> = ({ quadra, onEdit, onDelete, index
     }
   };
 
-  const handleReserve = () => {
+  const handleReserve = (e: React.MouseEvent) => {
+    e.stopPropagation();
     navigate('/reservas', { 
       state: { 
         selectedDate: new Date().toISOString(), 
         quadraId: quadra.id 
       } 
     });
+  };
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEdit();
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete();
   };
   
   const weekdayHours = quadra.horarios?.weekday
@@ -100,7 +134,8 @@ const QuadraCard: React.FC<QuadraCardProps> = ({ quadra, onEdit, onDelete, index
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 flex flex-col overflow-hidden"
+      onClick={onEdit}
+      className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 flex flex-col overflow-hidden cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all"
     >
       <div className="aspect-video bg-brand-gray-200 dark:bg-brand-gray-700 relative overflow-hidden group">
         {hasPhotos ? (
@@ -132,23 +167,13 @@ const QuadraCard: React.FC<QuadraCardProps> = ({ quadra, onEdit, onDelete, index
             <p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{quadra.sports && quadra.sports.length > 0 ? quadra.sports.join(', ') : 'Esporte não definido'}</p>
           </div>
           <div className="flex space-x-1">
-            <Button variant="ghost" size="sm" onClick={onEdit} className="p-2"><Edit2 className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="sm" onClick={onDelete} className="p-2 hover:text-red-500"><Trash2 className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" onClick={handleEdit} className="p-2"><Edit2 className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" onClick={handleDelete} className="p-2 hover:text-red-500"><Trash2 className="h-4 w-4" /></Button>
           </div>
         </div>
-        <div className={`p-4 rounded-lg mb-4 flex items-center gap-4 ${quadra.status === 'ativa' ? 'bg-green-50 dark:bg-green-500/10' : 'bg-brand-gray-100 dark:bg-brand-gray-700/50'}`}>
-          <div className={`p-2 rounded-full ${quadra.status === 'ativa' ? 'bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-300' : 'bg-brand-gray-200 dark:bg-brand-gray-600 text-brand-gray-500'}`}>
-            <TrendingUp className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Receita Mensal Estimada (70%)</p>
-            <p className={`font-bold text-lg ${quadra.status === 'ativa' ? 'text-green-700 dark:text-green-300' : 'text-brand-gray-500'}`}>
-              {quadra.status === 'ativa' ? formatCurrency(monthlyEstimatedRevenue) : '-'}
-            </p>
-          </div>
-        </div>
+        
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 mb-4">
-          <InfoItem icon={Layers} label="Piso" value={quadra.court_type || 'N/A'} />
+          <InfoItem icon={Users} label="Piso" value={quadra.court_type || 'N/A'} />
           <InfoItem icon={Users} label="Capacidade" value={`${quadra.capacity || 'N/A'} pessoas`} />
           <InfoItem icon={Clock} label="Seg-Sex" value={weekdayHours} />
           <InfoItem icon={Clock} label="Sábado" value={saturdayHours} />
@@ -156,9 +181,34 @@ const QuadraCard: React.FC<QuadraCardProps> = ({ quadra, onEdit, onDelete, index
         </div>
         <div className="mt-auto pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700">
           <div className="flex justify-between items-center">
-            <div className="flex items-center">
-                <DollarSign className="h-5 w-5 text-brand-gray-500 mr-1" />
-                <p className="text-md font-bold text-brand-gray-800 dark:text-white">{priceRange}<span className="text-sm font-normal text-brand-gray-500">/hora</span></p>
+            <div className="flex items-center flex-wrap gap-x-4 gap-y-1">
+              {priceDisplay.single ? (
+                <div className="flex items-center">
+                  <DollarSign className="h-5 w-5 text-brand-gray-500 mr-1" />
+                  <p className="text-md font-bold text-brand-gray-800 dark:text-white">{priceDisplay.single}<span className="text-sm font-normal text-brand-gray-500">/hora</span></p>
+                </div>
+              ) : (
+                <>
+                  {priceDisplay.normal && (
+                    <div className="flex items-center">
+                      <DollarSign className="h-5 w-5 text-brand-gray-500 mr-1" />
+                      <div>
+                        <p className="text-md font-bold text-brand-gray-800 dark:text-white">{priceDisplay.normal}<span className="text-sm font-normal text-brand-gray-500">/h</span></p>
+                        <p className="text-xs text-brand-gray-500 -mt-1">Padrão</p>
+                      </div>
+                    </div>
+                  )}
+                  {priceDisplay.specific && (
+                    <div className="flex items-center">
+                      <DollarSign className="h-5 w-5 text-brand-blue-500 mr-1" />
+                      <div>
+                        <p className="text-md font-bold text-brand-blue-600 dark:text-brand-blue-400">{priceDisplay.specific}<span className="text-sm font-normal text-brand-gray-500">/h</span></p>
+                        <p className="text-xs text-brand-blue-500 -mt-1">Específico</p>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <Button onClick={handleReserve} size="sm">
               <Bookmark className="h-4 w-4 mr-2" />

@@ -6,22 +6,22 @@ import { PlanoAula } from '../../types';
 import { Loader2, Plus, Edit, Trash2, Tag, Calendar, DollarSign } from 'lucide-react';
 import Button from '../Forms/Button';
 import ConfirmationModal from '../Shared/ConfirmationModal';
-import PlanoAulaModal from './PlanoAulaModal';
+import PlanoAulaModal from '../Settings/PlanoAulaModal';
 import { formatCurrency } from '../../utils/formatters';
 
 const seedDefaultPlanosAulas = async (arenaId: string) => {
   const defaultPlanos: Omit<PlanoAula, 'id' | 'arena_id' | 'created_at'>[] = [
-    { name: 'Aula Avulsa', duration_type: 'avulso', price: 80, description: 'Uma única aula para experimentar ou para alunos esporádicos.', is_active: true },
-    { name: 'Plano Mensal - 1x/semana', duration_type: 'mensal', price: 280, description: 'Pacote com 4 aulas no mês, uma por semana.', is_active: true },
-    { name: 'Plano Mensal - 2x/semana', duration_type: 'mensal', price: 480, description: 'Pacote com 8 aulas no mês, duas por semana.', is_active: true },
-    { name: 'Plano Trimestral - 2x/semana', duration_type: 'trimestral', price: 1350, description: 'Pacote de 3 meses com 8 aulas por mês. Desconto aplicado.', is_active: true },
-    { name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, description: 'Acesso livre a todas as turmas compatíveis durante o ano.', is_active: false },
+    { name: 'Aula Avulsa', duration_type: 'avulso', price: 80, description: 'Uma única aula para experimentar ou para alunos esporádicos.', is_active: true, num_aulas: 1 },
+    { name: 'Plano Mensal - 1x/semana', duration_type: 'mensal', price: 280, description: 'Pacote com 4 aulas no mês, uma por semana.', is_active: true, num_aulas: 4 },
+    { name: 'Plano Mensal - 2x/semana', duration_type: 'mensal', price: 480, description: 'Pacote com 8 aulas no mês, duas por semana.', is_active: true, num_aulas: 8 },
+    { name: 'Plano Trimestral - 2x/semana', duration_type: 'trimestral', price: 1350, description: 'Pacote de 3 meses com 8 aulas por mês. Desconto aplicado.', is_active: true, num_aulas: 24 },
+    { name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, description: 'Acesso livre a todas as turmas compatíveis durante o ano.', is_active: false, num_aulas: null },
   ];
   await localApi.upsert('planos_aulas', defaultPlanos, arenaId, true);
 };
 
 const PlanosAulasTab: React.FC = () => {
-  const { arena } = useAuth();
+  const { selectedArenaContext: arena } = useAuth();
   const { addToast } = useToast();
   const [planos, setPlanos] = useState<PlanoAula[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +34,7 @@ const PlanosAulasTab: React.FC = () => {
     if (!arena) return;
     setIsLoading(true);
     try {
-      const seedKey = `planos_aulas_seeded_v1_${arena.id}`;
+      const seedKey = `planos_aulas_seeded_v2_${arena.id}`;
       if (!localStorage.getItem(seedKey)) {
         await seedDefaultPlanosAulas(arena.id);
         localStorage.setItem(seedKey, 'true');

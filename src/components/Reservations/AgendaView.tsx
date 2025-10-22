@@ -20,8 +20,8 @@ interface AgendaViewProps {
 const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate, onSlotClick, onReservationClick, onDataChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const timeSlots = Array.from({ length: (23 - 6) * 2 + 1 }, (_, i) => {
-    const totalMinutes = 6 * 60 + i * 30;
+  const timeSlots = Array.from({ length: 23 - 6 + 1 }, (_, i) => { // Hourly slots from 6:00 to 23:00
+    const totalMinutes = 6 * 60 + i * 60;
     const date = new Date();
     date.setHours(0, 0, 0, 0);
     date.setMinutes(totalMinutes);
@@ -40,11 +40,11 @@ const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate
   const getPaymentStatusIcon = (status?: 'pago' | 'pendente' | 'parcialmente_pago') => {
     switch (status) {
       case 'pago':
-        return <CheckCircle className="h-3 w-3 text-white/80" title="Pago" />;
+        return <CheckCircle className="h-4 w-4 text-green-300" title="Pago" />;
       case 'parcialmente_pago':
-        return <DollarSign className="h-3 w-3 text-white/80" title="Parcialmente Pago" />;
+        return <DollarSign className="h-4 w-4 text-cyan-300" title="Parcialmente Pago" />;
       case 'pendente':
-        return <AlertCircle className="h-3 w-3 text-white/80" title="Pendente" />;
+        return <AlertCircle className="h-4 w-4 text-yellow-300" title="Pendente" />;
       default:
         return null;
     }
@@ -63,7 +63,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate
 
           <div className="col-start-1 col-end-2 row-start-2">
             {timeSlots.map(time => (
-              <div key={time} data-time-label={time} className="h-12 flex items-center justify-center border-r border-b border-brand-gray-200 dark:border-brand-gray-700">
+              <div key={time} data-time-label={time} className="h-24 flex items-center justify-center border-r border-b border-brand-gray-200 dark:border-brand-gray-700">
                 <span className="text-xs text-brand-gray-500 dark:text-brand-gray-400">{time}</span>
               </div>
             ))}
@@ -75,7 +75,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate
                 <div
                   key={time}
                   onClick={() => onSlotClick(quadra.id, time)}
-                  className="h-12 border-r border-b border-brand-gray-200 dark:border-brand-gray-700 hover:bg-blue-50 dark:hover:bg-brand-blue-500/10 cursor-pointer group flex items-center justify-center"
+                  className="h-24 border-r border-b border-brand-gray-200 dark:border-brand-gray-700 hover:bg-blue-50 dark:hover:bg-brand-blue-500/10 cursor-pointer group flex items-center justify-center"
                 >
                   <Plus className="h-5 w-5 text-brand-gray-300 dark:text-brand-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
@@ -108,8 +108,8 @@ const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate
                   const topOffsetMinutes = startMinutes - (6 * 60);
                   const durationMinutes = endMinutes - startMinutes;
                   
-                  const top = (topOffsetMinutes / 30) * 3;
-                  const height = (durationMinutes / 30) * 3;
+                  const top = (topOffsetMinutes / 60) * 6;
+                  const height = (durationMinutes / 60) * 6;
 
                   if (height <= 0) return null;
 

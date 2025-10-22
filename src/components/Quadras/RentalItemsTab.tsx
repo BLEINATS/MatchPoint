@@ -9,8 +9,12 @@ import RentalItemModal from './RentalItemModal';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import { formatCurrency } from '../../utils/formatters';
 
-const RentalItemsTab: React.FC = () => {
-  const { arena } = useAuth();
+interface RentalItemsTabProps {
+  canEdit: boolean;
+}
+
+const RentalItemsTab: React.FC<RentalItemsTabProps> = ({ canEdit }) => {
+  const { selectedArenaContext: arena } = useAuth();
   const { addToast } = useToast();
   const [items, setItems] = useState<RentalItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -20,12 +24,15 @@ const RentalItemsTab: React.FC = () => {
   const [itemToDelete, setItemToDelete] = useState<RentalItem | null>(null);
 
   const loadItems = useCallback(async () => {
-    if (!arena) return;
+    if (!arena) {
+        setIsLoading(false);
+        return;
+    }
     setIsLoading(true);
     try {
       const { data, error } = await localApi.select<RentalItem>('rental_items', arena.id);
       if (error) throw error;
-      setItems(data.sort((a, b) => a.name.localeCompare(b.name)));
+      setItems((data || []).sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error: any) {
       addToast({ message: `Erro ao carregar itens: ${error.message}`, type: 'error' });
     } finally {
@@ -87,7 +94,7 @@ const RentalItemsTab: React.FC = () => {
           <h3 className="text-lg font-semibold text-brand-gray-900 dark:text-white">Itens para Aluguel</h3>
           <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">Gerencie os itens que seus clientes podem alugar junto com a reserva.</p>
         </div>
-        <Button onClick={() => openModal()}><Plus className="h-4 w-4 mr-2" />Adicionar Item</Button>
+        {canEdit && <Button onClick={() => openModal()}><Plus className="h-4 w-4 mr-2" />Adicionar Item</Button>}
       </div>
       
       {items.length > 0 ? (
@@ -108,8 +115,12 @@ const RentalItemsTab: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500 dark:text-brand-gray-400">{formatCurrency(item.price)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500 dark:text-brand-gray-400">{item.stock}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Button variant="ghost" size="sm" onClick={() => openModal(item)}><Edit className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteRequest(item)} className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+                    {canEdit && (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={() => openModal(item)}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteRequest(item)} className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

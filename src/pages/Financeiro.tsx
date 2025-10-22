@@ -14,7 +14,7 @@ import FinancialChart from '../components/Financeiro/FinancialChart';
 import TransactionModal from '../components/Financeiro/TransactionModal';
 
 const Financeiro: React.FC = () => {
-  const { arena } = useAuth();
+  const { selectedArenaContext: arena } = useAuth();
   const { addToast } = useToast();
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);

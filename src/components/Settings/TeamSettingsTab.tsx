@@ -20,7 +20,7 @@ export const PERMISSIONS_CONFIG: Record<keyof ProfilePermissions, { label: strin
 };
 
 const TeamSettingsTab: React.FC = () => {
-  const { arena } = useAuth();
+  const { selectedArenaContext: arena } = useAuth();
   const { addToast } = useToast();
   const [teamMembers, setTeamMembers] = useState<Profile[]>([]);
   const [isLoading, setIsLoading] = useState(true);

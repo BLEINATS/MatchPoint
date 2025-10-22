@@ -12,6 +12,7 @@ interface DayDetailViewProps {
   reservas: Reserva[];
   quadras: Quadra[];
   onSlotClick: (time: string) => void;
+  onReservationClick: (reserva: Reserva) => void;
 }
 
 const timeStringToMinutes = (time: string): number => {
@@ -20,7 +21,7 @@ const timeStringToMinutes = (time: string): number => {
   return hours * 60 + minutes;
 };
 
-const DayDetailView: React.FC<DayDetailViewProps> = ({ date, reservas, quadras, onSlotClick }) => {
+const DayDetailView: React.FC<DayDetailViewProps> = ({ date, reservas, quadras, onSlotClick, onReservationClick }) => {
   
   const reservationsForDay = useMemo(() => {
     return reservas.filter(r => isSameDay(parseDateStringAsLocal(r.date), date) && r.status !== 'cancelada');
@@ -72,7 +73,11 @@ const DayDetailView: React.FC<DayDetailViewProps> = ({ date, reservas, quadras, 
               return null;
             }
             
-            const typeDetails = getReservationTypeDetails(reserva.type);
+            let typeDetails = getReservationTypeDetails(reserva.type);
+            if (reserva.status === 'aguardando_pagamento') {
+              typeDetails = getReservationTypeDetails('aguardando_pagamento');
+            }
+            
             const paymentStatus = getPaymentStatus(reserva.payment_status);
             const startMinutes = timeStringToMinutes(reserva.start_time);
             const endMinutes = timeStringToMinutes(reserva.end_time);
@@ -80,7 +85,7 @@ const DayDetailView: React.FC<DayDetailViewProps> = ({ date, reservas, quadras, 
             const height = durationInSlots * 2.5;
 
             return (
-              <div key={reserva.id} className={`p-3 rounded-lg text-white ${typeDetails.bgColor}`} style={{ minHeight: `${height}rem` }}>
+              <div key={reserva.id} onClick={() => onReservationClick(reserva)} className={`p-3 rounded-lg text-white cursor-pointer ${typeDetails.bgColor}`} style={{ minHeight: `${height}rem` }}>
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-bold text-sm">{reserva.clientName || typeDetails.label}</p>

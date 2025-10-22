@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Mail, Phone, Calendar, Award, Dribbble, DollarSign, Trash2, Gift, ClipboardList, Hash, Users } from 'lucide-react';
-import { Aluno, PlanoAula } from '../../types';
+import { X, Save, User, Mail, Phone, Calendar, Award, Dribbble, DollarSign, Trash2, Gift, ClipboardList, Hash, Users, UserPlus, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Aluno, PlanoAula, Profile } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { format } from 'date-fns';
@@ -40,6 +40,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   const [activeTab, setActiveTab] = useState<'details' | 'credits' | 'gamification'>('details');
   const [internalAluno, setInternalAluno] = useState<Aluno | null>(initialData);
   const [isRenewConfirmOpen, setIsRenewConfirmOpen] = useState(false);
+  const [isCreateLoginConfirmOpen, setIsCreateLoginConfirmOpen] = useState(false);
   
   const isEditing = !!initialData;
 
@@ -209,6 +210,56 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
     }
   };
 
+  const handleCreateLogin = async () => {
+    if (!arena || !internalAluno || !internalAluno.email) {
+        addToast({ message: 'Erro: O cliente precisa ter um e-mail cadastrado.', type: 'error' });
+        return;
+    }
+
+    try {
+        const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+        const existingProfile = allProfiles.find(p => p.email.toLowerCase() === internalAluno!.email!.toLowerCase());
+
+        if (existingProfile) {
+            const updatedAluno = { ...internalAluno, profile_id: existingProfile.id };
+            await localApi.upsert('alunos', [updatedAluno], arena.id);
+            addToast({ message: `Conta de usuário encontrada e vinculada a ${internalAluno.name}!`, type: 'success' });
+        } else {
+            const newProfile: Omit<Profile, 'id' | 'created_at'> = {
+                name: internalAluno.name,
+                email: internalAluno.email,
+                avatar_url: internalAluno.avatar_url || null,
+                role: 'cliente',
+                phone: internalAluno.phone,
+                cpf: internalAluno.cpf,
+                birth_date: internalAluno.birth_date,
+                gender: internalAluno.gender,
+            };
+
+            const { data: createdProfiles } = await localApi.upsert('profiles', [newProfile], 'all');
+            const createdProfile = createdProfiles[0];
+
+            if (!createdProfile) {
+                throw new Error("Falha ao criar o perfil do usuário.");
+            }
+
+            const updatedAluno = { ...internalAluno, profile_id: createdProfile.id };
+            await localApi.upsert('alunos', [updatedAluno], arena.id);
+
+            addToast({ 
+                message: `Acesso criado para ${internalAluno.name}! O cliente pode agora entrar com o e-mail e criar uma senha.`, 
+                type: 'success' 
+            });
+        }
+
+        handleInternalDataChange();
+        setIsCreateLoginConfirmOpen(false);
+
+    } catch (error: any) {
+        addToast({ message: `Erro ao criar acesso: ${error.message}`, type: 'error' });
+    }
+  };
+
   const modalTitle = isEditing ? `Editar ${modalType}` : `Adicionar Novo ${modalType}`;
   
   const tabs = [
@@ -269,63 +320,78 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                     transition={{ duration: 0.2 }}
                   >
                     {activeTab === 'details' && (
-                      <div className="space-y-4">
-                        <Input label="Nome Completo" name="name" value={formData.name} onChange={handleChange} icon={<User className="h-4 w-4 text-brand-gray-400"/>} required />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <Input label="E-mail" name="email" type="email" value={formData.email || ''} onChange={handleChange} icon={<Mail className="h-4 w-4 text-brand-gray-400"/>} />
-                          <Input label="Telefone" name="phone" value={formData.phone || ''} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} />
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <Input label="CPF" name="cpf" value={formData.cpf || ''} onChange={handleChange} icon={<Hash className="h-4 w-4 text-brand-gray-400"/>} />
-                          <Input label="Data de Nascimento" name="birth_date" type="date" value={formData.birth_date || ''} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Gênero</label>
-                            <select name="gender" value={formData.gender || 'nao_informado'} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
-                              <option value="nao_informado">Não informar</option>
-                              <option value="masculino">Masculino</option>
-                              <option value="feminino">Feminino</option>
-                              <option value="outro">Outro</option>
+                      <>
+                        {isEditing && (
+                            internalAluno?.profile_id ? (
+                                <div className="p-3 mb-4 rounded-md bg-green-50 dark:bg-green-900/50 flex items-center gap-3 border border-green-200 dark:border-green-800">
+                                    <ShieldCheck className="h-5 w-5 text-green-500" />
+                                    <p className="text-sm font-medium text-green-800 dark:text-green-300">Este cliente possui um acesso verificado à plataforma.</p>
+                                </div>
+                            ) : (
+                                <div className="p-3 mb-4 rounded-md bg-yellow-50 dark:bg-yellow-900/50 flex items-center gap-3 border border-yellow-200 dark:border-yellow-800">
+                                    <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Este cliente ainda não tem um acesso à plataforma.</p>
+                                </div>
+                            )
+                        )}
+                        <div className="space-y-4">
+                            <Input label="Nome Completo" name="name" value={formData.name} onChange={handleChange} icon={<User className="h-4 w-4 text-brand-gray-400"/>} required />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Input label="E-mail" name="email" type="email" value={formData.email || ''} onChange={handleChange} icon={<Mail className="h-4 w-4 text-brand-gray-400"/>} />
+                            <Input label="Telefone" name="phone" value={formData.phone || ''} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Input label="CPF" name="cpf" value={formData.cpf || ''} onChange={handleChange} icon={<Hash className="h-4 w-4 text-brand-gray-400"/>} />
+                            <Input label="Data de Nascimento" name="birth_date" type="date" value={formData.birth_date || ''} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Gênero</label>
+                                <select name="gender" value={formData.gender || 'nao_informado'} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                                <option value="nao_informado">Não informar</option>
+                                <option value="masculino">Masculino</option>
+                                <option value="feminino">Feminino</option>
+                                <option value="outro">Outro</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Status</label>
+                                <select name="status" value={formData.status} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                                <option value="ativo">Ativo</option>
+                                <option value="inativo">Inativo</option>
+                                <option value="experimental">Experimental</option>
+                                </select>
+                            </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Input label="Data de Início" name="join_date" type="date" value={formData.join_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
+                            <div>
+                                <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte Principal</label>
+                                <select name="sport" value={formData.sport || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                                <option value="">Selecione um esporte</option>
+                                {allSports.map(sport => <option key={sport} value={sport}>{sport}</option>)}
+                                </select>
+                            </div>
+                            </div>
+                            <div>
+                            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Plano Contratado</label>
+                            <select name="plan_id" value={formData.plan_id || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                                <option value="">Nenhum (Avulso)</option>
+                                {activePlanOptions.map(plan => <option key={plan.id} value={plan.id}>{plan.name} ({formatCurrency(plan.price)})</option>)}
                             </select>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Status</label>
-                            <select name="status" value={formData.status} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
-                              <option value="ativo">Ativo</option>
-                              <option value="inativo">Inativo</option>
-                              <option value="experimental">Experimental</option>
-                            </select>
-                          </div>
+                            </div>
+                            <Input
+                            label="Aulas Restantes (Créditos)"
+                            name="aulas_restantes"
+                            type="number"
+                            value={isUnlimitedPlan ? '' : (formData.aulas_restantes ?? 0).toString()}
+                            onChange={handleChange}
+                            icon={<Hash className="h-4 w-4 text-brand-gray-400" />}
+                            placeholder={isUnlimitedPlan ? 'Ilimitado' : 'Ex: 8'}
+                            disabled={isUnlimitedPlan}
+                            />
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <Input label="Data de Início" name="join_date" type="date" value={formData.join_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
-                          <div>
-                            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte Principal</label>
-                            <select name="sport" value={formData.sport || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
-                              <option value="">Selecione um esporte</option>
-                              {allSports.map(sport => <option key={sport} value={sport}>{sport}</option>)}
-                            </select>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Plano Contratado</label>
-                          <select name="plan_id" value={formData.plan_id || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
-                            <option value="">Nenhum (Avulso)</option>
-                            {activePlanOptions.map(plan => <option key={plan.id} value={plan.id}>{plan.name} ({formatCurrency(plan.price)})</option>)}
-                          </select>
-                        </div>
-                        <Input
-                          label="Aulas Restantes (Créditos)"
-                          name="aulas_restantes"
-                          type="number"
-                          value={isUnlimitedPlan ? '' : (formData.aulas_restantes ?? 0).toString()}
-                          onChange={handleChange}
-                          icon={<Hash className="h-4 w-4 text-brand-gray-400" />}
-                          placeholder={isUnlimitedPlan ? 'Ilimitado' : 'Ex: 8'}
-                          disabled={isUnlimitedPlan}
-                        />
-                      </div>
+                      </>
                     )}
                     {activeTab === 'credits' && internalAluno && (
                       <CreditsTab aluno={internalAluno} onDataChange={handleInternalDataChange} />
@@ -351,6 +417,12 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                       Renovar Créditos
                     </Button>
                   )}
+                   {isEditing && !internalAluno?.profile_id && internalAluno?.email && (
+                    <Button variant="secondary" onClick={() => setIsCreateLoginConfirmOpen(true)}>
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Criar Acesso
+                    </Button>
+                  )}
                 </div>
                 <div className="flex justify-end gap-3">
                   <Button variant="outline" onClick={onClose}>Cancelar</Button>
@@ -371,6 +443,22 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
         message={<p>Isso registrará um pagamento de <strong>{formatCurrency(selectedPlan?.price || 0)}</strong> e redefinirá os créditos de aula de {formData.name}. Deseja continuar?</p>}
         confirmText="Sim, Renovar"
         icon={<DollarSign className="h-10 w-10 text-green-500" />}
+        confirmVariant="primary"
+      />
+      <ConfirmationModal
+        isOpen={isCreateLoginConfirmOpen}
+        onClose={() => setIsCreateLoginConfirmOpen(false)}
+        onConfirm={handleCreateLogin}
+        title="Criar Acesso para Cliente?"
+        message={
+            <p>
+                Isso criará uma conta de usuário para <strong>{formData.name}</strong> usando o e-mail <strong>{formData.email}</strong>. 
+                O cliente poderá então fazer login e definir sua própria senha. Deseja continuar?
+            </p>
+        }
+        confirmText="Sim, Criar Acesso"
+        icon={<UserPlus className="h-10 w-10 text-brand-blue-500" />}
+        confirmVariant="primary"
       />
     </>
   );

@@ -12,6 +12,7 @@ interface ConfirmationModalProps {
   confirmText?: string;
   cancelText?: string;
   icon?: React.ReactNode;
+  confirmVariant?: 'primary' | 'danger';
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -23,7 +24,18 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
   icon = <AlertTriangle className="h-10 w-10 text-red-500" />,
+  confirmVariant = 'danger',
 }) => {
+  const confirmButtonClasses = {
+    primary: 'bg-brand-blue-600 hover:bg-brand-blue-700 focus:ring-brand-blue-500',
+    danger: 'bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 focus:ring-red-500'
+  };
+
+  const iconContainerClasses = {
+      primary: 'bg-blue-100 dark:bg-blue-900/50',
+      danger: 'bg-red-100 dark:bg-red-900/50'
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -39,7 +51,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             <button onClick={onClose} className="absolute top-4 right-4 p-1 rounded-full hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
               <X className="h-5 w-5 text-brand-gray-500" />
             </button>
-            <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-red-100 dark:bg-red-900/50 mb-6">
+            <div className={`mx-auto flex items-center justify-center h-20 w-20 rounded-full ${iconContainerClasses[confirmVariant]} mb-6`}>
               {icon}
             </div>
             <h3 className="text-2xl font-bold text-brand-gray-900 dark:text-white">
@@ -52,7 +64,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               <Button onClick={onClose} variant="outline" className="w-full" size="lg">
                 {cancelText}
               </Button>
-              <Button onClick={onConfirm} className="w-full bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 focus:ring-red-500" size="lg">
+              <Button onClick={onConfirm} className={`w-full ${confirmButtonClasses[confirmVariant]}`} size="lg">
                 {confirmText}
               </Button>
             </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, GraduationCap, BookOpen, Plus, Search, BadgeCheck, BadgeX, Briefcase, Loader2, MessageSquare, MoreVertical, Handshake, UserCheck, Star, Edit, Trash2, Phone, Calendar, List, Mail, Percent, FileText, DollarSign, BadgeHelp } from 'lucide-react';
+import { ArrowLeft, Users, GraduationCap, BookOpen, Plus, Search, BadgeCheck, BadgeX, Briefcase, Loader2, MessageSquare, MoreVertical, Handshake, UserCheck, Star, Edit, Trash2, Phone, Calendar, List, Mail, Percent, FileText, DollarSign, BadgeHelp, UserPlus } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -57,7 +57,7 @@ const Alunos: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'aluno' | 'professor' | 'atleta' | 'turma' } | null>(null);
   
-  const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.clientes === 'edit', [profile]);
+  const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.gerenciamento_arena === 'edit', [profile]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -356,7 +356,7 @@ const Alunos: React.FC = () => {
     );
   }
 
-  if (profile?.role === 'funcionario' && profile.permissions?.clientes === 'none') {
+  if (profile?.role === 'funcionario' && profile.permissions?.gerenciamento_arena === 'none') {
     return (
       <Layout>
         <div className="text-center p-8">
@@ -452,7 +452,7 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, on
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {aluno.profile_id && canEdit ? (
                       <ActionMenu aluno={aluno} onPromoteToProfessor={() => onPromoteToProfessor(aluno)} onPromoteToAtleta={() => onPromoteToAtleta(aluno)} />
-                    ) : aluno.phone && canEdit ? (
+                    ) : !aluno.profile_id && aluno.phone && canEdit ? (
                       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleInvite(aluno.phone!, aluno.name); }} title="Convidar cliente via WhatsApp" className="text-green-500 hover:bg-green-100 dark:hover:bg-green-900/50 p-2">
                         <MessageSquare className="h-5 w-5" />
                       </Button>

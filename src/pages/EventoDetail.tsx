@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Trash2, CheckCircle, PartyPopper, List, CreditCard, Edit } from 'lucide-react';
@@ -20,7 +20,7 @@ type TabType = 'overview' | 'checklist' | 'financial';
 const EventoDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { arena } = useAuth();
+  const { selectedArenaContext: arena, profile } = useAuth();
   const { addToast } = useToast();
   
   const [evento, setEvento] = useState<Evento | null>(null);
@@ -31,6 +31,8 @@ const EventoDetail: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.eventos === 'edit', [profile]);
 
   const loadData = useCallback(async () => {
     if (arena && id) {
@@ -172,19 +174,21 @@ const EventoDetail: React.FC = () => {
               <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">{evento.name}</h1>
               <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Gerencie todos os detalhes do evento privado.</p>
             </div>
-            <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={() => setIsModalOpen(true)}>
-                    <Edit className="h-4 w-4 mr-2" />
-                    Editar
-                </Button>
-                <Button onClick={handleSaveFromButton} isLoading={isSaving} disabled={isSaving}>
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.span key={showSuccess ? 'success' : 'save'} initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="flex items-center">
-                      {showSuccess ? <><CheckCircle className="h-4 w-4 mr-2" /> Salvo!</> : <><Save className="h-4 w-4 mr-2" /> Salvar Alterações</>}
-                    </motion.span>
-                  </AnimatePresence>
-                </Button>
-            </div>
+            {canEdit && (
+              <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={() => setIsModalOpen(true)}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Editar
+                  </Button>
+                  <Button onClick={handleSaveFromButton} isLoading={isSaving} disabled={isSaving}>
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.span key={showSuccess ? 'success' : 'save'} initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="flex items-center">
+                        {showSuccess ? <><CheckCircle className="h-4 w-4 mr-2" /> Salvo!</> : <><Save className="h-4 w-4 mr-2" /> Salvar Alterações</>}
+                      </motion.span>
+                    </AnimatePresence>
+                  </Button>
+              </div>
+            )}
           </div>
         </motion.div>
 

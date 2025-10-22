@@ -9,7 +9,7 @@ import {
 import StatCard from './StatCard';
 import { Quadra, Reserva, Aluno } from '../../types';
 import { expandRecurringReservations, getReservationTypeDetails } from '../../utils/reservationUtils';
-import { getAvailableTimeRangesForDay } from '../../utils/analytics';
+import { getAvailableSlotsForDay } from '../../utils/analytics';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -21,7 +21,7 @@ import { formatCurrency } from '../../utils/formatters';
 import Timer from '../Shared/Timer';
 
 const AnalyticsDashboard: React.FC = () => {
-  const { arena, profile } = useAuth();
+  const { selectedArenaContext: arena, profile } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
   const [quadras, setQuadras] = useState<Quadra[]>([]);
@@ -97,7 +97,7 @@ const AnalyticsDashboard: React.FC = () => {
     const reservasHoje = todaysBookings.length;
     const receitaHoje = todaysBookings.reduce((sum, r) => sum + (r.total_price || 0), 0);
     
-    const availableTimeRangesToday = getAvailableTimeRangesForDay(quadras, todaysBookings, today);
+    const availableSlotsToday = getAvailableSlotsForDay(quadras, todaysBookings, today);
 
     const activeQuadras = quadras.filter(q => q.status === 'ativa');
     const dayOfWeek = getDay(today);
@@ -164,7 +164,7 @@ const AnalyticsDashboard: React.FC = () => {
       reservasHoje,
       receitaHoje,
       canceledReservationsThisMonth,
-      availableTimeRangesToday,
+      availableSlotsToday,
       ocupacaoHoje: Math.min(ocupacaoHoje, 100),
     };
   }, [quadras, reservas, alunos]);
@@ -204,12 +204,12 @@ const AnalyticsDashboard: React.FC = () => {
         color = 'text-yellow-500';
       } else if (r.status === 'cancelada') {
         text = `Reserva cancelada`;
-        details = `${r.clientName || 'Cliente'} na ${quadraName}`;
+        details = `${r.clientName || 'Cliente'} na {quadraName}`;
         icon = XCircle;
         color = 'text-red-500';
       } else {
         text = `Nova reserva (${typeDetails.label})`;
-        details = `${r.clientName || 'Cliente'} na ${quadraName} - ${formatCurrency(r.total_price)}`;
+        details = `${r.clientName || 'Cliente'} na {quadraName} - ${formatCurrency(r.total_price)}`;
         icon = typeDetails.icon;
         color = 'text-blue-500';
       }
@@ -269,6 +269,21 @@ const AnalyticsDashboard: React.FC = () => {
     }
   };
 
+  const handleSlotClick = (quadraId: string, time: string) => {
+    if (!canManageReservas) {
+      addToast({ message: 'Você não tem permissão para criar reservas.', type: 'error' });
+      return;
+    }
+    navigate('/reservas', { 
+      state: { 
+        openModal: true, 
+        quadraId: quadraId, 
+        time: time,
+        selectedDate: new Date().toISOString()
+      } 
+    });
+  };
+
   if (isLoading) {
     return <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto text-brand-blue-500" /></div>;
   }
@@ -302,14 +317,20 @@ const AnalyticsDashboard: React.FC = () => {
         
         <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
             <p className="text-sm font-medium text-brand-gray-600 dark:text-brand-gray-400 mb-2">Horários Livres Hoje</p>
-            {analyticsData.availableTimeRangesToday.length > 0 ? (
-                <div className="grid grid-flow-col auto-cols-fr gap-x-6 max-h-24 overflow-y-auto pr-2">
-                    {analyticsData.availableTimeRangesToday.map(courtData => (
+            {analyticsData.availableSlotsToday.length > 0 ? (
+                <div className="grid grid-flow-col auto-cols-max gap-x-6 max-h-24 overflow-y-auto pr-2">
+                    {analyticsData.availableSlotsToday.map(courtData => (
                         <div key={courtData.courtId}>
                             <p className="text-sm font-semibold text-brand-gray-800 dark:text-white">{courtData.courtName}</p>
-                            <div className="mt-1 space-y-1">
-                                {courtData.ranges.map(range => (
-                                    <p key={range} className="text-sm font-semibold text-green-500">{range}</p>
+                            <div className="mt-1 flex flex-col items-start">
+                                {courtData.slots.map(slot => (
+                                    <button 
+                                      key={slot.start} 
+                                      onClick={() => handleSlotClick(courtData.courtId, slot.start)}
+                                      className="text-sm font-semibold text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 transition-colors py-0.5"
+                                    >
+                                      {slot.start} - {slot.end}
+                                    </button>
                                 ))}
                             </div>
                         </div>

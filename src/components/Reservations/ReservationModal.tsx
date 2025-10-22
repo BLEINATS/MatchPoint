@@ -1,4 +1,4 @@
-{/*
+{`{/*
   ====================================================================
   || ATENÇÃO: CÓDIGO PROTEGIDO (BLINDADO) POR SOLICITAÇÃO DO USUÁRIO ||
   ====================================================================
@@ -9,10 +9,10 @@
   || Antes de qualquer mudança, pergunte ao usuário:                ||
   || "Você confirma que deseja alterar a lógica de crédito/preço?"  ||
   ====================================================================
-*/}
+*/}`}
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, Calendar, Clock, User, Phone, Repeat, Tag, DollarSign, Info, AlertTriangle, CreditCard, ShoppingBag, Handshake, Users } from 'lucide-react';
+import { X, Save, Calendar, Clock, User, Phone, Repeat, Tag, DollarSign, Info, AlertTriangle, CreditCard, ShoppingBag, Handshake, Users, CheckCircle, Loader2 } from 'lucide-react';
 import { Aluno, Quadra, Reserva, PricingRule, DurationDiscount, ReservationType, RentalItem, Profile, AtletaAluguel, Friendship } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
@@ -43,6 +43,7 @@ interface ReservationModalProps {
   clientProfile?: Aluno | null;
   profissionais?: AtletaAluguel[];
   friends?: Profile[];
+  isReadOnly?: boolean;
 }
 
 const ALL_SPORTS = ['Beach Tennis', 'Futevôlei', 'Vôlei de Praia', 'Tênis', 'Padel', 'Futebol Society', 'Outro'];
@@ -58,7 +59,7 @@ const timeToMinutes = (timeStr: string): number => {
   }
 };
 
-const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, onSave, onCancelReservation, reservation, newReservationSlot, quadras, alunos, allReservations, arenaId, selectedDate, isClientBooking = false, userProfile, clientProfile, profissionais = [], friends = [] }) => {
+const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, onSave, onCancelReservation, reservation, newReservationSlot, quadras, alunos, allReservations, arenaId, selectedDate, isClientBooking = false, userProfile, clientProfile, profissionais = [], friends = [], isReadOnly = false }) => {
   const { addToast } = useToast();
   const [durationDiscounts, setDurationDiscounts] = useState<DurationDiscount[]>([]);
   const [rentalItems, setRentalItems] = useState<RentalItem[]>([]);
@@ -219,83 +220,92 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   }, [isOpen, arenaId, addToast]);
 
   useEffect(() => {
-    if (isOpen) {
-      let baseData: any = {
-        date: format(selectedDate, 'yyyy-MM-dd'),
-        start_time: '09:00',
-        end_time: '10:00',
-        quadra_id: quadras.length > 0 ? quadras[0].id : '',
-        clientName: '',
-        clientPhone: '',
-        status: 'confirmada',
-        type: 'avulsa',
-        sport_type: 'Beach Tennis',
-        total_price: 0,
-        credit_used: 0,
-        isRecurring: false,
-        recurringType: 'weekly',
-        recurringEndDate: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
-        rented_items: [],
-        payment_status: 'pendente',
-        notes: '',
-        atleta_aluguel_id: null,
-        participants: [],
-      };
-
-      if (reservation) {
-        const creditAlreadyUsed = reservation.credit_used || 0;
-        baseData = {
-          ...baseData,
-          ...reservation,
-          start_time: reservation.start_time.slice(0, 5),
-          end_time: reservation.end_time.slice(0, 5),
-          credit_used: creditAlreadyUsed,
-        };
-        setOriginalCreditUsed(creditAlreadyUsed);
-        const initialSelectedItems: Record<string, number> = {};
-        if (reservation.rented_items) {
-          for (const item of reservation.rented_items) {
-            initialSelectedItems[item.itemId] = item.quantity;
+    const loadAndSetData = async () => {
+      if (isOpen) {
+        setIsLoading(true);
+        let reservationToUse: Reserva | null = null;
+        
+        if (reservation?.id && arenaId) {
+          try {
+            const { data: allReservas } = await localApi.select<Reserva>('reservas', arenaId);
+            reservationToUse = allReservas.find(r => r.id === reservation.id) || reservation;
+          } catch {
+            reservationToUse = reservation;
           }
-        }
-        setSelectedItems(initialSelectedItems);
-        const initialInvitedIds = reservation.participants?.filter(p => p.profile_id !== userProfile?.id).map(p => p.profile_id) || [];
-        setInvitedFriendIds(initialInvitedIds);
-        setIsGroupBooking(!!reservation.participants && reservation.participants.length > 1);
-      } else if (newReservationSlot) {
-        const startTime = newReservationSlot.time || '09:00';
-        const quadraId = newReservationSlot.quadraId || (quadras.length > 0 ? quadras[0].id : '');
-        const selectedQuadra = quadras.find(q => q.id === quadraId);
-        const duration = selectedQuadra?.booking_duration_minutes || 60;
-        const startTimeDate = parse(startTime, 'HH:mm', new Date());
-        const endTimeDate = addMinutes(startTimeDate, duration);
-        const endTime = format(endTimeDate, 'HH:mm');
-        
-        baseData = {
-          ...baseData,
-          quadra_id: quadraId,
-          start_time: startTime,
-          end_time: endTime,
-          type: newReservationSlot.type || 'avulsa',
-          sport_type: selectedQuadra?.sports?.[0] || 'Beach Tennis',
-        };
-        
-        if (newReservationSlot.type === 'bloqueio') {
-          baseData.clientName = 'Horário Bloqueado';
+        } else {
+          reservationToUse = reservation;
         }
 
-        if (isClientBooking && userProfile) {
-            baseData.clientName = userProfile.name;
-            baseData.clientPhone = userProfile.phone || '';
+        let baseData: any = {
+          date: format(selectedDate, 'yyyy-MM-dd'),
+          start_time: '09:00', end_time: '10:00',
+          quadra_id: quadras.length > 0 ? quadras[0].id : '',
+          clientName: '', clientPhone: '',
+          status: 'confirmada', type: 'avulsa', sport_type: 'Beach Tennis',
+          total_price: 0, credit_used: 0,
+          isRecurring: false, recurringType: 'weekly',
+          recurringEndDate: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
+          rented_items: [], payment_status: 'pendente', notes: '',
+          atleta_aluguel_id: null, participants: [],
+        };
+
+        if (reservationToUse) {
+          const creditAlreadyUsed = reservationToUse.credit_used || 0;
+          baseData = {
+            ...baseData,
+            ...reservationToUse,
+            start_time: reservationToUse.start_time.slice(0, 5),
+            end_time: reservationToUse.end_time.slice(0, 5),
+            credit_used: creditAlreadyUsed,
+          };
+          setOriginalCreditUsed(creditAlreadyUsed);
+          const initialSelectedItems: Record<string, number> = {};
+          if (reservationToUse.rented_items) {
+            for (const item of reservationToUse.rented_items) {
+              initialSelectedItems[item.itemId] = item.quantity;
+            }
+          }
+          setSelectedItems(initialSelectedItems);
+          const initialInvitedIds = reservationToUse.participants?.filter(p => p.profile_id !== userProfile?.id).map(p => p.profile_id) || [];
+          setInvitedFriendIds(initialInvitedIds);
+          setIsGroupBooking(!!reservationToUse.participants && reservationToUse.participants.length > 1);
+        } else if (newReservationSlot) {
+          const startTime = newReservationSlot.time || '09:00';
+          const quadraId = newReservationSlot.quadraId || (quadras.length > 0 ? quadras[0].id : '');
+          const selectedQuadra = quadras.find(q => q.id === quadraId);
+          const duration = selectedQuadra?.booking_duration_minutes || 60;
+          const startTimeDate = parse(startTime, 'HH:mm', new Date());
+          const endTimeDate = addMinutes(startTimeDate, duration);
+          const endTime = format(endTimeDate, 'HH:mm');
+          
+          baseData = {
+            ...baseData,
+            quadra_id: quadraId,
+            start_time: startTime,
+            end_time: endTime,
+            type: newReservationSlot.type || 'avulsa',
+            sport_type: selectedQuadra?.sports?.[0] || 'Beach Tennis',
+          };
+          
+          if (newReservationSlot.type === 'bloqueio') {
+            baseData.clientName = 'Horário Bloqueado';
+          }
+
+          if (isClientBooking && userProfile) {
+              baseData.clientName = userProfile.name;
+              baseData.clientPhone = userProfile.phone || '';
+          }
+          setOriginalCreditUsed(0);
+          setSelectedItems({});
+          setInvitedFriendIds([]);
+          setIsGroupBooking(false);
         }
-        setOriginalCreditUsed(0);
-        setSelectedItems({});
-        setInvitedFriendIds([]);
-        setIsGroupBooking(false);
+        setFormData(prev => ({...prev, ...baseData}));
+        setIsLoading(false);
       }
-      setFormData(prev => ({...prev, ...baseData}));
-    }
-  }, [reservation, newReservationSlot, isOpen, selectedDate, quadras, clientProfile, userProfile, isClientBooking]);
+    };
+    loadAndSetData();
+  }, [isOpen, reservation, newReservationSlot, arenaId, selectedDate, quadras, isClientBooking, userProfile]);
 
   const findMatchingRule = useCallback((
     rules: PricingRule[], sport: string, date: string, startTime: string
@@ -462,14 +472,32 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
       const totalCreditOnReservation = originalCreditUsed + creditToApplyNow;
       
-      setFormData(prev => ({ 
-        ...prev, 
-        total_price: priceWithItemsAndProf,
-        credit_used: totalCreditOnReservation,
-        rented_items: rentedItemsDetails,
-        payment_status: (priceWithItemsAndProf - totalCreditOnReservation) <= 0 ? 'pago' : 'pendente',
-        atleta_aluguel_id: selectedProfissionalId,
-      }));
+      setFormData(prev => {
+        const valorAPagar = priceWithItemsAndProf - totalCreditOnReservation;
+        const newCalculatedStatus = valorAPagar <= 0 ? 'pago' : 'pendente';
+      
+        // If the reservation was already paid, don't change status unless price changes.
+        if (prev.payment_status === 'pago' && Math.abs(priceWithItemsAndProf - (prev.total_price || 0)) < 0.01) {
+          return {
+            ...prev,
+            total_price: priceWithItemsAndProf,
+            credit_used: totalCreditOnReservation,
+            rented_items: rentedItemsDetails,
+            atleta_aluguel_id: selectedProfissionalId,
+            // payment_status is intentionally omitted to keep the existing 'pago' status
+          };
+        }
+      
+        // For new reservations, unpaid ones, or when price changes on a paid one.
+        return {
+          ...prev,
+          total_price: priceWithItemsAndProf,
+          credit_used: totalCreditOnReservation,
+          rented_items: rentedItemsDetails,
+          payment_status: newCalculatedStatus,
+          atleta_aluguel_id: selectedProfissionalId,
+        };
+      });
     };
     calculatePrice();
   }, [
@@ -634,6 +662,34 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     );
   };
 
+  const handleManualPaymentConfirmation = async () => {
+    if (!reservation || !arenaId) return;
+
+    try {
+        await localApi.upsert('finance_transactions', [{
+            arena_id: arenaId,
+            description: `Pagamento Reserva: ${formData.clientName} em ${format(parseDateStringAsLocal(formData.date), 'dd/MM/yy')}`,
+            amount: formData.total_price || 0,
+            type: 'receita' as 'receita',
+            category: 'Reservas',
+            date: format(new Date(), 'yyyy-MM-dd'),
+        }], arenaId);
+
+        const updatedData = {
+            ...formData,
+            status: 'confirmada' as 'confirmada',
+            payment_status: 'pago' as 'pago',
+            payment_deadline: null,
+        };
+        onSave({ ...reservation, ...updatedData });
+
+        addToast({ message: 'Pagamento confirmado e transação registrada!', type: 'success' });
+
+    } catch (error: any) {
+        addToast({ message: `Erro ao confirmar pagamento: ${error.message}`, type: 'error' });
+    }
+  };
+
   const rentalCost = useMemo(() => {
     return formData.rented_items?.reduce((acc, item) => acc + item.price * item.quantity, 0) || 0;
   }, [formData.rented_items]);
@@ -651,6 +707,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   const valorPorJogador = numParticipants > 0 ? (totalBruto - discountAmount + rentalCost + professionalCost) / numParticipants : 0;
 
   const isBlockMode = formData.type === 'bloqueio';
+  const showConfirmPaymentButton = !isClientBooking && isEditing && formData.payment_status !== 'pago' && formData.status !== 'aguardando_pagamento';
 
   return (
     <AnimatePresence>
@@ -678,13 +735,13 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
               ) : (
                 <>
                   {isBlockMode ? (
-                    <Input label="Motivo do Bloqueio" name="notes" value={formData.notes} onChange={handleChange} icon={<Info className="h-4 w-4 text-brand-gray-400"/>} placeholder="Ex: Manutenção, Uso Interno" />
+                    <Input label="Motivo do Bloqueio" name="notes" value={formData.notes} onChange={handleChange} icon={<Info className="h-4 w-4 text-brand-gray-400"/>} placeholder="Ex: Manutenção, Uso Interno" disabled={isReadOnly} />
                   ) : isClientBooking ? (
                     <div className="p-4 rounded-lg bg-brand-gray-100 dark:bg-brand-gray-800"><div className="flex items-center"><User className="h-5 w-5 mr-3 text-brand-gray-500" /><div><p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">Reserva em nome de:</p><p className="font-semibold text-brand-gray-900 dark:text-white">{formData.clientName}</p></div></div></div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <CreatableClientSelect alunos={alunos} value={{ id: selectedClientId, name: formData.clientName }} onChange={(selection) => { setFormData(prev => ({ ...prev, clientName: selection.name, clientPhone: selection.phone || '' })); const selectedAluno = alunos.find(a => a.id === selection.id); setCustomerType(selectedAluno?.monthly_fee && selectedAluno.monthly_fee > 0 ? 'Mensalista' : 'Avulso'); }} placeholder="Digite ou selecione o cliente" />
-                      <Input label="Telefone do Cliente" name="clientPhone" value={formData.clientPhone} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} />
+                      <CreatableClientSelect alunos={alunos} value={{ id: selectedClientId, name: formData.clientName }} onChange={(selection) => { setFormData(prev => ({ ...prev, clientName: selection.name, clientPhone: selection.phone || '' })); const selectedAluno = alunos.find(a => a.id === selection.id); setCustomerType(selectedAluno?.monthly_fee && selectedAluno.monthly_fee > 0 ? 'Mensalista' : 'Avulso'); }} placeholder="Digite ou selecione o cliente" disabled={isReadOnly} />
+                      <Input label="Telefone do Cliente" name="clientPhone" value={formData.clientPhone} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} disabled={isReadOnly} />
                     </div>
                   )}
 
@@ -697,28 +754,28 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Quadra</label>
-                      <select name="quadra_id" value={formData.quadra_id} onChange={handleChange} className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600"><option value="">Selecione a quadra</option>{quadras.map(q => <option key={q.id} value={q.id}>{q.name}</option>)}</select>
+                      <select name="quadra_id" value={formData.quadra_id} onChange={handleChange} className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600" disabled={isReadOnly}><option value="">Selecione a quadra</option>{quadras.map(q => <option key={q.id} value={q.id}>{q.name}</option>)}</select>
                     </div>
                     {!isBlockMode && (
                      <div>
                       <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte</label>
-                      <select name="sport_type" value={formData.sport_type} onChange={handleChange} className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600">
+                      <select name="sport_type" value={formData.sport_type} onChange={handleChange} className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600" disabled={isReadOnly}>
                         {ALL_SPORTS.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                     )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Input label="Data" name="date" type="date" value={formData.date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
-                    <Input label="Início" name="start_time" type="time" value={formData.start_time} onChange={handleChange} icon={<Clock className="h-4 w-4 text-brand-gray-400"/>} />
-                    <Input label="Fim" name="end_time" type="time" value={formData.end_time} onChange={handleChange} icon={<Clock className="h-4 w-4 text-brand-gray-400"/>} />
+                    <Input label="Data" name="date" type="date" value={formData.date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} disabled={isReadOnly} />
+                    <Input label="Início" name="start_time" type="time" value={formData.start_time} onChange={handleChange} icon={<Clock className="h-4 w-4 text-brand-gray-400"/>} disabled={isReadOnly} />
+                    <Input label="Fim" name="end_time" type="time" value={formData.end_time} onChange={handleChange} icon={<Clock className="h-4 w-4 text-brand-gray-400"/>} disabled={isReadOnly} />
                   </div>
 
                   {!isBlockMode && (
                     <>
                       {!isGroupBooking && !isEditing && (
                         <div className="text-center py-2">
-                          <Button variant="outline" onClick={() => setIsGroupBooking(true)}>
+                          <Button variant="outline" onClick={() => setIsGroupBooking(true)} disabled={isReadOnly}>
                             <Users className="h-4 w-4 mr-2" />
                             Convidar amigos e dividir o valor
                           </Button>
@@ -727,17 +784,25 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                       <AnimatePresence>
                         {isGroupBooking && (
                           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                            <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4"><h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><Users className="h-5 w-5 mr-2 text-brand-blue-500" />Convidar Amigos</h4>{friends.length > 0 ? (<div className="space-y-2 max-h-32 overflow-y-auto pr-2">{friends.map(friend => (<label key={friend.id} className="flex items-center justify-between p-2 rounded-md hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700/50 cursor-pointer"><div className="flex items-center gap-3"><img src={friend.avatar_url || `https://avatar.vercel.sh/${friend.id}.svg`} alt={friend.name} className="w-8 h-8 rounded-full object-cover" /><span className="text-sm font-medium">{friend.name}</span></div><input type="checkbox" checked={invitedFriendIds.includes(friend.id)} onChange={() => handleFriendToggle(friend.id)} className="form-checkbox h-5 w-5 rounded text-brand-blue-600" /></label>))}</div>) : (<p className="text-sm text-center text-brand-gray-500 py-4">Você ainda não tem amigos para convidar.</p>)}</div>
+                            <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4"><h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><Users className="h-5 w-5 mr-2 text-brand-blue-500" />Convidar Amigos</h4>{friends.length > 0 ? (<div className="space-y-2 max-h-32 overflow-y-auto pr-2">{friends.map(friend => (<label key={friend.id} className="flex items-center justify-between p-2 rounded-md hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700/50 cursor-pointer"><div className="flex items-center gap-3"><img src={friend.avatar_url || `https://avatar.vercel.sh/${friend.id}.svg`} alt={friend.name} className="w-8 h-8 rounded-full object-cover" /><span className="text-sm font-medium">{friend.name}</span></div><input type="checkbox" checked={invitedFriendIds.includes(friend.id)} onChange={() => handleFriendToggle(friend.id)} className="form-checkbox h-5 w-5 rounded text-brand-blue-600" disabled={isReadOnly} /></label>))}</div>) : (<p className="text-sm text-center text-brand-gray-500 py-4">Você ainda não tem amigos para convidar.</p>)}</div>
                           </motion.div>
                         )}
                       </AnimatePresence>
                       {isEditing && originalCreditUsed > 0 && (<div className="p-3 rounded-md bg-gray-100 dark:bg-gray-700/50 flex items-center gap-3"><Info className="h-5 w-5 text-gray-500 dark:text-gray-400 flex-shrink-0" /><div><p className="font-semibold text-gray-800 dark:text-gray-200">Crédito Já Aplicado</p><p className="text-sm text-gray-600 dark:text-gray-300">Esta reserva já utilizou <strong className="text-green-600 dark:text-green-400">{formatCurrency(originalCreditUsed)}</strong> de crédito.</p></div></div>)}
-                      {availableCredit > 0 && (<div className="p-3 rounded-md bg-blue-50 dark:bg-blue-900/50 flex items-center justify-between"><div className="flex items-center"><CreditCard className="h-5 w-5 mr-3 text-blue-500" /><div><p className="font-semibold text-blue-800 dark:text-blue-200">Saldo de Crédito do Cliente</p><p className="text-sm text-blue-600 dark:text-blue-300 font-bold">{formatCurrency(availableCredit)}</p></div></div><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={useCredit} onChange={e => setUseCredit(e.target.checked)} className="form-checkbox h-5 w-5 rounded text-brand-blue-600" /><span className="text-sm font-medium">Usar Saldo</span></label></div>)}
-                      <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" className="form-checkbox h-4 w-4 rounded text-brand-blue-600" checked={showHirePlayer} onChange={(e) => setShowHirePlayer(e.target.checked)} /><span className="text-sm font-medium flex items-center gap-2"><Handshake className="h-4 w-4 text-brand-gray-500" />Deseja contratar um Atleta de Aluguel?</span></label>{showHirePlayer && (<div className="mt-4 p-4 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg">{availableProfessionals.length > 0 ? (<div className="space-y-3 max-h-48 overflow-y-auto">{availableProfessionals.map(prof => (<button key={prof.id} onClick={() => setSelectedProfissionalId(prev => prev === prof.id ? null : prof.id)} className={`w-full p-3 border-2 rounded-lg text-left flex items-center gap-3 transition-all ${selectedProfissionalId === prof.id ? 'border-brand-blue-500 bg-blue-100 dark:bg-brand-blue-500/20' : 'border-brand-gray-200 dark:border-brand-gray-700 hover:border-brand-blue-400'}`}><img src={prof.avatar_url || `https://avatar.vercel.sh/${prof.id}.svg`} alt={prof.name} className="w-12 h-12 rounded-full object-cover" /><div className="flex-1"><p className="font-bold text-sm text-brand-gray-900 dark:text-white">{prof.name}</p><p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">{prof.nivel_tecnico || 'Nível não informado'}</p></div><p className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(prof.taxa_hora)}</p></button>))}</div>) : (<p className="text-center text-sm text-brand-gray-500 py-4">Nenhum atleta disponível para este esporte no momento.</p>)}</div>)}</div>
-                      {rentalItems.length > 0 && (<div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4"><h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><ShoppingBag className="h-5 w-5 mr-2 text-brand-blue-500" />Alugar Itens Adicionais</h4><div className="space-y-3 max-h-40 overflow-y-auto pr-2">{rentalItems.map(item => { const stock = availableStock[item.id] ?? 0; const currentSelection = selectedItems[item.id] || 0; return (<div key={item.id} className="flex items-center justify-between"><div><p className="font-medium text-sm">{item.name} <span className="text-xs text-brand-gray-500">({stock} disponíveis)</span></p><p className="text-xs text-green-600 dark:text-green-400 font-semibold">{formatCurrency(item.price)} / reserva</p></div><div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => handleItemQuantityChange(item.id, currentSelection - 1)}>-</Button><span className="w-8 text-center font-semibold">{currentSelection}</span><Button size="sm" variant="outline" onClick={() => handleItemQuantityChange(item.id, currentSelection + 1)} disabled={currentSelection >= stock}>+</Button></div></div>)})}</div></div>)}
+                      {availableCredit > 0 && (<div className="p-3 rounded-md bg-blue-50 dark:bg-blue-900/50 flex items-center justify-between"><div className="flex items-center"><CreditCard className="h-5 w-5 mr-3 text-blue-500" /><div><p className="font-semibold text-blue-800 dark:text-blue-200">Saldo de Crédito do Cliente</p><p className="text-sm text-blue-600 dark:text-blue-300 font-bold">{formatCurrency(availableCredit)}</p></div></div><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={useCredit} onChange={e => setUseCredit(e.target.checked)} className="form-checkbox h-5 w-5 rounded text-brand-blue-600" disabled={isReadOnly} /><span className="text-sm font-medium">Usar Saldo</span></label></div>)}
+                      <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" className="form-checkbox h-4 w-4 rounded text-brand-blue-600" checked={showHirePlayer} onChange={(e) => setShowHirePlayer(e.target.checked)} disabled={isReadOnly} /><span className="text-sm font-medium flex items-center gap-2"><Handshake className="h-4 w-4 text-brand-gray-500" />Deseja contratar um Atleta de Aluguel?</span></label>{showHirePlayer && (<div className="mt-4 p-4 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg">{availableProfessionals.length > 0 ? (<div className="space-y-3 max-h-48 overflow-y-auto">{availableProfessionals.map(prof => (<button key={prof.id} onClick={() => !isReadOnly && setSelectedProfissionalId(prev => prev === prof.id ? null : prof.id)} className={`w-full p-3 border-2 rounded-lg text-left flex items-center gap-3 transition-all ${selectedProfissionalId === prof.id ? 'border-brand-blue-500 bg-blue-100 dark:bg-brand-blue-500/20' : 'border-brand-gray-200 dark:border-brand-gray-700 hover:border-brand-blue-400'}`}><img src={prof.avatar_url || `https://avatar.vercel.sh/${prof.id}.svg`} alt={prof.name} className="w-12 h-12 rounded-full object-cover" /><div className="flex-1"><p className="font-bold text-sm text-brand-gray-900 dark:text-white">{prof.name}</p><p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">{prof.nivel_tecnico || 'Nível não informado'}</p></div><p className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(prof.taxa_hora)}</p></button>))}</div>) : (<p className="text-center text-sm text-brand-gray-500 py-4">Nenhum atleta disponível para este esporte no momento.</p>)}</div>)}</div>
+                      {rentalItems.length > 0 && (<div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4"><h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><ShoppingBag className="h-5 w-5 mr-2 text-brand-blue-500" />Alugar Itens Adicionais</h4><div className="space-y-3 max-h-40 overflow-y-auto pr-2">{rentalItems.map(item => { const stock = availableStock[item.id] ?? 0; const currentSelection = selectedItems[item.id] || 0; return (<div key={item.id} className="flex items-center justify-between"><div><p className="font-medium text-sm">{item.name} <span className="text-xs text-brand-gray-500">({stock} disponíveis)</span></p><p className="text-xs text-green-600 dark:text-green-400 font-semibold">{formatCurrency(item.price)} / reserva</p></div><div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => handleItemQuantityChange(item.id, currentSelection - 1)} disabled={isReadOnly}>-</Button><span className="w-8 text-center font-semibold">{currentSelection}</span><Button size="sm" variant="outline" onClick={() => handleItemQuantityChange(item.id, currentSelection + 1)} disabled={isReadOnly || currentSelection >= stock}>+</Button></div></div>)})}</div></div>)}
                       {activeRule && (<div className={`p-3 rounded-md flex items-start ${activeRule.is_default ? 'bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800' : 'bg-green-50 dark:bg-green-900/50 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'}`}><Tag className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"/><p className="text-xs">{activeRule.is_default ? 'Aplicada regra padrão: ' : 'Promoção aplicada: '}<strong>"{activeRule.sport_type}"</strong> das {activeRule.start_time} às {activeRule.end_time}. Preço: <strong>{formatCurrency(customerType === 'Mensalista' ? activeRule.price_monthly : activeRule.price_single)}/h</strong>.</p></div>)}
                       <div className="p-4 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-800 space-y-2 border border-brand-gray-200 dark:border-brand-gray-700">
-                        <h4 className="font-semibold text-brand-gray-800 dark:text-white">Resumo Financeiro</h4>
+                        <div className="flex justify-between items-center">
+                          <h4 className="font-semibold text-brand-gray-800 dark:text-white">Resumo Financeiro</h4>
+                          {formData.payment_status === 'pago' && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                              <CheckCircle className="h-4 w-4 mr-1.5" />
+                              Pago
+                            </span>
+                          )}
+                        </div>
                         {priceBreakdown.map((item, index) => (<div key={index} className="flex justify-between items-center text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">{item.description}</span><span className="font-medium text-brand-gray-800 dark:text-white">{formatCurrency(item.subtotal)}</span></div>))}
                         {discountAmount > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-green-600 dark:text-green-400">Desconto por Duração ({discountInfo?.duration}h - {discountInfo?.percentage}%)</span><span className="font-medium text-green-600 dark:text-green-400">- {formatCurrency(discountAmount)}</span></div>)}
                         {rentalCost > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Itens Alugados</span><span className="font-medium text-brand-gray-800 dark:text-white">+ {formatCurrency(rentalCost)}</span></div>)}
@@ -755,10 +820,10 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                   {!isClientBooking && (
                     <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={formData.isRecurring} onChange={e => setFormData(p => ({...p, isRecurring: e.target.checked}))} className="form-checkbox h-4 w-4 rounded text-brand-blue-600"/>
+                        <input type="checkbox" className="form-checkbox h-4 w-4 rounded text-brand-blue-600" checked={formData.isRecurring} onChange={e => setFormData(p => ({...p, isRecurring: e.target.checked}))} disabled={isReadOnly} />
                         <span className="text-sm font-medium">Reserva Recorrente (Fixo)</span>
                       </label>
-                      {formData.isRecurring && (<div className="mt-3 pl-6"><Input label="Repetir até" name="recurringEndDate" type="date" value={formData.recurringEndDate || ''} onChange={handleChange} icon={<Repeat className="h-4 w-4 text-brand-gray-400"/>} /></div>)}
+                      {formData.isRecurring && (<div className="mt-3 pl-6"><Input label="Repetir até" name="recurringEndDate" type="date" value={formData.recurringEndDate || ''} onChange={handleChange} icon={<Repeat className="h-4 w-4 text-brand-gray-400"/>} disabled={isReadOnly} /></div>)}
                     </div>
                   )}
                 </>
@@ -766,18 +831,30 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
             </div>
 
             <div className="p-6 mt-auto border-t border-brand-gray-200 dark:border-brand-gray-700 flex justify-between items-center">
-              <div>
+              <div className="flex gap-3">
                 {isEditing && reservation && !isClientBooking && (
-                  <Button variant="outline" className="text-red-500 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => onCancelReservation(reservation)}>
+                  <Button variant="outline" className="text-red-500 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => onCancelReservation(reservation)} disabled={isReadOnly}>
                     Cancelar Reserva
+                  </Button>
+                )}
+                {showConfirmPaymentButton && (
+                  <Button
+                    onClick={handleManualPaymentConfirmation}
+                    className="bg-green-600 hover:bg-green-700 focus:ring-green-500"
+                    disabled={isReadOnly}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Confirmar Pagamento
                   </Button>
                 )}
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" onClick={onClose}>Fechar</Button>
-                <Button onClick={handleSaveClick} disabled={isLoading || !!operatingHoursWarning || !!conflictWarning}>
+                <Button variant="outline" onClick={onClose}>
+                  {isClientBooking ? 'Fechar' : 'Cancelar'}
+                </Button>
+                <Button onClick={handleSaveClick} disabled={isLoading || isReadOnly || !!operatingHoursWarning || !!conflictWarning}>
                   <Save className="h-4 w-4 mr-2"/> 
-                  {isEditing ? 'Salvar Alterações' : isBlockMode ? 'Salvar Bloqueio' : isGroupBooking ? 'Criar Jogo em Grupo' : 'Pagar Reserva'}
+                  {isEditing ? 'Salvar Alterações' : isBlockMode ? 'Salvar Bloqueio' : 'Reservar'}
                 </Button>
               </div>
             </div>

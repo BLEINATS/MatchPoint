@@ -22,6 +22,7 @@ import { expandRecurringReservations } from '../utils/reservationUtils';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
 import { awardPointsForReservation, processCancellation } from '../utils/gamificationUtils';
 import { formatCurrency } from '../utils/formatters';
+import DayDetailView from '../components/Reservations/DayDetailView';
 
 type ViewMode = 'agenda' | 'calendar' | 'list';
 
@@ -55,9 +56,18 @@ const Reservations: React.FC = () => {
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [isManualCancelModalOpen, setIsManualCancelModalOpen] = useState(false);
   const [reservationToCancel, setReservationToCancel] = useState<Reserva | null>(null);
+  
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const canView = useMemo(() => 
+    profile?.role === 'admin_arena' || 
+    profile?.permissions?.reservas === 'view' || 
+    profile?.permissions?.reservas === 'edit', 
+  [profile]);
 
   const canEdit = useMemo(() => 
-    profile?.role === 'admin_arena' || profile?.permissions?.reservas === 'edit', 
+    profile?.role === 'admin_arena' || 
+    profile?.permissions?.reservas === 'edit', 
   [profile]);
 
   const loadData = useCallback(async () => {
@@ -104,13 +114,23 @@ const Reservations: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 60000); // Auto-refresh to check for expired payments
+  }, [loadData, refreshTrigger]);
+
+  useEffect(() => {
+    const interval = setInterval(loadData, 60000);
     window.addEventListener('focus', loadData);
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', loadData);
     };
   }, [loadData]);
+  
+  const closeModal = useCallback(() => {
+    setIsModalOpen(false);
+    setSelectedReservation(null);
+    setNewReservationSlot(null);
+    setRefreshTrigger(v => v + 1);
+  }, []);
 
   useEffect(() => {
     let stateHandled = false;
@@ -127,7 +147,11 @@ const Reservations: React.FC = () => {
         addToast({ message: 'Você não tem permissão para criar novas reservas.', type: 'error' });
         return;
       }
-      setNewReservationSlot({ quadraId: '', time: '', type: location.state.type || 'avulsa' });
+      setNewReservationSlot({ 
+        quadraId: location.state.quadraId || '',
+        time: location.state.time || '',
+        type: location.state.type || 'avulsa' 
+      });
       setSelectedReservation(null); setIsModalOpen(true); stateHandled = true;
     }
     if (stateHandled) navigate(location.pathname, { replace: true });
@@ -139,8 +163,10 @@ const Reservations: React.FC = () => {
 
     if (viewMode === 'list') {
       const hasDateRangeFilter = filters.startDate && filters.endDate;
-      viewStartDate = hasDateRangeFilter ? parseDateStringAsLocal(filters.startDate) : startOfDay(selectedDate);
-      viewEndDate = hasDateRangeFilter ? parseDateStringAsLocal(filters.endDate) : endOfDay(selectedDate);
+      const defaultStart = subDays(new Date(), 30);
+      const defaultEnd = addDays(new Date(), 30);
+      viewStartDate = hasDateRangeFilter ? parseDateStringAsLocal(filters.startDate) : defaultStart;
+      viewEndDate = hasDateRangeFilter ? parseDateStringAsLocal(filters.endDate) : defaultEnd;
       sourceReservas = expandRecurringReservations(reservas, viewStartDate, viewEndDate, quadras);
     } else {
         if (viewMode === 'calendar') { 
@@ -173,7 +199,7 @@ const Reservations: React.FC = () => {
     }
 
     return filtered;
-  }, [reservas, selectedDate, quadras, filters, viewMode, sortOrder]);
+  }, [reservas, quadras, viewMode, filters, selectedDate, sortOrder]);
 
   const filteredQuadras = useMemo(() => filters.quadraId === 'all' ? quadras : quadras.filter(q => q.id === filters.quadraId), [quadras, filters.quadraId]);
   const activeFilterCount = Object.values(filters).filter(value => value !== 'all' && value !== '').length;
@@ -217,7 +243,7 @@ const Reservations: React.FC = () => {
         dataToUpsert.clientName = reservaData.notes || 'Horário Bloqueado';
         dataToUpsert.total_price = 0;
         dataToUpsert.credit_used = 0;
-        dataToUpsert.status = 'confirmada'; // Bloqueios são sempre confirmados
+        dataToUpsert.status = 'confirmada';
         delete dataToUpsert.payment_deadline;
       }
 
@@ -243,7 +269,6 @@ const Reservations: React.FC = () => {
   
       addToast({ message: `Reserva salva com sucesso!`, type: 'success' });
       closeModal();
-      await loadData();
     } catch (error: any) { addToast({ message: `Erro ao salvar reserva: ${error.message}`, type: 'error' }); }
   };
 
@@ -257,16 +282,15 @@ const Reservations: React.FC = () => {
     closeModal();
   };
 
-  const handleConfirmManualCancel = async (reservaId: string) => {
-    if (!selectedArenaContext) return;
+  const handleConfirmManualCancel = async () => {
+    if (!selectedArenaContext || !reservationToCancel) return;
     try {
-        const reserva = reservas.find(r => r.id === reservaId);
-        if (!reserva) throw new Error("Reserva não encontrada");
+        const reserva = reservationToCancel;
         const updatePayload: Partial<Reserva> = { status: 'cancelada' };
         if (reserva.total_price && reserva.total_price > 0) updatePayload.payment_status = 'pago';
         await localApi.upsert('reservas', [{ ...reserva, ...updatePayload }], selectedArenaContext.id);
         addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
-        await loadData();
+        setRefreshTrigger(v => v + 1);
     } catch (error: any) { addToast({ message: `Erro ao cancelar reserva: ${error.message}`, type: 'error' }); }
     finally { setIsManualCancelModalOpen(false); setReservationToCancel(null); }
   };
@@ -294,7 +318,7 @@ const Reservations: React.FC = () => {
     } finally {
         setIsCancellationModalOpen(false);
         setReservationToCancel(null);
-        await loadData();
+        setRefreshTrigger(v => v + 1);
     }
   };
 
@@ -320,18 +344,43 @@ const Reservations: React.FC = () => {
   };
   
   const openEditReservationModal = (reserva: Reserva) => {
-    if (!canEdit) {
-      addToast({ message: 'Você tem permissão apenas para visualizar as reservas.', type: 'info' });
-      return;
-    }
     const master = reserva.masterId ? reservas.find(r => r.id === reserva.masterId) : reserva;
     setSelectedReservation(master || null);
     setNewReservationSlot(null);
     setIsModalOpen(true);
   };
 
-  const closeModal = () => { setIsModalOpen(false); setSelectedReservation(null); setNewReservationSlot(null); };
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => { const newDate = parseDateStringAsLocal(e.target.value); if (!isNaN(newDate.getTime())) setSelectedDate(newDate); };
+
+  if (!canView) {
+    return (
+      <Layout>
+        <div className="text-center p-8">
+          <h2 className="text-2xl font-bold">Acesso Negado</h2>
+          <p className="text-brand-gray-500">Você não tem permissão para acessar esta área.</p>
+          <Link to="/dashboard"><Button className="mt-4">Voltar para o Painel</Button></Link>
+        </div>
+      </Layout>
+    );
+  }
+
+  const renderContent = () => {
+    switch (viewMode) {
+      case 'agenda':
+        return <AgendaView quadras={filteredQuadras} reservas={displayedReservations} selectedDate={selectedDate} onSlotClick={openNewReservationModal} onReservationClick={openEditReservationModal} onDataChange={loadData} />;
+      case 'calendar':
+        return (
+          <div className="space-y-8">
+            <CalendarView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} selectedDate={selectedDate} onDateChange={setSelectedDate} onDayDoubleClick={openNewReservationOnDay} onSlotClick={openNewReservationOnDay} />
+            <DayDetailView date={selectedDate} reservas={displayedReservations} quadras={quadras} onSlotClick={(time) => openNewReservationOnDay(selectedDate, time)} onReservationClick={openEditReservationModal} />
+          </div>
+        );
+      case 'list':
+        return <ListView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <Layout>
@@ -351,11 +400,11 @@ const Reservations: React.FC = () => {
         </Button>
         </div></div><AnimatePresence>{isFilterPanelOpen && <FilterPanel filters={filters} onFilterChange={setFilters} onClearFilters={handleClearFilters} quadras={quadras}/>}</AnimatePresence></div>
         <ReservationLegend />
-        <AnimatePresence mode="wait"><motion.div key={viewMode + filters.quadraId} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>{isLoading ? <div className="text-center py-16"><Loader2 className="w-8 h-8 border-4 border-brand-blue-500 border-t-transparent rounded-full animate-spin mx-auto" /></div> : (() => { switch (viewMode) { case 'agenda': return <AgendaView quadras={filteredQuadras} reservas={displayedReservations} selectedDate={selectedDate} onSlotClick={openNewReservationModal} onReservationClick={openEditReservationModal} onDataChange={loadData} />; case 'calendar': return <CalendarView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} selectedDate={selectedDate} onDateChange={setSelectedDate} onDayDoubleClick={openNewReservationOnDay} onSlotClick={openNewReservationOnDay} />; case 'list': return <ListView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} />; default: return null; } })()}</motion.div></AnimatePresence>
+        <AnimatePresence mode="wait"><motion.div key={viewMode + filters.quadraId} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>{isLoading ? <div className="text-center py-16"><Loader2 className="w-8 h-8 border-4 border-brand-blue-500 border-t-transparent rounded-full animate-spin mx-auto" /></div> : renderContent()}</motion.div></AnimatePresence>
       </div>
-      <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={selectedArenaContext?.id || ''} selectedDate={selectedDate} profissionais={atletas} />}</AnimatePresence>
+      <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={selectedArenaContext?.id || ''} selectedDate={selectedDate} profissionais={atletas} isReadOnly={!canEdit} />}</AnimatePresence>
       <AnimatePresence>{isCancellationModalOpen && (<CancellationModal isOpen={isCancellationModalOpen} onClose={() => { setIsCancellationModalOpen(false); setReservationToCancel(null); }} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} />)}</AnimatePresence>
-      <AnimatePresence>{isManualCancelModalOpen && (<ManualCancellationModal isOpen={isManualCancelModalOpen} onClose={() => { setIsManualCancelModalOpen(false); setReservationToCancel(null); }} onConfirm={() => reservationToCancel && handleConfirmManualCancel(reservationToCancel.id)} reservaName={reservationToCancel?.clientName || 'Reserva'} />)}</AnimatePresence>
+      <AnimatePresence>{isManualCancelModalOpen && (<ManualCancellationModal isOpen={isManualCancelModalOpen} onClose={() => { setIsManualCancelModalOpen(false); setReservationToCancel(null); }} onConfirm={handleConfirmManualCancel} reservaName={reservationToCancel?.clientName || 'Reserva'} />)}</AnimatePresence>
     </Layout>
   );
 };

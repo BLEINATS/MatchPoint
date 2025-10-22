@@ -1,15 +1,16 @@
-import React, { useMemo } from 'react';
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isSameDay, startOfDay, addDays, subDays, endOfDay } from 'date-fns';
+import React, { useState, useMemo, useEffect } from 'react';
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isSameDay, startOfDay, addWeeks, subWeeks, startOfWeek, endOfWeek, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Reserva, Quadra } from '../../types';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, CalendarDays } from 'lucide-react';
+import { Reserva } from '../../types';
 import { getReservationTypeDetails } from '../../utils/reservationUtils';
-import DayDetailView from './DayDetailView';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
+import DayDetailView from './DayDetailView';
+import Button from '../Forms/Button';
 
 interface CalendarViewProps {
   reservas: Reserva[];
-  quadras: Quadra[];
+  quadras: any[];
   onReservationClick: (reserva: Reserva) => void;
   selectedDate: Date;
   onDateChange: (date: Date) => void;
@@ -18,63 +19,97 @@ interface CalendarViewProps {
 }
 
 const CalendarView: React.FC<CalendarViewProps> = ({ reservas, quadras, onReservationClick, selectedDate, onDateChange, onDayDoubleClick, onSlotClick }) => {
-  const currentMonth = startOfMonth(selectedDate);
+  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
+  const [currentDisplayDate, setCurrentDisplayDate] = useState(selectedDate);
+  const today = startOfDay(new Date());
 
-  const handleMonthChange = (direction: 'next' | 'prev') => {
-    const newMonth = direction === 'next' ? addMonths(currentMonth, 1) : subMonths(currentMonth, 1);
-    onDateChange(newMonth);
+  useEffect(() => {
+    setCurrentDisplayDate(selectedDate);
+  }, [selectedDate]);
+
+  const handleNavigation = (direction: 'next' | 'prev') => {
+    const newDate = viewMode === 'week'
+      ? direction === 'next' ? addWeeks(currentDisplayDate, 1) : subWeeks(currentDisplayDate, 1)
+      : direction === 'next' ? addMonths(currentDisplayDate, 1) : subMonths(currentDisplayDate, 1);
+    setCurrentDisplayDate(newDate);
   };
 
+  const headerTitle = useMemo(() => {
+    if (viewMode === 'week') {
+      const weekStart = startOfWeek(currentDisplayDate, { locale: ptBR });
+      const weekEnd = endOfWeek(currentDisplayDate, { locale: ptBR });
+      if (isSameMonth(weekStart, weekEnd)) {
+        return format(currentDisplayDate, 'MMMM yyyy', { locale: ptBR });
+      }
+      return `${format(weekStart, 'MMM', { locale: ptBR })} - ${format(weekEnd, 'MMM yyyy', { locale: ptBR })}`;
+    }
+    return format(currentDisplayDate, 'MMMM yyyy', { locale: ptBR });
+  }, [currentDisplayDate, viewMode]);
+
   const renderHeader = () => (
-    <div className="flex justify-between items-center mb-4">
+    <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
       <h2 className="text-xl font-bold capitalize text-brand-gray-900 dark:text-white">
-        {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+        {headerTitle}
       </h2>
-      <div className="flex space-x-2">
-        <button onClick={() => handleMonthChange('prev')} className="p-2 rounded-md hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
+      <div className="flex items-center gap-1">
+        <Button variant="outline" size="sm" onClick={() => onDateChange(today)}>Hoje</Button>
+        <Button variant="ghost" size="icon" onClick={() => handleNavigation('prev')} className="p-2 rounded-md">
           <ChevronLeft className="h-5 w-5" />
-        </button>
-        <button onClick={() => handleMonthChange('next')} className="p-2 rounded-md hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
+        </Button>
+        <Button variant="ghost" size="icon" onClick={() => handleNavigation('next')} className="p-2 rounded-md">
           <ChevronRight className="h-5 w-5" />
-        </button>
+        </Button>
+        <Button variant="ghost" size="icon" onClick={() => setViewMode(prev => prev === 'week' ? 'month' : 'week')} className="p-2 rounded-md" title={viewMode === 'week' ? 'Ver Mês' : 'Ver Semana'}>
+          {viewMode === 'week' ? <CalendarIcon className="h-5 w-5" /> : <CalendarDays className="h-5 w-5" />}
+        </Button>
       </div>
     </div>
   );
 
-  const renderDays = () => {
+  const renderDaysOfWeek = () => {
     const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     return (
       <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-brand-gray-500 dark:text-brand-gray-400 mb-2">
-        {days.map(day => <div key={day}>{day}</div>)}
+        {days.map(day => <div key={day} className="py-2">{day}</div>)}
       </div>
     );
   };
 
   const renderCells = () => {
-    const monthStart = currentMonth;
-    const monthEnd = endOfMonth(monthStart);
-    const startDate = startOfDay(subDays(monthStart, getDay(monthStart)));
-    const endDate = endOfDay(addDays(monthEnd, 6 - getDay(monthEnd)));
-    
-    const days = eachDayOfInterval({ start: startDate, end: endDate });
+    let days: Date[];
+    let isCurrentPeriod: (day: Date) => boolean;
+
+    if (viewMode === 'week') {
+      const weekStart = startOfWeek(currentDisplayDate, { locale: ptBR });
+      const weekEnd = endOfWeek(currentDisplayDate, { locale: ptBR });
+      days = eachDayOfInterval({ start: weekStart, end: weekEnd });
+      isCurrentPeriod = () => true;
+    } else { // month view
+      const monthStart = startOfMonth(currentDisplayDate);
+      const monthEnd = endOfMonth(monthStart);
+      const calendarStart = startOfWeek(monthStart, { locale: ptBR });
+      const calendarEnd = endOfWeek(monthEnd, { locale: ptBR });
+      days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+      isCurrentPeriod = (day) => isSameMonth(day, currentDisplayDate);
+    }
 
     return (
       <div className="grid grid-cols-7 gap-1">
         {days.map(day => {
           const dayReservas = reservas.filter(r => isSameDay(parseDateStringAsLocal(r.date), day) && r.status !== 'cancelada');
-          const isCurrentMonth = isSameMonth(day, monthStart);
-          const isToday = isSameDay(day, new Date());
           const isSelected = isSameDay(day, selectedDate);
-
+          const isTodayDay = isSameDay(day, today);
+          const isCurrent = isCurrentPeriod(day);
+          
           const getCellClasses = () => {
             const base = 'p-2 border rounded-lg min-h-[120px] transition-all cursor-pointer flex flex-col';
-            if (!isCurrentMonth) {
+            if (!isCurrent) {
               return `${base} bg-brand-gray-50 dark:bg-brand-gray-900/50 text-brand-gray-400 opacity-50 border-transparent`;
             }
             if (isSelected) {
               return `${base} bg-white dark:bg-brand-gray-800 border-2 border-orange-500 shadow-lg`;
             }
-            if (isToday) {
+            if (isTodayDay) {
               return `${base} bg-white dark:bg-brand-gray-800 border-brand-gray-200 dark:border-brand-gray-700 ring-1 ring-brand-blue-400`;
             }
             return `${base} bg-white dark:bg-brand-gray-800 border-brand-gray-200 dark:border-brand-gray-700 hover:bg-blue-50 dark:hover:bg-brand-gray-700`;
@@ -85,7 +120,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ reservas, quadras, onReserv
             if (isSelected) {
               return `${base} bg-orange-500 text-white`;
             }
-            if (isToday) {
+            if (isTodayDay && isCurrent) {
               return `${base} bg-brand-blue-100 text-brand-blue-600 dark:bg-brand-blue-500/20 dark:text-brand-blue-300`;
             }
             return 'font-medium';
@@ -105,7 +140,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({ reservas, quadras, onReserv
               </div>
               <div className="mt-1 space-y-1 flex-1 overflow-y-auto">
                 {dayReservas.slice(0, 2).map(r => {
-                  const typeDetails = getReservationTypeDetails(r.type, r.isRecurring);
+                  let typeDetails = getReservationTypeDetails(r.type, r.isRecurring);
+                  if (r.status === 'aguardando_pagamento') {
+                    typeDetails = {
+                      ...getReservationTypeDetails('aguardando_pagamento', r.isRecurring),
+                    };
+                  }
                   return (
                     <div 
                       key={r.id} 
@@ -133,18 +173,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({ reservas, quadras, onReserv
   
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <div className="lg:col-span-2 bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+      <div className="lg:col-span-3 bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
         {renderHeader()}
-        {renderDays()}
+        {renderDaysOfWeek()}
         {renderCells()}
-      </div>
-      <div className="lg:col-span-1">
-        <DayDetailView 
-          date={selectedDate} 
-          reservas={reservas}
-          quadras={quadras}
-          onSlotClick={(time) => onSlotClick(selectedDate, time)}
-        />
       </div>
     </div>
   );
