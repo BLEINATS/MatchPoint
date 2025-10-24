@@ -101,46 +101,56 @@ export const syncTurmaReservations = (
   turma: Turma,
   allReservas: Reserva[]
 ): Reserva[] => {
-  // 1. Remove todas as reservas antigas associadas a esta turma
   const otherReservas = allReservas.filter(r => r.turma_id !== turma.id);
-
-  // 2. Cria novas reservas para cada slot de aula da turma
   const newReservationsForTurma: Reserva[] = [];
+
+  if (!turma.schedule || turma.schedule.length === 0) {
+    return otherReservas;
+  }
+
   const loopStartDate = parseDateStringAsLocal(turma.start_date);
   const loopEndDate = turma.end_date ? parseDateStringAsLocal(turma.end_date) : addYears(loopStartDate, 1);
   
   const classDays = eachDayOfInterval({ start: loopStartDate, end: loopEndDate });
 
-  const blockStartTime = parse(turma.start_time, 'HH:mm', new Date());
-  const blockEndTime = parse(turma.end_time, 'HH:mm', new Date());
-  const blockDuration = differenceInMinutes(blockEndTime, blockStartTime);
-  const numberOfSlots = blockDuration / 60; // Assumindo slots de 1 hora
-
   for (const day of classDays) {
-    if (turma.daysOfWeek.includes(getDay(day))) {
-      for (let i = 0; i < numberOfSlots; i++) {
-        const slotStartTime = addMinutes(blockStartTime, i * 60);
-        const slotEndTime = addMinutes(slotStartTime, 60);
+    const scheduleForDay = turma.schedule.find(s => s.day === getDay(day));
+    
+    if (scheduleForDay) {
+      try {
+        const blockStartTime = parse(scheduleForDay.start_time, 'HH:mm', new Date());
+        const blockEndTime = parse(scheduleForDay.end_time, 'HH:mm', new Date());
+        const blockDuration = differenceInMinutes(blockEndTime, blockStartTime);
         
-        newReservationsForTurma.push({
-          id: `reserva_turma_${turma.id}_${format(day, 'yyyyMMdd')}_${format(slotStartTime, 'HHmm')}`,
-          arena_id: turma.arena_id,
-          quadra_id: turma.quadra_id,
-          turma_id: turma.id,
-          date: format(day, 'yyyy-MM-dd'),
-          start_time: format(slotStartTime, 'HH:mm'),
-          end_time: format(slotEndTime, 'HH:mm'),
-          type: 'aula',
-          status: 'confirmada',
-          clientName: `Aula: ${turma.name}`,
-          isRecurring: true,
-          master_id: `turma_${turma.id}`,
-          created_at: new Date().toISOString(),
-        } as Reserva);
+        if (blockDuration > 0) {
+          const numberOfSlots = Math.floor(blockDuration / 60);
+
+          for (let i = 0; i < numberOfSlots; i++) {
+            const slotStartTime = addMinutes(blockStartTime, i * 60);
+            const slotEndTime = addMinutes(slotStartTime, 60);
+            
+            newReservationsForTurma.push({
+              id: `reserva_turma_${turma.id}_${format(day, 'yyyyMMdd')}_${format(slotStartTime, 'HHmm')}`,
+              arena_id: turma.arena_id,
+              quadra_id: turma.quadra_id,
+              turma_id: turma.id,
+              date: format(day, 'yyyy-MM-dd'),
+              start_time: format(slotStartTime, 'HH:mm'),
+              end_time: format(slotEndTime, 'HH:mm'),
+              type: 'aula',
+              status: 'confirmada',
+              clientName: `Aula: ${turma.name}`,
+              isRecurring: true,
+              master_id: `turma_${turma.id}`,
+              created_at: new Date().toISOString(),
+            } as Reserva);
+          }
+        }
+      } catch (e) {
+        console.error("Error processing schedule for turma:", turma.name, e);
       }
     }
   }
 
-  // 3. Retorna a lista combinada
   return [...otherReservas, ...newReservationsForTurma];
 };

@@ -62,22 +62,7 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
   }, [currentPlan, aluno.join_date]);
 
   const expirationDateString = expirationDateObject ? format(expirationDateObject, "dd/MM/yyyy") : null;
-
-  const getSlotsForTurma = useCallback((turma: Turma) => {
-    const slots = [];
-    try {
-      const startTime = parse(turma.start_time, 'HH:mm', new Date());
-      const endTime = parse(turma.end_time, 'HH:mm', new Date());
-      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime()) || endTime <= startTime) return [];
-      let currentTime = startTime;
-      while (currentTime < endTime) {
-        slots.push(format(currentTime, 'HH:mm'));
-        currentTime = addMinutes(currentTime, 60);
-      }
-    } catch (e) { console.error("Error parsing time for turma:", turma.name, e); }
-    return slots;
-  }, []);
-
+  
   const { scheduledClasses, availableSlots } = useMemo(() => {
     const now = new Date();
     const scheduled = (aluno.aulas_agendadas || [])
@@ -113,38 +98,70 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
 
     const day = selectedDate;
     const dayOfWeek = getDay(day);
-    const dayTurmas = turmas.filter(t => t.daysOfWeek.includes(dayOfWeek));
     const available: any[] = [];
 
-    dayTurmas.forEach(turma => {
-      const slots = getSlotsForTurma(turma);
-      slots.forEach(slotTime => {
-        const slotDateTime = parse(slotTime, 'HH:mm', day);
-        const isSlotPast = isPast(slotDateTime);
+    turmas.forEach(turma => {
+        const scheduleForDay = turma.schedule?.find(s => s.day === dayOfWeek);
+        if (!scheduleForDay) return;
 
-        const isEnrolled = (aluno.aulas_agendadas || []).some(a => a.turma_id === turma.id && a.date === format(day, 'yyyy-MM-dd') && a.time === slotTime);
-        if (isEnrolled) return;
+        const startDate = parseDateStringAsLocal(turma.start_date);
+        if (isBefore(day, startDate)) return;
+        if (turma.end_date) {
+            const endDate = parseDateStringAsLocal(turma.end_date);
+            if (isAfter(day, endDate)) return;
+        }
 
-        const enrolledCount = allAlunos.reduce((count, currentAluno) => {
-          return count + ((currentAluno.aulas_agendadas || []).some(a => a.turma_id === turma.id && a.date === format(day, 'yyyy-MM-dd') && a.time === slotTime) ? 1 : 0);
-        }, 0);
+        try {
+            const startTime = parse(scheduleForDay.start_time, 'HH:mm', new Date());
+            const endTime = parse(scheduleForDay.end_time, 'HH:mm', new Date());
+            let currentTime = startTime;
 
-        available.push({
-          id: `${turma.id}-${format(day, 'yyyyMMdd')}-${slotTime}`,
-          turma, date: day, time: slotTime,
-          professor: professores.find(p => p.id === turma.professor_id),
-          quadra: quadras.find(q => q.id === turma.quadra_id),
-          isEnrolled: false,
-          enrolledCount,
-          capacity: turma.alunos_por_horario,
-          isPast: isSlotPast,
-        });
-      });
+            while (currentTime < endTime) {
+                const slotTime = format(currentTime, 'HH:mm');
+                const slotDateTime = parse(slotTime, 'HH:mm', day);
+                const isSlotPast = isPast(slotDateTime);
+
+                const isEnrolled = (aluno.aulas_agendadas || []).some(a => 
+                    a.turma_id === turma.id && 
+                    a.date === format(day, 'yyyy-MM-dd') && 
+                    a.time === slotTime
+                );
+                if (isEnrolled) {
+                    currentTime = addMinutes(currentTime, 60);
+                    continue;
+                }
+
+                const enrolledCount = allAlunos.reduce((count, currentAluno) => {
+                    return count + ((currentAluno.aulas_agendadas || []).some(a => 
+                        a.turma_id === turma.id && 
+                        a.date === format(day, 'yyyy-MM-dd') && 
+                        a.time === slotTime
+                    ) ? 1 : 0);
+                }, 0);
+
+                available.push({
+                    id: `${turma.id}-${format(day, 'yyyyMMdd')}-${slotTime}`,
+                    turma,
+                    date: day,
+                    time: slotTime,
+                    professor: professores.find(p => p.id === turma.professor_id),
+                    quadra: quadras.find(q => q.id === turma.quadra_id),
+                    isEnrolled: false,
+                    enrolledCount,
+                    capacity: turma.alunos_por_horario,
+                    isPast: isSlotPast,
+                });
+                
+                currentTime = addMinutes(currentTime, 60);
+            }
+        } catch (e) {
+            console.error("Error processing schedule for turma in AulasTab:", turma.name, e);
+        }
     });
 
     available.sort((a, b) => a.time.localeCompare(b.time));
     return { scheduledClasses: scheduled, availableSlots: available };
-  }, [selectedDate, turmas, aluno, professores, quadras, allAlunos, getSlotsForTurma]);
+  }, [selectedDate, turmas, aluno, professores, quadras, allAlunos]);
 
   const handleOpenModal = (classData: any) => {
     setSelectedClass(classData);

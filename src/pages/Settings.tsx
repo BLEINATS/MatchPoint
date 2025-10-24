@@ -15,8 +15,9 @@ import PlanosAulasTab from '../components/Settings/PlanosAulasTab';
 import NotificationSettingsTab from './Settings/NotificationSettingsTab';
 import SecurityTab from '../components/Settings/SecurityTab';
 import TeamSettingsTab from '../components/Settings/TeamSettingsTab';
+import FaturamentoTab from '../components/Settings/FaturamentoTab';
 
-type AdminTabType = 'profile' | 'operation' | 'payments' | 'planos_aulas' | 'team' | 'plan';
+type AdminTabType = 'profile' | 'operation' | 'payments' | 'planos_aulas' | 'team' | 'plan' | 'faturamento';
 type ClientTabType = 'my-profile' | 'notifications' | 'security';
 type StaffTabType = 'planos_aulas'; // Staff can only see what they have permissions for
 
@@ -37,8 +38,9 @@ const Settings: React.FC = () => {
     { id: 'operation', label: 'Operação e Políticas', icon: FileText },
     { id: 'payments', label: 'Pagamentos', icon: CreditCard },
     { id: 'planos_aulas', label: 'Planos de Aulas', icon: DollarSign },
+    { id: 'faturamento', label: 'Faturamento', icon: BarChart2 },
     { id: 'team', label: 'Equipe', icon: UsersIcon },
-    { id: 'plan', label: 'Plano e Faturamento', icon: BarChart2 },
+    { id: 'plan', label: 'Plano e Assinatura', icon: Star },
   ];
 
   const clientTabs: { id: ClientTabType; label: string; icon: React.ElementType }[] = [
@@ -92,6 +94,7 @@ const Settings: React.FC = () => {
         case 'operation': return <OperationTab formData={arenaFormData} setFormData={setArenaFormData} />;
         case 'payments': return <PaymentSettingsTab formData={arenaFormData} setFormData={setArenaFormData} />;
         case 'planos_aulas': return <PlanosAulasTab />;
+        case 'faturamento': return <FaturamentoTab formData={arenaFormData} setFormData={setArenaFormData} />;
         case 'team': return <TeamSettingsTab />;
         case 'plan': return <PlanTab />;
         default: return null;
@@ -117,7 +120,7 @@ const Settings: React.FC = () => {
     );
   }
   
-  const canSave = isAdmin ? (activeTab === 'profile' || activeTab === 'operation' || activeTab === 'payments') : (activeTab === 'my-profile' || activeTab === 'notifications' || activeTab === 'security');
+  const canSave = isAdmin ? (activeTab === 'profile' || activeTab === 'operation' || activeTab === 'payments' || activeTab === 'faturamento') : (activeTab === 'my-profile' || activeTab === 'notifications' || activeTab === 'security');
 
   return (
     <Layout>

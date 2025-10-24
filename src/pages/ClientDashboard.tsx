@@ -282,18 +282,45 @@ const ClientDashboard: React.FC = () => {
         const payload = { ...reservationData, arena_id: selectedArenaContext.id, profile_id: profile.id, clientName: profile.name, clientPhone: profile.phone || '' };
         
         let savedReserva: Reserva;
+        const isEditing = 'id' in payload;
 
-        if ('id' in payload) {
+        if (isEditing) {
             const { data } = await localApi.upsert('reservas', [payload], selectedArenaContext.id);
             savedReserva = data[0];
         } else {
+            const { data: arenas } = await localApi.select<Arena>('arenas', 'all');
+            const currentArena = arenas.find(a => a.id === selectedArenaContext.id);
+            const paymentWindow = currentArena?.single_booking_payment_window_minutes || 30;
             const newReservaPayload: Omit<Reserva, 'id' | 'created_at'> = {
                 ...payload,
                 status: (payload.total_price || 0) > 0 ? 'aguardando_pagamento' : 'confirmada',
-                payment_deadline: (payload.total_price || 0) > 0 ? addMinutes(new Date(), 30).toISOString() : null,
+                payment_deadline: (payload.total_price || 0) > 0 ? addMinutes(new Date(), paymentWindow).toISOString() : null,
             };
             const { data } = await localApi.upsert('reservas', [newReservaPayload], selectedArenaContext.id);
             savedReserva = data[0];
+        }
+
+        if (savedReserva && savedReserva.credit_used && savedReserva.credit_used > 0) {
+            const newlyAppliedCredit = savedReserva.credit_used - ((reservationData as any).originalCreditUsed || 0);
+            if (newlyAppliedCredit > 0 && alunoProfileForSelectedArena?.id) {
+                const { data: allAlunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
+                const targetAluno = allAlunos.find(a => a.id === alunoProfileForSelectedArena!.id);
+                if (targetAluno) {
+                    targetAluno.credit_balance = (targetAluno.credit_balance || 0) - newlyAppliedCredit;
+                    await localApi.upsert('alunos', [targetAluno], selectedArenaContext.id);
+                    const quadraName = quadras.find(q => q.id === savedReserva.quadra_id)?.name || 'Quadra';
+                    const reservaDetails = `${quadraName} em ${format(parseDateStringAsLocal(savedReserva.date), 'dd/MM/yy')} às ${savedReserva.start_time.slice(0,5)}`;
+                    const newDescription = `Pagamento da reserva: ${reservaDetails}`;
+                    await localApi.upsert('credit_transactions', [{ 
+                        aluno_id: targetAluno.id, 
+                        arena_id: selectedArenaContext.id, 
+                        amount: -newlyAppliedCredit, 
+                        type: 'reservation_payment', 
+                        description: newDescription,
+                        related_reservation_id: savedReserva.id 
+                    }], selectedArenaContext.id);
+                }
+            }
         }
 
         if (savedReserva.participants && savedReserva.participants.length > 1) {
@@ -412,7 +439,7 @@ const ClientDashboard: React.FC = () => {
       const reserva = reservas.find(r => r.id === reservaId);
       if (!reserva) throw new Error("Reserva não encontrada");
   
-      const { creditRefunded } = await processCancellation(reserva, selectedArenaContext.id);
+      const { creditRefunded } = await processCancellation(reserva, selectedArenaContext.id, quadras);
   
       await localApi.upsert('reservas', [{ ...reserva, status: 'cancelada' }], selectedArenaContext.id);
       
@@ -635,60 +662,62 @@ const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: 
   </div>
 );
 
-const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras: Quadra[], arenaName?: string, isPast?: boolean, onCancel?: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string}> = ({title, reservations, quadras, arenaName, isPast, onCancel, onDetail, onHirePlayer, profileId}) => (
-  <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
-    <h3 className="text-xl font-semibold p-6">{title}</h3>
-    {reservations.length === 0 ? (
-      <p className="px-6 pb-6 text-brand-gray-500">Nenhuma reserva encontrada.</p>
-    ) : (
-      <ul className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
-        {reservations.map(res => {
-          const isOrganizer = res.profile_id === profileId;
-          const isInvited = res.participants?.some(p => p.profile_id === profileId) && !isOrganizer;
-          const isClickable = !isPast || res.status === 'aguardando_pagamento';
-          return (
-            <li key={res.id} onClick={() => isClickable && onDetail(res)} className={`p-4 sm:p-6 transition-colors ${isClickable ? 'hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer' : 'cursor-default opacity-70'}`}>
-              <div className="flex flex-col sm:flex-row justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    {isInvited && <Handshake className="h-4 w-4 text-purple-500" title="Você foi convidado" />}
-                    {isOrganizer && res.participants && res.participants.length > 1 && <Users className="h-4 w-4 text-blue-500" title="Você é o organizador" />}
-                    <p className="font-bold text-brand-gray-900 dark:text-white">{quadras.find(q => q.id === res.quadra_id)?.name} <span className="font-normal text-brand-gray-500">• {arenaName}</span></p>
-                  </div>
-                  <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">
-                    {format(parseDateStringAsLocal(res.date), "dd/MM/yyyy")} • {res.start_time.slice(0, 5)} - {res.end_time.slice(0, 5)}
-                  </p>
-                  {res.status === 'aguardando_aceite_profissional' && <p className="text-xs text-orange-500 font-medium mt-1">Aguardando aceite do profissional</p>}
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(res.total_price)}</p>
-                    <div className="flex items-center justify-end gap-2 text-xs text-brand-gray-500">
-                      {res.payment_status === 'pago' && <><CheckCircle className="h-3 w-3 text-green-500"/> Pago</>}
-                      {res.payment_status === 'pendente' && <><AlertCircle className="h-3 w-3 text-yellow-500"/> Pendente</>}
-                      {res.credit_used && res.credit_used > 0 && <CreditCard className="h-3 w-3 text-blue-500" title={`Pago com ${formatCurrency(res.credit_used)} de crédito`} />}
-                      {res.rented_items && res.rented_items.length > 0 && <ShoppingBag className="h-3 w-3 text-purple-500" title="Itens alugados" />}
+const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras: Quadra[], arenaName?: string, isPast?: boolean, onCancel?: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string}> = ({title, reservations, quadras, arenaName, isPast, onCancel, onDetail, onHirePlayer, profileId}) => {
+  return (
+    <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
+      <h3 className="text-xl font-semibold p-6">{title}</h3>
+      {reservations.length === 0 ? (
+        <p className="px-6 pb-6 text-brand-gray-500">Nenhuma reserva encontrada.</p>
+      ) : (
+        <ul className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
+          {reservations.map(res => {
+            const isOrganizer = res.profile_id === profileId;
+            const isInvited = res.participants?.some(p => p.profile_id === profileId) && !isOrganizer;
+            const isClickable = !isPast || res.status === 'aguardando_pagamento';
+            return (
+              <li key={res.id} onClick={() => isClickable && onDetail(res)} className={`p-4 sm:p-6 transition-colors ${isClickable ? 'hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer' : 'cursor-default opacity-70'}`}>
+                <div className="flex flex-col sm:flex-row justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {isInvited && <Handshake className="h-4 w-4 text-purple-500" title="Você foi convidado" />}
+                      {isOrganizer && res.participants && res.participants.length > 1 && <Users className="h-4 w-4 text-blue-500" title="Você é o organizador" />}
+                      <p className="font-bold text-brand-gray-900 dark:text-white">{quadras.find(q => q.id === res.quadra_id)?.name} <span className="font-normal text-brand-gray-500">• {arenaName}</span></p>
                     </div>
+                    <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">
+                      {format(parseDateStringAsLocal(res.date), "dd/MM/yyyy")} • {res.start_time.slice(0, 5)} - {res.end_time.slice(0, 5)}
+                    </p>
+                    {res.status === 'aguardando_aceite_profissional' && <p className="text-xs text-orange-500 font-medium mt-1">Aguardando aceite do profissional</p>}
                   </div>
-                  {!isPast && onCancel && isOrganizer && (
-                    <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onCancel(res); }}>
-                      Cancelar
-                    </Button>
-                  )}
-                  {!isPast && onHirePlayer && isOrganizer && !res.atleta_aluguel_id && (
-                      <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onHirePlayer(res); }}>
-                          Contratar Jogador
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(res.total_price)}</p>
+                      <div className="flex items-center justify-end gap-2 text-xs text-brand-gray-500">
+                        {res.payment_status === 'pago' && <><CheckCircle className="h-3 w-3 text-green-500"/> Pago</>}
+                        {res.payment_status === 'pendente' && <><AlertCircle className="h-3 w-3 text-yellow-500"/> Pendente</>}
+                        {res.credit_used && res.credit_used > 0 && <CreditCard className="h-3 w-3 text-blue-500" title={`Pago com ${formatCurrency(res.credit_used)} de crédito`} />}
+                        {res.rented_items && res.rented_items.length > 0 && <ShoppingBag className="h-3 w-3 text-purple-500" title="Itens alugados" />}
+                      </div>
+                    </div>
+                    {!isPast && onCancel && isOrganizer && (
+                      <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onCancel(res); }}>
+                        Cancelar
                       </Button>
-                  )}
+                    )}
+                    {!isPast && onHirePlayer && isOrganizer && !res.atleta_aluguel_id && (
+                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onHirePlayer(res); }}>
+                            Contratar Jogador
+                        </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-    )}
-  </div>
-);
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], levels: GamificationLevel[], rewards: GamificationReward[], onOpenProfileModal: (tab: 'credits' | 'gamification' | 'payments') => void, nextReservation?: Reserva, pendingReservations: Reserva[], onDetail: (reserva: Reserva) => void, onDataChange: () => void, nextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, selectedArena: Arena | null, onOpenAttendanceModal: () => void }> = ({ alunoProfile, planos, levels, rewards, onOpenProfileModal, nextReservation, pendingReservations, onDetail, onDataChange, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, selectedArena, onOpenAttendanceModal }) => { 
   const [favoriteQuadras, setFavoriteQuadras] = useState<string[]>([]);
@@ -892,7 +921,7 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
     </div> 
   ); 
 };
-const QuickBookingWidget: React.FC<{ quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, favoriteQuadras: string[], toggleFavorite: (quadraId: string) => void, profile: Profile | null, }> = ({quadras, reservas, onSlotClick, selectedDate, setSelectedDate, favoriteQuadras, toggleFavorite, profile}) => { const displayedReservations = useMemo(() => { const viewStartDate = startOfDay(new Date()); const viewEndDate = endOfDay(addDays(new Date(), 365)); return expandRecurringReservations(reservas, viewStartDate, viewEndDate, quadras); }, [reservas, quadras]); const generateTimeSlots = (quadra: Quadra) => { const slots = []; const dayOfWeek = getDay(selectedDate); let horario; if (dayOfWeek === 0) horario = quadra.horarios?.sunday; else if (dayOfWeek === 6) horario = quadra.horarios?.saturday; else horario = quadra.horarios?.weekday; if (!horario || !horario.start || !horario.end) return []; let currentTime = parse(horario.start.slice(0, 5), 'HH:mm', selectedDate); let endTime = parse(horario.end.slice(0, 5), 'HH:mm', selectedDate); if (endTime <= currentTime) endTime = addDays(endTime, 1); const interval = quadra.booking_duration_minutes || 60; while (currentTime < endTime) { slots.push(format(currentTime, 'HH:mm')); currentTime = addMinutes(currentTime, interval); } return slots; }; const getSlotStatus = (time: string, quadraId: string) => { const slotDateTime = parse(time, 'HH:mm', selectedDate); if (isPast(slotDateTime) && !isSameDay(selectedDate, startOfDay(new Date()))) { return { status: 'past', data: null }; } else if (isPast(slotDateTime) && isSameDay(selectedDate, startOfDay(new Date()))) { return { status: 'past', data: null }; } const reserva = displayedReservations.find(r => r.quadra_id === quadraId && isSameDay(parseDateStringAsLocal(r.date), selectedDate) && r.start_time.slice(0, 5) === time && r.status !== 'cancelada'); if (reserva) return { status: 'booked', data: reserva }; return { status: 'available', data: null }; }; const getPriceRange = (quadra: Quadra) => { if (!quadra.pricing_rules || quadra.pricing_rules.length === 0) return "A definir"; const activePrices = quadra.pricing_rules.filter(r => r.is_active).map(r => r.price_single); if (activePrices.length === 0) return "A definir"; const minPrice = Math.min(...activePrices); const maxPrice = Math.max(...activePrices); if (minPrice === maxPrice) return formatCurrency(minPrice); return `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`; }; const renderSlotButton = (quadra: Quadra, time: string) => { const { status } = getSlotStatus(time, quadra.id); let styles = 'bg-brand-gray-100 text-brand-gray-500 dark:bg-brand-gray-700 dark:text-brand-gray-400'; let icon = <Clock className="h-3 w-3 mr-1" />; if (status === 'available') { styles = 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-500/20'; } else if (status === 'past') { styles = 'bg-brand-gray-100 text-brand-gray-400 dark:bg-brand-gray-700/50 dark:text-brand-gray-500 cursor-not-allowed'; } else if (status === 'booked') { styles = 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400 cursor-not-allowed'; } return ( <motion.button key={time} whileHover={{ scale: status === 'available' ? 1.05 : 1 }} whileTap={{ scale: status === 'available' ? 0.95 : 1 }} onClick={() => onSlotClick(time, quadra.id)} disabled={status !== 'available'} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all text-center ${styles}`}> <div className="flex items-center justify-center"> {icon} {time.slice(0,5)} </div> </motion.button> ); }; return ( <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 p-6"> <h3 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200 mb-4 flex items-center"><Calendar className="h-5 w-5 mr-2 text-brand-blue-500" /> Reserva Rápida</h3> <div className="mb-6"> <DatePickerCalendar selectedDate={selectedDate} onDateChange={setSelectedDate} /> </div> <div className="space-y-6"> {quadras.map(quadra => ( <div key={quadra.id}> <div className="flex justify-between items-center mb-3"> <div> <h4 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200">{quadra.name}</h4> <p className="text-sm text-brand-gray-500">{quadra.sports.join(', ')} - <span className="font-medium text-green-600">{getPriceRange(quadra)}</span></p> </div> {profile && ( <button onClick={() => toggleFavorite(quadra.id)} className="p-2 rounded-full hover:bg-red-100/50 dark:hover:bg-red-500/10 transition-colors"> <Heart className={`h-5 w-5 transition-all ${favoriteQuadras.includes(quadra.id) ? 'fill-current text-red-500' : 'text-brand-gray-400'}`} /> </button> )} </div> <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3"> {generateTimeSlots(quadra).map(time => renderSlotButton(quadra, time))} </div> </div> ))} </div> </div> ); };
+const QuickBookingWidget: React.FC<{ quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, favoriteQuadras: string[], toggleFavorite: (quadraId: string) => void, profile: Profile | null, }> = ({quadras, reservas, onSlotClick, selectedDate, setSelectedDate, favoriteQuadras, toggleFavorite, profile}) => { const displayedReservations = useMemo(() => { const viewStartDate = startOfDay(new Date()); const viewEndDate = endOfDay(addDays(new Date(), 365)); return expandRecurringReservations(reservas, viewStartDate, viewEndDate, quadras); }, [reservas, quadras]); const generateTimeSlots = (quadra: Quadra) => { const slots = []; const dayOfWeek = getDay(selectedDate); let horario; if (dayOfWeek === 0) horario = quadra.horarios?.sunday; else if (dayOfWeek === 6) horario = quadra.horarios?.saturday; else horario = quadra.horarios?.weekday; if (!horario || !horario.start || !horario.end) return []; let currentTime = parse(horario.start.slice(0, 5), 'HH:mm', selectedDate); let endTime = parse(horario.end.slice(0, 5), 'HH:mm', selectedDate); if (endTime <= currentTime) endTime = addDays(endTime, 1); const interval = 60; while (currentTime < endTime) { slots.push(format(currentTime, 'HH:mm')); currentTime = addMinutes(currentTime, interval); } return slots; }; const getSlotStatus = (time: string, quadraId: string) => { const slotDateTime = parse(time, 'HH:mm', selectedDate); if (isPast(slotDateTime) && !isSameDay(selectedDate, startOfDay(new Date()))) { return { status: 'past', data: null }; } else if (isPast(slotDateTime) && isSameDay(selectedDate, startOfDay(new Date()))) { return { status: 'past', data: null }; } const reserva = displayedReservations.find(r => r.quadra_id === quadraId && isSameDay(parseDateStringAsLocal(r.date), selectedDate) && r.start_time.slice(0, 5) === time && r.status !== 'cancelada'); if (reserva) return { status: 'booked', data: reserva }; return { status: 'available', data: null }; }; const getPriceRange = (quadra: Quadra) => { if (!quadra.pricing_rules || quadra.pricing_rules.length === 0) return "A definir"; const activePrices = quadra.pricing_rules.filter(r => r.is_active).map(r => r.price_single); if (activePrices.length === 0) return "A definir"; const minPrice = Math.min(...activePrices); const maxPrice = Math.max(...activePrices); if (minPrice === maxPrice) return formatCurrency(minPrice); return `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`; }; const renderSlotButton = (quadra: Quadra, time: string) => { const { status } = getSlotStatus(time, quadra.id); let styles = 'bg-brand-gray-100 text-brand-gray-500 dark:bg-brand-gray-700 dark:text-brand-gray-400'; let icon = <Clock className="h-3 w-3 mr-1" />; if (status === 'available') { styles = 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-500/20'; } else if (status === 'past') { styles = 'bg-brand-gray-100 text-brand-gray-400 dark:bg-brand-gray-700/50 dark:text-brand-gray-500 cursor-not-allowed'; } else if (status === 'booked') { styles = 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400 cursor-not-allowed'; } return ( <motion.button key={time} whileHover={{ scale: status === 'available' ? 1.05 : 1 }} whileTap={{ scale: status === 'available' ? 0.95 : 1 }} onClick={() => onSlotClick(time, quadra.id)} disabled={status !== 'available'} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all text-center ${styles}`}> <div className="flex items-center justify-center"> {icon} {time.slice(0,5)} </div> </motion.button> ); }; return ( <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 p-6"> <h3 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200 mb-4 flex items-center"><Calendar className="h-5 w-5 mr-2 text-brand-blue-500" /> Reserva Rápida</h3> <div className="mb-6"> <DatePickerCalendar selectedDate={selectedDate} onDateChange={setSelectedDate} /> </div> <div className="space-y-6"> {quadras.map(quadra => ( <div key={quadra.id}> <div className="flex justify-between items-center mb-3"> <div> <h4 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200">{quadra.name}</h4> <p className="text-sm text-brand-gray-500">{quadra.sports.join(', ')} - <span className="font-medium text-green-600">{getPriceRange(quadra)}</span></p> </div> {profile && ( <button onClick={() => toggleFavorite(quadra.id)} className="p-2 rounded-full hover:bg-red-100/50 dark:hover:bg-red-500/10 transition-colors"> <Heart className={`h-5 w-5 transition-all ${favoriteQuadras.includes(quadra.id) ? 'fill-current text-red-500' : 'text-brand-gray-400'}`} /> </button> )} </div> <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3"> {generateTimeSlots(quadra).map(time => renderSlotButton(quadra, time))} </div> </div> ))} </div> </div> ); };
 const EmptyState: React.FC<{message: string}> = ({ message }) => ( <div className="text-center h-full flex flex-col justify-center items-center py-10 px-6 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg border-2 border-dashed border-brand-gray-300 dark:border-brand-gray-700"> <p className="text-brand-gray-600 dark:text-brand-gray-400">{message}</p> </div> );
 
 export default ClientDashboard;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, BookOpen, GraduationCap, MapPin, Calendar, Clock, Users, Info } from 'lucide-react';
-import { Turma, Professor, Quadra, Aluno, PlanoAula, Matricula } from '../../types';
+import { Turma, Professor, Quadra, Aluno, PlanoAula, Matricula, TurmaSchedule } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { format, parse, addMinutes, differenceInMinutes } from 'date-fns';
@@ -41,9 +41,7 @@ const TurmaModal: React.FC<TurmaModalProps> = ({ isOpen, onClose, onSave, initia
     professor_id: '',
     quadra_id: '',
     sport: '',
-    daysOfWeek: [] as number[],
-    start_time: '18:00',
-    end_time: '21:00',
+    schedule: [] as TurmaSchedule[],
     start_date: format(new Date(), 'yyyy-MM-dd'),
     end_date: '',
     alunos_por_horario: 8,
@@ -59,14 +57,22 @@ const TurmaModal: React.FC<TurmaModalProps> = ({ isOpen, onClose, onSave, initia
     if (!isOpen) return;
 
     if (initialData) {
+      let scheduleData = initialData.schedule || [];
+      // Migration logic for old data structure
+      if ((!initialData.schedule || initialData.schedule.length === 0) && initialData.daysOfWeek && initialData.daysOfWeek.length > 0) {
+        scheduleData = initialData.daysOfWeek.map(day => ({
+          day: day,
+          start_time: initialData.start_time || '18:00',
+          end_time: initialData.end_time || '19:00',
+        }));
+      }
+
       setFormData({
         name: initialData.name,
         professor_id: initialData.professor_id,
         quadra_id: initialData.quadra_id,
         sport: initialData.sport,
-        daysOfWeek: initialData.daysOfWeek,
-        start_time: initialData.start_time,
-        end_time: initialData.end_time,
+        schedule: scheduleData,
         start_date: initialData.start_date,
         end_date: initialData.end_date || '',
         alunos_por_horario: initialData.alunos_por_horario || 8,
@@ -74,19 +80,20 @@ const TurmaModal: React.FC<TurmaModalProps> = ({ isOpen, onClose, onSave, initia
       });
     } else {
       setFormData({
-        name: '', professor_id: '', quadra_id: '', sport: '', daysOfWeek: [],
-        start_time: '18:00', end_time: '21:00', start_date: format(new Date(), 'yyyy-MM-dd'),
+        name: '', professor_id: '', quadra_id: '', sport: '', schedule: [],
+        start_date: format(new Date(), 'yyyy-MM-dd'),
         end_date: '', alunos_por_horario: 8, matriculas: [],
       });
     }
   }, [initialData, isOpen]);
 
   const handleSave = () => {
-    const quadra = quadras.find(q => q.id === formData.quadra_id);
+    const { daysOfWeek, start_time, end_time, ...restOfData } = formData as any;
+    const quadra = quadras.find(q => q.id === restOfData.quadra_id);
     const dataToSave = {
-      ...formData,
-      sport: quadra?.sport_type || formData.sport,
-      alunos_por_horario: Number(formData.alunos_por_horario) || 0,
+      ...restOfData,
+      sport: quadra?.sport_type || restOfData.sport,
+      alunos_por_horario: Number(restOfData.alunos_por_horario) || 0,
     };
 
     if (isEditing && initialData) {
@@ -101,39 +108,66 @@ const TurmaModal: React.FC<TurmaModalProps> = ({ isOpen, onClose, onSave, initia
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const toggleDay = (dayId: number) => {
+  const toggleScheduleDay = (dayId: number) => {
     setFormData(prev => {
-      const daysOfWeek = prev.daysOfWeek.includes(dayId)
-        ? prev.daysOfWeek.filter(d => d !== dayId)
-        : [...prev.daysOfWeek, dayId];
-      return { ...prev, daysOfWeek };
+      const existingSchedule = prev.schedule.find(s => s.day === dayId);
+      if (existingSchedule) {
+        return { ...prev, schedule: prev.schedule.filter(s => s.day !== dayId) };
+      } else {
+        const newSchedule = [...prev.schedule, { day: dayId, start_time: '18:00', end_time: '19:00' }];
+        return { ...prev, schedule: newSchedule.sort((a, b) => a.day - b.day) };
+      }
     });
+  };
+
+  const handleScheduleTimeChange = (day: number, type: 'start_time' | 'end_time', value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      schedule: prev.schedule.map(s => s.day === day ? { ...s, [type]: value } : s)
+    }));
   };
   
   const scheduleGrid = useMemo(() => {
-    const startTime = parse(formData.start_time, 'HH:mm', new Date());
-    const endTime = parse(formData.end_time, 'HH:mm', new Date());
-    const duration = differenceInMinutes(endTime, startTime);
-    const slots = duration / 60;
-    
-    if (duration <= 0 || slots <= 0) return { timeSlots: [], grid: [] };
+    const allSlots = new Set<string>();
+    formData.schedule.forEach(s => {
+        try {
+            const startTime = parse(s.start_time, 'HH:mm', new Date());
+            const endTime = parse(s.end_time, 'HH:mm', new Date());
+            let currentTime = startTime;
+            while (currentTime < endTime) {
+                allSlots.add(format(currentTime, 'HH:mm'));
+                currentTime = addMinutes(currentTime, 60);
+            }
+        } catch (e) { console.error("Invalid time format in schedule", s); }
+    });
 
-    const timeSlots = Array.from({ length: slots }, (_, i) => format(addMinutes(startTime, i * 60), 'HH:mm'));
-    
+    const timeSlots = Array.from(allSlots).sort();
+    const sortedScheduleDays = formData.schedule.map(s => s.day).sort((a, b) => a - b);
+
     const grid = timeSlots.map(time => {
-      return formData.daysOfWeek.sort().map(day => {
-        const matricula = formData.matriculas.find(m => m.dayOfWeek === day && m.time === time);
-        return {
-          day,
-          time,
-          enrolled: matricula?.student_ids.length || 0,
-          studentIds: matricula?.student_ids || [],
-        };
+      return sortedScheduleDays.map(day => {
+        const scheduleForDay = formData.schedule.find(s => s.day === day);
+        if (!scheduleForDay) return null;
+
+        const slotTimeMinutes = timeToMinutes(time);
+        const startTimeMinutes = timeToMinutes(scheduleForDay.start_time);
+        const endTimeMinutes = timeToMinutes(scheduleForDay.end_time);
+
+        if (slotTimeMinutes >= startTimeMinutes && slotTimeMinutes < endTimeMinutes) {
+          const matricula = formData.matriculas.find(m => m.dayOfWeek === day && m.time === time);
+          return {
+            day,
+            time,
+            enrolled: matricula?.student_ids.length || 0,
+            studentIds: matricula?.student_ids || [],
+          };
+        }
+        return null;
       });
     });
 
-    return { timeSlots, grid };
-  }, [formData.start_time, formData.end_time, formData.daysOfWeek, formData.matriculas]);
+    return { timeSlots, sortedScheduleDays, grid };
+  }, [formData.schedule, formData.matriculas]);
   
   const handleSlotClick = (day: number, time: string) => {
     setEditingSlot({ day, time });
@@ -155,12 +189,6 @@ const TurmaModal: React.FC<TurmaModalProps> = ({ isOpen, onClose, onSave, initia
       
       return { ...prev, matriculas: newMatriculas };
     });
-  };
-
-  const handlePromoteClient = (aluno: Aluno) => {
-    setIsMatriculaModalOpen(false);
-    onClose(); // Fecha o modal de turma também para focar no aluno
-    // A navegação ou abertura do modal do aluno será tratada na página principal
   };
 
   return (
@@ -193,35 +221,47 @@ const TurmaModal: React.FC<TurmaModalProps> = ({ isOpen, onClose, onSave, initia
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-2">Dias da Semana</label>
-                  <div className="flex flex-wrap gap-2">{weekDays.map(day => (<button key={day.id} type="button" onClick={() => toggleDay(day.id)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${formData.daysOfWeek.includes(day.id) ? 'bg-brand-blue-600 text-white shadow-md border-brand-blue-600' : 'bg-white text-brand-gray-700 border-brand-gray-300 hover:bg-brand-gray-100 dark:bg-brand-gray-700 dark:text-brand-gray-300 dark:border-brand-gray-600 dark:hover:bg-brand-gray-600'}`}>{day.label}</button>))}</div>
+                  <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-2">Dias e Horários</label>
+                  <div className="flex flex-wrap gap-2 mb-4">{weekDays.map(day => (<button key={day.id} type="button" onClick={() => toggleScheduleDay(day.id)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${formData.schedule.some(s => s.day === day.id) ? 'bg-brand-blue-600 text-white shadow-md border-brand-blue-600' : 'bg-white text-brand-gray-700 border-brand-gray-300 hover:bg-brand-gray-100 dark:bg-brand-gray-700 dark:text-brand-gray-300 dark:border-brand-gray-600 dark:hover:bg-brand-gray-600'}`}>{day.label}</button>))}</div>
+                  
+                  <div className="space-y-4">
+                    {formData.schedule.map(s => (
+                      <div key={s.day} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end p-3 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg">
+                        <span className="font-semibold text-brand-gray-800 dark:text-white">{weekDays.find(wd => wd.id === s.day)?.label}</span>
+                        <Input label="Início" type="time" value={s.start_time} onChange={e => handleScheduleTimeChange(s.day, 'start_time', e.target.value)} />
+                        <Input label="Fim" type="time" value={s.end_time} onChange={e => handleScheduleTimeChange(s.day, 'end_time', e.target.value)} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <Input label="Início do Bloco de Aulas" name="start_time" type="time" value={formData.start_time} onChange={handleChange} icon={<Clock className="h-4 w-4 text-brand-gray-400"/>} />
-                  <Input label="Fim do Bloco de Aulas" name="end_time" type="time" value={formData.end_time} onChange={handleChange} icon={<Clock className="h-4 w-4 text-brand-gray-400"/>} />
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                   <Input label="Alunos por Horário" name="alunos_por_horario" type="number" value={formData.alunos_por_horario.toString()} onChange={handleChange} icon={<Users className="h-4 w-4 text-brand-gray-400"/>} />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <Input label="Data de Início da Turma" name="start_date" type="date" value={formData.start_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
                   <Input label="Data de Fim (opcional)" name="end_date" type="date" value={formData.end_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
                 </div>
                 
-                {formData.daysOfWeek.length > 0 && scheduleGrid.timeSlots.length > 0 && (
+                {formData.schedule.length > 0 && scheduleGrid.timeSlots.length > 0 && (
                   <div className="pt-4">
                     <h4 className="text-lg font-semibold mb-3">Grade de Alunos</h4>
                     <p className="text-sm text-brand-gray-500 mb-4 -mt-2">Clique em um horário para gerenciar os alunos matriculados.</p>
                     <div className="overflow-x-auto">
-                      <div className="grid gap-1" style={{ gridTemplateColumns: `60px repeat(${formData.daysOfWeek.length}, 1fr)` }}>
+                      <div className="grid gap-1" style={{ gridTemplateColumns: `60px repeat(${scheduleGrid.sortedScheduleDays.length}, 1fr)` }}>
                         <div />
-                        {formData.daysOfWeek.sort().map(day => <div key={day} className="text-center font-bold text-sm pb-2">{weekDays.find(d=>d.id===day)?.label}</div>)}
+                        {scheduleGrid.sortedScheduleDays.map(day => <div key={day} className="text-center font-bold text-sm pb-2">{weekDays.find(d=>d.id===day)?.label}</div>)}
                         {scheduleGrid.grid.map((row, rowIndex) => (
                           <React.Fragment key={scheduleGrid.timeSlots[rowIndex]}>
                             <div className="flex items-center justify-center text-xs font-semibold text-brand-gray-500 pr-2">{scheduleGrid.timeSlots[rowIndex]}</div>
-                            {row.map(cell => (
-                              <button key={`${cell.day}-${cell.time}`} onClick={() => handleSlotClick(cell.day, cell.time)} className={`p-2 rounded-md text-center transition-colors ${cell.enrolled === formData.alunos_por_horario ? 'bg-red-100 dark:bg-red-900/50' : cell.enrolled > 0 ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-brand-gray-100 dark:bg-brand-gray-700/50'} hover:border-brand-blue-500 border-2 border-transparent`}>
-                                <span className="font-bold text-lg">{cell.enrolled}</span><span className="text-sm">/{formData.alunos_por_horario}</span>
-                              </button>
-                            ))}
+                            {row.map((cell, colIndex) => {
+                              if (!cell) {
+                                return <div key={`${rowIndex}-${colIndex}`} className="p-2 rounded-md bg-brand-gray-100 dark:bg-brand-gray-700/50 opacity-50" />;
+                              }
+                              return (
+                                <button key={`${cell.day}-${cell.time}`} onClick={() => handleSlotClick(cell.day, cell.time)} className={`p-2 rounded-md text-center transition-colors ${cell.enrolled === formData.alunos_por_horario ? 'bg-red-100 dark:bg-red-900/50' : cell.enrolled > 0 ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-brand-gray-100 dark:bg-brand-gray-700/50'} hover:border-brand-blue-500 border-2 border-transparent`}>
+                                  <span className="font-bold text-lg">{cell.enrolled}</span><span className="text-sm">/{formData.alunos_por_horario}</span>
+                                </button>
+                              )
+                            })}
                           </React.Fragment>
                         ))}
                       </div>
@@ -247,7 +287,6 @@ const TurmaModal: React.FC<TurmaModalProps> = ({ isOpen, onClose, onSave, initia
           allAlunos={alunos}
           enrolledStudentIds={formData.matriculas.find(m => m.dayOfWeek === editingSlot.day && m.time === editingSlot.time)?.student_ids || []}
           capacity={formData.alunos_por_horario}
-          onPromoteClient={handlePromoteClient}
           planos={planos}
           onDataChange={onDataChange}
         />

@@ -1,5 +1,5 @@
 import { localApi } from './localApi';
-import { Arena, Profile, Quadra, PricingRule, PlanoAula, Aluno, Friendship, Reserva, GamificationSettings, GamificationLevel, GamificationReward, GamificationAchievement, Professor, Turma } from '../types';
+import { Arena, Profile, Quadra, PricingRule, PlanoAula, Aluno, Friendship, Reserva, GamificationSettings, GamificationLevel, GamificationReward, GamificationAchievement, Professor, Turma, Plan, Subscription } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { subDays, format, addDays } from 'date-fns';
 
@@ -26,13 +26,21 @@ export const seedInitialData = async () => {
   
   // 1. Profiles
   const adminProfile: Profile = { id: 'profile_admin_01', name: 'Admin MatchPlay', email: 'admin@matchplay.com', role: 'admin_arena', avatar_url: null, created_at: new Date().toISOString() };
+  const superAdminProfile: Profile = { id: 'profile_superadmin_01', name: 'Super Admin', email: 'superadmin@matchplay.com', role: 'super_admin', avatar_url: null, created_at: new Date().toISOString() };
   const viniProfile: Profile = { id: 'profile_vini_01', name: 'Vini Bleinat', email: 'vini@bleinat.com.br', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(11) 98765-4321', cpf: '111.222.333-44', birth_date: '1990-01-15', gender: 'masculino', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
   const anaProfile: Profile = { id: 'profile_ana_01', name: 'Ana Pereira', email: 'ana@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(21) 91234-5678', cpf: '222.333.444-55', birth_date: '1992-05-20', gender: 'feminino', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
   const brunoProfile: Profile = { id: 'profile_bruno_01', name: 'Bruno Lima', email: 'bruno@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(31) 95555-4444', cpf: '333.444.555-66', birth_date: '1988-11-30', gender: 'masculino', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
   
-  await localApi.upsert('profiles', [adminProfile, viniProfile, anaProfile, brunoProfile], 'all', true);
+  await localApi.upsert('profiles', [adminProfile, superAdminProfile, viniProfile, anaProfile, brunoProfile], 'all', true);
 
-  // 2. Arena
+  // 2. SaaS Plans
+  const trialPlan: Plan = { id: 'plan_trial_01', name: '7 Dias Grátis', price: 0, features: ['Até 2 quadras', 'Reservas online', '1 funcionário'], is_active: true };
+  const basicPlan: Plan = { id: 'plan_basic_01', name: 'Básico', price: 59.90, features: ['Até 5 quadras', 'Reservas online', 'Dashboard de gestão', 'Gestão de Clientes', '3 funcionários'], is_active: true };
+  const proPlan: Plan = { id: 'plan_pro_01', name: 'Pro', price: 99.90, features: ['Quadras ilimitadas', 'Relatórios avançados', 'Gestão de clientes (CRM)', 'Gamificação', 'Suporte prioritário', 'Funcionários ilimitados'], is_active: true };
+  
+  await localApi.upsert('plans', [trialPlan, basicPlan, proPlan], 'all', true);
+
+  // 3. Arena
   const arenaId = `arena_${uuidv4()}`;
   const arena: Arena = {
     id: arenaId,
@@ -43,11 +51,25 @@ export const seedInitialData = async () => {
     state: 'SP',
     created_at: new Date().toISOString(),
     cancellation_policy: 'Padrão',
-    terms_of_use: 'Padrão'
+    terms_of_use: 'Padrão',
+    status: 'active',
+    plan_id: basicPlan.id,
+    single_booking_payment_window_minutes: 30,
   };
   await localApi.upsert('arenas', [arena], 'all', true);
 
-  // 3. Quadra
+  // 4. Subscription for the Arena
+  const subscription: Subscription = {
+    id: `sub_${uuidv4()}`,
+    arena_id: arenaId,
+    plan_id: basicPlan.id,
+    status: 'active',
+    start_date: new Date().toISOString(),
+    end_date: null,
+  };
+  await localApi.upsert('subscriptions', [subscription], 'all', true);
+
+  // 5. Quadra
   const quadraId = `quadra_${uuidv4()}`;
   const quadra: Quadra = {
     id: quadraId,
@@ -72,7 +94,7 @@ export const seedInitialData = async () => {
   };
   await localApi.upsert('quadras', [quadra], arenaId, true);
 
-  // 4. Professor
+  // 6. Professor
   const profId = `prof_${uuidv4()}`;
   const professor: Omit<Professor, 'id' | 'created_at'> = {
     arena_id: arenaId,
@@ -83,7 +105,7 @@ export const seedInitialData = async () => {
   };
   await localApi.upsert('professores', [professor], arenaId, true);
 
-  // 5. Turma
+  // 7. Turma
   const turmaId = `turma_${uuidv4()}`;
   const turma: Omit<Turma, 'id' | 'created_at'> = {
     arena_id: arenaId,
@@ -100,14 +122,14 @@ export const seedInitialData = async () => {
   };
   await localApi.upsert('turmas', [turma], arenaId, true);
 
-  // 6. Planos de Aula
+  // 8. Planos de Aula
   const planoMensal1x: PlanoAula = { id: `plano_${uuidv4()}`, arena_id: arenaId, name: 'Plano Mensal - 1x/semana', duration_type: 'mensal', price: 280, num_aulas: 4, description: 'Pacote com 4 aulas no mês.', is_active: true, created_at: new Date().toISOString() };
   const planoMensal2x: PlanoAula = { id: `plano_${uuidv4()}`, arena_id: arenaId, name: 'Plano Mensal - 2x/semana', duration_type: 'mensal', price: 480, num_aulas: 8, description: 'Pacote com 8 aulas no mês.', is_active: true, created_at: new Date().toISOString() };
-  const planoAnualLivre: PlanoAula = { id: `plano_${uuidv4()}`, arena_id: arenaId, name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, num_aulas: null, description: 'Acesso livre às aulas, limitado a uma por dia.', is_active: true, created_at: new Date().toISOString() };
+  const planoAnualLivre: PlanoAula = { id: `plano_${uuidv4()}`, arena_id: arenaId, name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, num_aulas: null, description: 'Acesso livre a todas as turmas compatíveis durante o ano.', is_active: true, created_at: new Date().toISOString() };
   
   await localApi.upsert('planos_aulas', [planoMensal1x, planoMensal2x, planoAnualLivre], arenaId, true);
 
-  // 7. Alunos e Clientes
+  // 9. Alunos e Clientes
   const alunos: Omit<Aluno, 'id' | 'created_at'>[] = [
     {
       arena_id: arenaId, profile_id: viniProfile.id, name: viniProfile.name, email: viniProfile.email, phone: viniProfile.phone, cpf: viniProfile.cpf, birth_date: viniProfile.birth_date, gender: viniProfile.gender, status: 'ativo',
@@ -145,14 +167,14 @@ export const seedInitialData = async () => {
   ];
   await localApi.upsert('alunos', alunos, arenaId, true);
 
-  // 8. Friendships
+  // 10. Friendships
   const friendships: Friendship[] = [
     { id: uuidv4(), user1_id: viniProfile.id, user2_id: anaProfile.id, status: 'accepted', requested_by: viniProfile.id, created_at: new Date().toISOString() },
     { id: uuidv4(), user1_id: brunoProfile.id, user2_id: viniProfile.id, status: 'pending', requested_by: brunoProfile.id, created_at: new Date().toISOString() },
   ];
   await localApi.upsert('friendships', friendships, 'all', true);
 
-  // 9. Sample Reservation with Participants
+  // 11. Sample Reservation with Participants
   const sampleReservation: Reserva = {
     id: `reserva_${uuidv4()}`,
     arena_id: arenaId,
@@ -178,7 +200,7 @@ export const seedInitialData = async () => {
   };
   await localApi.upsert('reservas', [sampleReservation], arenaId, true);
   
-  // 10. Gamification Settings
+  // 12. Gamification Settings
   const gamificationSettings: GamificationSettings = {
     arena_id: arenaId,
     is_enabled: true,
@@ -187,7 +209,7 @@ export const seedInitialData = async () => {
   };
   await localApi.upsert('gamification_settings', [gamificationSettings], arenaId, true);
 
-  // 11. Gamification Levels
+  // 13. Gamification Levels
   const levels: Omit<GamificationLevel, 'id'>[] = [
     { arena_id: arenaId, name: 'Bronze', points_required: 0, level_rank: 1 },
     { arena_id: arenaId, name: 'Prata', points_required: 1000, level_rank: 2 },
@@ -195,14 +217,14 @@ export const seedInitialData = async () => {
   ];
   await localApi.upsert('gamification_levels', levels, arenaId, true);
 
-  // 12. Gamification Rewards
+  // 14. Gamification Rewards
   const rewards: Omit<GamificationReward, 'id'>[] = [
     { arena_id: arenaId, title: 'Desconto de R$10', description: 'Use seus pontos para ganhar um desconto na sua próxima reserva.', points_cost: 500, type: 'discount', value: 10, quantity: null, is_active: true },
     { arena_id: arenaId, title: '1 Hora Grátis', description: 'Troque seus pontos por uma hora de jogo por nossa conta!', points_cost: 1200, type: 'free_hour', value: 1, quantity: 10, is_active: true },
   ];
   await localApi.upsert('gamification_rewards', rewards, arenaId, true);
 
-  // 13. Gamification Achievements
+  // 15. Gamification Achievements
   const achievements: Omit<GamificationAchievement, 'id'>[] = [
     { arena_id: arenaId, name: 'Primeira Reserva', description: 'Bem-vindo! Ganhe pontos na sua primeira reserva.', type: 'first_reservation', points_reward: 100, icon: 'PartyPopper' },
     { arena_id: arenaId, name: 'Fidelidade Bronze', description: 'Complete 10 reservas e mostre sua lealdade.', type: 'loyalty_10', points_reward: 250, icon: 'Medal' },

@@ -40,7 +40,7 @@ export interface Profile {
   name: string;
   email: string;
   avatar_url: string | null;
-  role: 'cliente' | 'admin_arena' | 'professor' | 'atleta' | 'funcionario';
+  role: 'cliente' | 'admin_arena' | 'professor' | 'atleta' | 'funcionario' | 'super_admin';
   arena_id?: string;
   permissions?: ProfilePermissions;
   phone?: string | null;
@@ -55,6 +55,23 @@ export interface Profile {
     friend_requests?: boolean;
     arena_news?: boolean;
   };
+}
+
+export interface Plan {
+  id: string;
+  name: string;
+  price: number;
+  features: string[];
+  is_active: boolean;
+}
+
+export interface Subscription {
+  id: string;
+  arena_id: string;
+  plan_id: string;
+  status: 'active' | 'past_due' | 'canceled';
+  start_date: string;
+  end_date: string | null;
 }
 
 export interface Arena {
@@ -79,6 +96,15 @@ export interface Arena {
   terms_of_use?: string;
   created_at: string;
   asaas_api_key?: string;
+  status?: 'active' | 'suspended';
+  plan_id?: string;
+  billing_day?: number;
+  billing_grace_period_value?: number;
+  billing_grace_period_unit?: 'hours' | 'days';
+  billing_warning_1_enabled?: boolean;
+  billing_warning_2_enabled?: boolean;
+  billing_warning_3_enabled?: boolean;
+  single_booking_payment_window_minutes?: number;
 }
 
 export interface ArenaMembership {
@@ -219,6 +245,12 @@ export interface Matricula {
   student_ids: string[];
 }
 
+export interface TurmaSchedule {
+  day: number;
+  start_time: string;
+  end_time: string;
+}
+
 export interface Turma {
   id: string;
   arena_id: string;
@@ -226,23 +258,27 @@ export interface Turma {
   sport: string;
   professor_id: string;
   quadra_id: string;
-  daysOfWeek: number[];
-  start_time: string;
-  end_time: string;
+  schedule: TurmaSchedule[];
   start_date: string;
   end_date?: string | null;
   alunos_por_horario: number;
   matriculas: Matricula[];
   created_at: string;
+  // Deprecated fields for migration
+  daysOfWeek?: number[];
+  start_time?: string;
+  end_time?: string;
 }
 
 export type ReservationType = 'avulsa' | 'aula' | 'torneio' | 'evento' | 'bloqueio';
+export type RecurringType = 'none' | 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
 
-export interface Reservation {
+export interface Reserva {
   id: string;
   arena_id: string;
   quadra_id: string;
   profile_id?: string | null;
+  aluno_id?: string | null;
   turma_id?: string | null;
   torneio_id?: string | null;
   evento_id?: string | null;
@@ -260,7 +296,7 @@ export interface Reservation {
   sport_type?: string;
   notes?: string;
   isRecurring?: boolean;
-  recurringType?: 'daily' | 'weekly';
+  recurringType?: RecurringType;
   recurringEndDate?: string | null;
   masterId?: string;
   master_id?: string;
@@ -286,7 +322,7 @@ export interface Reservation {
 }
 
 // Alias para compatibilidade
-export type Reserva = Reservation;
+export type Reservation = Reserva;
 
 export interface CreditTransaction {
   id?: string;

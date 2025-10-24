@@ -154,6 +154,9 @@ const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate
                           <Icon className="h-3 w-3 mr-1 flex-shrink-0" />
                           <span className="truncate">{reservation.clientName || typeDetails.label}</span>
                         </p>
+                        {reservation.sport_type && (
+                          <p className="text-xs opacity-80 truncate">{reservation.sport_type}</p>
+                        )}
                         <p className="text-xs opacity-80">{reservation.start_time.slice(0, 5)} - {reservation.end_time.slice(0, 5)}</p>
                       </div>
                       <div className="flex items-center justify-between mt-1">

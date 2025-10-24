@@ -4,7 +4,7 @@ import { X, Save, User, Mail, Phone, Calendar, Award, Dribbble, DollarSign, Tras
 import { Aluno, PlanoAula, Profile } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
-import { format } from 'date-fns';
+import { format, endOfMonth, differenceInDays, getDaysInMonth } from 'date-fns';
 import { maskPhone, maskCPFOrCNPJ } from '../../utils/masks';
 import { useToast } from '../../context/ToastContext';
 import GamificationTab from './GamificationTab';
@@ -41,6 +41,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   const [internalAluno, setInternalAluno] = useState<Aluno | null>(initialData);
   const [isRenewConfirmOpen, setIsRenewConfirmOpen] = useState(false);
   const [isCreateLoginConfirmOpen, setIsCreateLoginConfirmOpen] = useState(false);
+  const [proRataInfo, setProRataInfo] = useState<{ firstPayment: number; recurringPayment: number; daysRemaining: number; daysInMonth: number; } | null>(null);
   
   const isEditing = !!initialData;
 
@@ -77,6 +78,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
     if (isOpen) {
       setInternalAluno(initialData);
       setActiveTab('details');
+      setProRataInfo(null);
       
       const baseData = {
         name: '', email: '', phone: '', status: 'ativo', sport: '', plan_id: null,
@@ -142,6 +144,19 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
       aulas_restantes: isUnlimitedPlan ? null : (formData.aulas_restantes ?? 0),
     };
 
+    if (proRataInfo && (!isEditing || (isEditing && initialData?.plan_id !== formData.plan_id))) {
+        if (arena) {
+            localApi.upsert('finance_transactions', [{
+                arena_id: arena.id,
+                description: `Pagamento Pro-rata: ${selectedPlan?.name} - ${formData.name}`,
+                amount: proRataInfo.firstPayment,
+                type: 'receita' as 'receita',
+                category: 'Mensalidade',
+                date: format(new Date(), 'yyyy-MM-dd'),
+            }], arena.id);
+        }
+    }
+
     if (isEditing && internalAluno) {
       onSave({ ...internalAluno, ...dataToSave });
     } else {
@@ -198,6 +213,35 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
 
     if (name === 'plan_id') {
       const newSelectedPlan = activePlanOptions.find(p => p.id === value);
+      
+      let proRata = null;
+      if (newSelectedPlan && newSelectedPlan.price > 0 && newSelectedPlan.duration_type !== 'avulso') {
+        const today = new Date();
+        const endOfThisMonth = endOfMonth(today);
+        const daysRemainingInMonth = differenceInDays(endOfThisMonth, today) + 1;
+        const daysInCurrentMonth = getDaysInMonth(today);
+
+        let monthlyEquivalentPrice = 0;
+        switch(newSelectedPlan.duration_type) {
+            case 'mensal':
+                monthlyEquivalentPrice = newSelectedPlan.price;
+                break;
+            case 'trimestral':
+                monthlyEquivalentPrice = newSelectedPlan.price / 3;
+                break;
+            case 'semestral':
+                monthlyEquivalentPrice = newSelectedPlan.price / 6;
+                break;
+            case 'anual':
+                monthlyEquivalentPrice = newSelectedPlan.price / 12;
+                break;
+        }
+
+        const firstPayment = (monthlyEquivalentPrice / daysInCurrentMonth) * daysRemainingInMonth;
+        proRata = { firstPayment, recurringPayment: monthlyEquivalentPrice, daysRemaining: daysRemainingInMonth, daysInMonth: daysInCurrentMonth };
+      }
+      setProRataInfo(proRata);
+      
       const isNewPlanUnlimited = newSelectedPlan?.num_aulas === null;
       setFormData(prev => ({
         ...prev,
@@ -380,6 +424,26 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                                 {activePlanOptions.map(plan => <option key={plan.id} value={plan.id}>{plan.name} ({formatCurrency(plan.price)})</option>)}
                             </select>
                             </div>
+                            {proRataInfo && (
+                              <div className="mt-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-800">
+                                <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Resumo da Cobrança</h4>
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex justify-between">
+                                    <div>
+                                      <span>Primeira Cobrança (proporcional)</span>
+                                      <span className="text-xs text-blue-600 dark:text-blue-400 block">
+                                        (referente a {proRataInfo.daysRemaining} de {proRataInfo.daysInMonth} dias do mês)
+                                      </span>
+                                    </div>
+                                    <span className="font-bold">{formatCurrency(proRataInfo.firstPayment)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Valor da Recorrência:</span>
+                                    <span className="font-bold">{formatCurrency(proRataInfo.recurringPayment)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                             <Input
                             label="Aulas Restantes (Créditos)"
                             name="aulas_restantes"

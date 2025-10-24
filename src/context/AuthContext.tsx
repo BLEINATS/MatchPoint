@@ -10,7 +10,7 @@ interface AuthContextType extends AuthState {
   allArenas: Arena[];
   alunoProfileForSelectedArena: Aluno | null;
   signUp: (email: string, password: string, name?: string, role?: 'cliente' | 'admin_arena') => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<Profile | null>;
   signOut: () => void;
   updateProfile: (updatedProfile: Partial<Profile>) => Promise<void>;
   updateArena: (updatedArena: Partial<Arena>) => Promise<void>;
@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const initializeSession = async () => {
       setIsLoading(true);
       try {
-        const seedKey = 'initial_data_seeded_v14_persistent';
+        const seedKey = 'initial_data_seeded_v15_persistent';
         if (!localStorage.getItem(seedKey)) {
           await seedInitialData();
           localStorage.setItem(seedKey, 'true');
@@ -66,7 +66,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUser(loggedInUser);
         setProfile(loggedInProfile);
 
-        if (loggedInProfile.role === 'admin_arena') {
+        if (loggedInProfile.role === 'super_admin') {
+            setArena(null);
+            setSelectedArenaContext(null);
+        } else if (loggedInProfile.role === 'admin_arena') {
             const userArena = (currentArenas || []).find(a => a.owner_id === loggedInProfile.id);
             if (userArena) {
                 setArena(userArena);
@@ -119,10 +122,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return Promise.resolve();
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string): Promise<Profile | null> => {
     setIsLoading(true);
     try {
-        const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+        let { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+        allProfiles = allProfiles || [];
+
+        // HACK/FIX: Ensure superadmin exists for login, in case seeding failed or was missed.
+        if (email.toLowerCase() === 'superadmin@matchplay.com' && !allProfiles.some(p => p.email.toLowerCase() === 'superadmin@matchplay.com')) {
+            const superAdminProfile: Profile = { id: 'profile_superadmin_01', name: 'Super Admin', email: 'superadmin@matchplay.com', role: 'super_admin', avatar_url: null, created_at: new Date().toISOString() };
+            await localApi.upsert('profiles', [superAdminProfile], 'all');
+            // Re-fetch profiles to include the new one
+            const { data: updatedProfiles } = await localApi.select<Profile>('profiles', 'all');
+            allProfiles = updatedProfiles || [];
+        }
+
         const userProfile = allProfiles.find(p => p.email.toLowerCase() === email.toLowerCase());
 
         if (!userProfile) {
@@ -132,7 +146,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data: arenas } = await localApi.select<Arena>('arenas', 'all');
         setAllArenas(arenas || []);
 
-        if (userProfile.role === 'admin_arena') {
+        if (userProfile.role === 'super_admin') {
+            setArena(null);
+            setSelectedArenaContext(null);
+        } else if (userProfile.role === 'admin_arena') {
             const userArena = (arenas || []).find(a => a.owner_id === userProfile.id);
             setArena(userArena || null);
             setSelectedArenaContext(userArena || null);
@@ -157,6 +174,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem('loggedInUser', JSON.stringify(userProfile));
         setUser(loggedInUser);
         setProfile(userProfile);
+        return userProfile;
     } catch (error) {
         setIsLoading(false);
         throw error;

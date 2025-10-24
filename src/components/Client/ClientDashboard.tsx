@@ -282,18 +282,43 @@ const ClientDashboard: React.FC = () => {
         const payload = { ...reservationData, arena_id: selectedArenaContext.id, profile_id: profile.id, clientName: profile.name, clientPhone: profile.phone || '' };
         
         let savedReserva: Reserva;
+        const isEditing = 'id' in payload;
 
-        if ('id' in payload) {
+        if (isEditing) {
             const { data } = await localApi.upsert('reservas', [payload], selectedArenaContext.id);
             savedReserva = data[0];
         } else {
+            const paymentWindow = selectedArenaContext.single_booking_payment_window_minutes || 30;
             const newReservaPayload: Omit<Reserva, 'id' | 'created_at'> = {
                 ...payload,
                 status: (payload.total_price || 0) > 0 ? 'aguardando_pagamento' : 'confirmada',
-                payment_deadline: (payload.total_price || 0) > 0 ? addMinutes(new Date(), 30).toISOString() : null,
+                payment_deadline: (payload.total_price || 0) > 0 ? addMinutes(new Date(), paymentWindow).toISOString() : null,
             };
             const { data } = await localApi.upsert('reservas', [newReservaPayload], selectedArenaContext.id);
             savedReserva = data[0];
+        }
+
+        if (savedReserva && savedReserva.credit_used && savedReserva.credit_used > 0) {
+            const newlyAppliedCredit = savedReserva.credit_used - ((reservationData as any).originalCreditUsed || 0);
+            if (newlyAppliedCredit > 0 && alunoProfileForSelectedArena?.id) {
+                const { data: allAlunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
+                const targetAluno = allAlunos.find(a => a.id === alunoProfileForSelectedArena!.id);
+                if (targetAluno) {
+                    targetAluno.credit_balance = (targetAluno.credit_balance || 0) - newlyAppliedCredit;
+                    await localApi.upsert('alunos', [targetAluno], selectedArenaContext.id);
+                    const quadraName = quadras.find(q => q.id === savedReserva.quadra_id)?.name || 'Quadra';
+                    const reservaDetails = `${quadraName} em ${format(parseDateStringAsLocal(savedReserva.date), 'dd/MM/yy')} às ${savedReserva.start_time.slice(0,5)}`;
+                    const newDescription = `Pagamento da reserva: ${reservaDetails}`;
+                    await localApi.upsert('credit_transactions', [{ 
+                        aluno_id: targetAluno.id, 
+                        arena_id: selectedArenaContext.id, 
+                        amount: -newlyAppliedCredit, 
+                        type: 'reservation_payment', 
+                        description: newDescription,
+                        related_reservation_id: savedReserva.id 
+                    }], selectedArenaContext.id);
+                }
+            }
         }
 
         if (savedReserva.participants && savedReserva.participants.length > 1) {
@@ -412,7 +437,7 @@ const ClientDashboard: React.FC = () => {
       const reserva = reservas.find(r => r.id === reservaId);
       if (!reserva) throw new Error("Reserva não encontrada");
   
-      const { creditRefunded } = await processCancellation(reserva, selectedArenaContext.id);
+      const { creditRefunded } = await processCancellation(reserva, selectedArenaContext.id, quadras);
   
       await localApi.upsert('reservas', [{ ...reserva, status: 'cancelada' }], selectedArenaContext.id);
       

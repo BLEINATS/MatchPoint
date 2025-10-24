@@ -8,7 +8,7 @@ import { localApi } from '../lib/localApi';
 import Layout from '../components/Layout/Layout';
 import Button from '../components/Forms/Button';
 import Input from '../components/Forms/Input';
-import { Quadra, Reserva, ReservationType, Aluno, AtletaAluguel } from '../types';
+import { Quadra, Reserva, ReservationType, Aluno, AtletaAluguel, Arena } from '../types';
 import AgendaView from '../components/Reservations/AgendaView';
 import ListView from '../components/Reservations/ListView';
 import CalendarView from '../components/Reservations/CalendarView';
@@ -20,7 +20,7 @@ import FilterPanel from '../components/Reservations/FilterPanel';
 import { startOfDay, format, startOfMonth, endOfMonth, isBefore, parse, addYears, subDays, getDay, addDays, endOfDay, addMinutes } from 'date-fns';
 import { expandRecurringReservations } from '../utils/reservationUtils';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
-import { awardPointsForReservation, processCancellation } from '../utils/gamificationUtils';
+import { awardPointsForCompletedReservation, processCancellation } from '../utils/gamificationUtils';
 import { formatCurrency } from '../utils/formatters';
 import DayDetailView from '../components/Reservations/DayDetailView';
 
@@ -208,32 +208,32 @@ const Reservations: React.FC = () => {
   const handleSaveReservation = async (reservaData: Omit<Reserva, 'id' | 'created_at'> | Reserva) => {
     if (!selectedArenaContext || !profile) return;
     const isEditing = !!(reservaData as Reserva).id;
+    
     try {
-      const startTime = parse(reservaData.start_time, 'HH:mm', new Date());
-      const endTime = parse(reservaData.end_time, 'HH:mm', new Date());
-      if (isBefore(endTime, startTime) || startTime.getTime() === endTime.getTime()) { addToast({ message: "Horário de fim inválido.", type: 'error' }); return; }
-      
+      const { clientName, clientPhone } = reservaData;
       let alunoForReservation: Aluno | null = null;
-      if (reservaData.clientName) {
-        const existingAluno = alunos.find(a => a.name.toLowerCase() === reservaData.clientName.toLowerCase());
-        if (existingAluno) { 
-            alunoForReservation = existingAluno; 
+      if (clientName) {
+        const existingAluno = alunos.find(a => a.name.toLowerCase() === clientName.toLowerCase());
+        if (existingAluno) {
+          alunoForReservation = existingAluno;
         } else {
-          const { data: newAlunos } = await localApi.upsert('alunos', [{ arena_id: selectedArenaContext.id, name: reservaData.clientName, phone: reservaData.clientPhone || null, status: 'ativo', plan_name: 'Avulso', join_date: format(new Date(), 'yyyy-MM-dd') }], selectedArenaContext.id);
-          if (newAlunos && newAlunos[0]) { 
-            alunoForReservation = newAlunos[0]; 
+          const { data: newAlunos } = await localApi.upsert('alunos', [{ arena_id: selectedArenaContext.id, name: clientName, phone: clientPhone || null, status: 'ativo', plan_name: 'Avulso', join_date: format(new Date(), 'yyyy-MM-dd') }], selectedArenaContext.id);
+          if (newAlunos && newAlunos[0]) {
+            alunoForReservation = newAlunos[0];
             const { data: allAlunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
             setAlunos(allAlunos);
           }
         }
       }
   
-      let dataToUpsert: Partial<Reserva> = { ...reservaData, arena_id: selectedArenaContext.id, profile_id: alunoForReservation?.profile_id || null };
+      let dataToUpsert: Partial<Reserva> = { ...reservaData, arena_id: selectedArenaContext.id, profile_id: alunoForReservation?.profile_id || null, aluno_id: alunoForReservation?.id || null };
+
       if (!isEditing) {
         dataToUpsert.created_by_name = profile.name;
-        if (dataToUpsert.total_price && dataToUpsert.total_price > 0) {
+        if (dataToUpsert.total_price && dataToUpsert.total_price > 0 && dataToUpsert.payment_status === 'pendente') {
           dataToUpsert.status = 'aguardando_pagamento';
-          dataToUpsert.payment_deadline = addMinutes(new Date(), 30).toISOString();
+          const paymentWindow = selectedArenaContext.single_booking_payment_window_minutes || 30;
+          dataToUpsert.payment_deadline = addMinutes(new Date(), paymentWindow).toISOString();
         } else {
           dataToUpsert.status = 'confirmada';
         }
@@ -251,20 +251,7 @@ const Reservations: React.FC = () => {
       const savedReserva = savedReservas[0];
   
       if (savedReserva && !isEditing && savedReserva.status === 'confirmada') {
-        await awardPointsForReservation(savedReserva, selectedArenaContext.id);
-      }
-
-      if (savedReserva && savedReserva.credit_used && savedReserva.credit_used > 0) {
-        const newlyAppliedCredit = savedReserva.credit_used - ((reservaData as any).originalCreditUsed || 0);
-        if (newlyAppliedCredit > 0 && alunoForReservation?.id) {
-          const { data: allAlunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
-          const targetAluno = allAlunos.find(a => a.id === alunoForReservation!.id);
-          if (targetAluno) {
-            targetAluno.credit_balance = (targetAluno.credit_balance || 0) - newlyAppliedCredit;
-            await localApi.upsert('alunos', [targetAluno], selectedArenaContext.id);
-            await localApi.upsert('credit_transactions', [{ aluno_id: targetAluno.id, arena_id: selectedArenaContext.id, amount: -newlyAppliedCredit, type: 'reservation_payment', description: `Pagamento da reserva #${savedReserva.id.substring(0, 8)}`, related_reservation_id: savedReserva.id }], selectedArenaContext.id);
-          }
-        }
+        await awardPointsForCompletedReservation(savedReserva, selectedArenaContext.id);
       }
   
       addToast({ message: `Reserva salva com sucesso!`, type: 'success' });
@@ -301,7 +288,7 @@ const Reservations: React.FC = () => {
         const reserva = reservas.find(r => r.id === reservaId);
         if (!reserva) throw new Error('Reserva não encontrada.');
 
-        const { pointsDeducted } = await processCancellation(reserva, selectedArenaContext.id);
+        await processCancellation(reserva, selectedArenaContext.id, quadras, creditAmount, reason);
         
         const updatePayload: Partial<Reserva> = { status: 'cancelada' };
         if (creditAmount === 0 && reserva.total_price && reserva.total_price > 0) {
@@ -311,7 +298,6 @@ const Reservations: React.FC = () => {
         
         addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
         if (creditAmount > 0) addToast({ message: `${formatCurrency(creditAmount)} de crédito aplicado.`, type: 'info' });
-        if (pointsDeducted > 0) addToast({ message: `${pointsDeducted} pontos deduzidos.`, type: 'info' });
 
     } catch (error: any) {
         addToast({ message: `Erro ao processar cancelamento: ${error.message}`, type: 'error' });

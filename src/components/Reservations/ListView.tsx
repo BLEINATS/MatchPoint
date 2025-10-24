@@ -67,7 +67,9 @@ const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationCli
                         <div className="text-sm font-medium text-brand-gray-900 dark:text-white flex items-center">
                           {reserva.clientName || typeDetails.label}
                         </div>
-                        <div className="text-xs text-brand-gray-500">{typeDetails.label}</div>
+                        <div className="text-xs text-brand-gray-500">
+                          {typeDetails.label}{reserva.sport_type && ` • ${reserva.sport_type}`}
+                        </div>
                         {reserva.clientPhone && <div className="text-xs text-brand-gray-500 flex items-center mt-1"><Phone className="h-3 w-3 mr-1" />{reserva.clientPhone}</div>}
                       </div>
                     </div>
@@ -135,7 +137,7 @@ const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationCli
               <div className="flex justify-between items-start">
                 <div>
                   <p className="font-bold text-brand-gray-900 dark:text-white">{reserva.clientName || typeDetails.label}</p>
-                  <p className="text-xs text-brand-gray-500">{typeDetails.label}</p>
+                  <p className="text-xs text-brand-gray-500">{typeDetails.label}{reserva.sport_type && ` • ${reserva.sport_type}`}</p>
                 </div>
                 <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusClasses(reserva.status)}`}>
                   {reserva.status.charAt(0).toUpperCase() + reserva.status.slice(1)}

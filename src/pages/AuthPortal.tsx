@@ -12,7 +12,7 @@ type Mode = 'login' | 'signup';
 type SignupStep = 'choice' | 'form';
 
 const AuthPortal: React.FC = () => {
-  const [mode, setMode] = useState<Mode>('signup');
+  const [mode, setMode] = useState<Mode>('login');
   const [signupStep, setSignupStep] = useState<SignupStep>('choice');
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
@@ -39,8 +39,12 @@ const AuthPortal: React.FC = () => {
     setError('');
     try {
       if (mode === 'login') {
-        await signIn(formData.email, formData.password);
-        navigate('/dashboard');
+        const userProfile = await signIn(formData.email, formData.password);
+        if (userProfile?.role === 'super_admin') {
+          navigate('/superadmin');
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         await signUp(formData.email, formData.password, formData.name, 'cliente');
         setShowConfirmation(true);

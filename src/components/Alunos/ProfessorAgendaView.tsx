@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isSameDay } from 'date-fns';
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isSameDay, addMinutes, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, GraduationCap, MapPin, Clock } from 'lucide-react';
 import { Professor, Turma, Quadra } from '../../types';
@@ -86,15 +86,33 @@ const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, 
         {daysInMonth.map((day) => {
           const dayOfWeek = getDay(day);
           const aulasDoDia = filteredTurmas
-            .filter(turma => turma.daysOfWeek.includes(dayOfWeek))
-            .filter(turma => {
+            .flatMap(turma => {
+              const scheduleForDay = turma.schedule?.find(s => s.day === dayOfWeek);
+              if (!scheduleForDay) return [];
+
               const startDate = parseDateStringAsLocal(turma.start_date);
-              if (day < startDate) return false;
+              if (day < startDate) return [];
               if (turma.end_date) {
                 const endDate = parseDateStringAsLocal(turma.end_date);
-                if (day > endDate) return false;
+                if (day > endDate) return [];
               }
-              return true;
+              
+              const slots = [];
+              try {
+                const startTime = parse(scheduleForDay.start_time, 'HH:mm', new Date());
+                const endTime = parse(scheduleForDay.end_time, 'HH:mm', new Date());
+                let currentTime = startTime;
+                while (currentTime < endTime) {
+                  slots.push({
+                    ...turma,
+                    start_time: format(currentTime, 'HH:mm'),
+                    end_time: format(addMinutes(currentTime, 60), 'HH:mm'),
+                    unique_key: `${turma.id}-${format(currentTime, 'HHmmss')}`
+                  });
+                  currentTime = addMinutes(currentTime, 60);
+                }
+              } catch(e) { console.error("Error parsing time in ProfessorAgendaView", e)}
+              return slots;
             })
             .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
@@ -106,7 +124,7 @@ const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, 
                   const professor = professores.find(p => p.id === aula.professor_id);
                   const quadra = quadras.find(q => q.id === aula.quadra_id);
                   return (
-                    <div key={aula.id} className="text-xs p-1.5 rounded bg-purple-50 dark:bg-purple-900/30 border-l-2 border-purple-500">
+                    <div key={aula.unique_key} className="text-xs p-1.5 rounded bg-purple-50 dark:bg-purple-900/30 border-l-2 border-purple-500">
                       <p className="font-bold text-purple-800 dark:text-purple-300 truncate">{aula.name}</p>
                       <div className="text-purple-700 dark:text-purple-400 mt-1 space-y-0.5">
                         <p className="flex items-center"><Clock className="h-3 w-3 mr-1" />{aula.start_time.slice(0,5)} - {aula.end_time.slice(0,5)}</p>

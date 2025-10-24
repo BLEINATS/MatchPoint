@@ -8,7 +8,7 @@ interface OperationTabProps {
 }
 
 const OperationTab: React.FC<OperationTabProps> = ({ formData, setFormData }) => {
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -98,13 +98,6 @@ COMPORTAMENTO:
           />
         </div>
       </Section>
-      
-      <div className="rounded-lg p-4 bg-blue-50 dark:bg-brand-blue-500/10 border border-blue-200 dark:border-brand-blue-500/20">
-        <h5 className="font-medium mb-2 flex items-center text-blue-900 dark:text-blue-200"><Info className="h-4 w-4 mr-2" />Informação</h5>
-        <p className="text-sm text-blue-700 dark:text-blue-300">
-          Estas políticas serão exibidas para seus clientes durante o processo de reserva para garantir que todos estejam cientes das regras.
-        </p>
-      </div>
     </div>
   );
 };

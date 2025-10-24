@@ -20,9 +20,8 @@ const CreditsTab: React.FC<CreditsTabProps> = ({ aluno, onDataChange }) => {
   const [creditToAdd, setCreditToAdd] = useState<string>('');
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [currentBalance, setCurrentBalance] = useState(aluno.credit_balance || 0);
 
-  const loadCreditData = useCallback(async () => {
+  const loadHistory = useCallback(async () => {
     setIsLoading(true);
     try {
       const { data: historyData } = await localApi.select<CreditTransaction>('credit_transactions', aluno.arena_id);
@@ -30,20 +29,16 @@ const CreditsTab: React.FC<CreditsTabProps> = ({ aluno, onDataChange }) => {
         .filter(h => h.aluno_id === aluno.id)
         .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime());
       setHistory(alunoHistory);
-
-      const { data: alunoData } = await localApi.select<Aluno>('alunos', aluno.arena_id);
-      const currentAluno = alunoData.find(a => a.id === aluno.id);
-      setCurrentBalance(currentAluno?.credit_balance || 0);
     } catch (error: any) {
-      addToast({ message: `Erro ao carregar dados de crédito: ${error.message}`, type: 'error' });
+      addToast({ message: `Erro ao carregar histórico de crédito: ${error.message}`, type: 'error' });
     } finally {
       setIsLoading(false);
     }
   }, [aluno.id, aluno.arena_id, addToast]);
 
   useEffect(() => {
-    loadCreditData();
-  }, [loadCreditData]);
+    loadHistory();
+  }, [aluno, loadHistory]);
 
   const handleCreditAdjustment = async () => {
     const amount = parseFloat(creditToAdd.replace(',', '.')) || 0;
@@ -54,7 +49,7 @@ const CreditsTab: React.FC<CreditsTabProps> = ({ aluno, onDataChange }) => {
 
     setIsSubmitting(true);
     try {
-      const updatedBalance = (currentBalance || 0) + amount;
+      const updatedBalance = (aluno.credit_balance || 0) + amount;
       await localApi.upsert('alunos', [{ ...aluno, credit_balance: updatedBalance }], aluno.arena_id);
       
       await localApi.upsert('credit_transactions', [{
@@ -69,7 +64,6 @@ const CreditsTab: React.FC<CreditsTabProps> = ({ aluno, onDataChange }) => {
       setCreditToAdd('');
       setAdjustmentReason('');
       
-      await loadCreditData();
       onDataChange();
 
     } catch (error: any) {
@@ -90,7 +84,7 @@ const CreditsTab: React.FC<CreditsTabProps> = ({ aluno, onDataChange }) => {
           <DollarSign className="h-8 w-8 text-green-500 mr-4" />
           <div>
             <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">Saldo Atual</p>
-            <p className="font-bold text-lg text-brand-gray-900 dark:text-white">{formatCurrency(currentBalance)}</p>
+            <p className="font-bold text-lg text-brand-gray-900 dark:text-white">{formatCurrency(aluno.credit_balance)}</p>
           </div>
         </div>
       </div>
@@ -116,7 +110,7 @@ const CreditsTab: React.FC<CreditsTabProps> = ({ aluno, onDataChange }) => {
             <div key={tx.id} className="flex justify-between items-center p-2 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-md">
               <div>
                 <p className="text-sm font-medium">{tx.description}</p>
-                <p className="text-xs text-brand-gray-500">{format(new Date(tx.created_at!), 'dd/MM/yyyy HH:mm')}</p>
+                <p className="text-xs text-brand-gray-500">{tx.created_at ? format(new Date(tx.created_at), 'dd/MM/yyyy HH:mm') : ''}</p>
               </div>
               <span className={`font-bold text-sm ${tx.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>{tx.amount >= 0 ? '+' : ''}{formatCurrency(tx.amount)}</span>
             </div>

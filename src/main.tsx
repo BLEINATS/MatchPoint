@@ -23,6 +23,7 @@ import Gamification from './pages/Gamification';
 import TorneioPublico from './pages/TorneioPublico.tsx';
 import Financeiro from './pages/Financeiro.tsx';
 import ProfessorProfilePage from './pages/ProfessorProfilePage.tsx';
+import SuperAdminPage from './pages/SuperAdmin.tsx';
 
 // Context Providers
 import { AuthProvider } from './context/AuthContext';
@@ -42,6 +43,10 @@ const router = createBrowserRouter([
       {
         path: 'dashboard',
         element: <ProtectedRoute><Dashboard /></ProtectedRoute>,
+      },
+      {
+        path: 'superadmin',
+        element: <ProtectedRoute><SuperAdminPage /></ProtectedRoute>,
       },
       {
         path: 'settings',

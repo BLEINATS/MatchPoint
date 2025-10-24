@@ -1,7 +1,7 @@
 import { localApi } from '../lib/localApi';
-import { Reserva, Aluno, GamificationSettings, GamificationPointTransaction, CreditTransaction } from '../types';
+import { Reserva, Aluno, GamificationSettings, GamificationPointTransaction, CreditTransaction, Quadra } from '../types';
 import { formatCurrency } from './formatters';
-import { differenceInHours } from 'date-fns';
+import { differenceInHours, format } from 'date-fns';
 import { parseDateStringAsLocal } from './dateUtils';
 
 /**
@@ -9,13 +9,24 @@ import { parseDateStringAsLocal } from './dateUtils';
  * Checks for existing transactions to prevent awarding points multiple times.
  */
 export const awardPointsForCompletedReservation = async (reserva: Reserva, arenaId: string) => {
-  if (!reserva.profile_id || !reserva.total_price || reserva.total_price <= 0 || reserva.status !== 'confirmada') {
+  if (reserva.status !== 'confirmada' && reserva.status !== 'realizada') {
     return;
   }
-
+  
   try {
     const { data: allAlunos } = await localApi.select<Aluno>('alunos', arenaId);
-    const aluno = allAlunos.find(a => a.profile_id === reserva.profile_id);
+    let aluno: Aluno | undefined;
+
+    if (reserva.aluno_id) {
+      aluno = allAlunos.find(a => a.id === reserva.aluno_id);
+    }
+    if (!aluno && reserva.profile_id) {
+      aluno = allAlunos.find(a => a.profile_id === reserva.profile_id);
+    }
+    if (!aluno && reserva.clientName) {
+      aluno = allAlunos.find(a => a.name === reserva.clientName);
+    }
+    
     if (!aluno) return;
 
     const { data: settingsData } = await localApi.select<GamificationSettings>('gamification_settings', arenaId);
@@ -65,9 +76,15 @@ export const awardPointsForCompletedReservation = async (reserva: Reserva, arena
  * Handles credit refund for a reservation cancellation.
  * Point deduction logic is removed as points are now awarded post-completion.
  */
-export const processCancellation = async (reserva: Reserva, arenaId: string): Promise<{ creditRefunded: number; pointsDeducted: number }> => {
+export const processCancellation = async (
+  reserva: Reserva,
+  arenaId: string,
+  quadras: Quadra[],
+  creditToRefund?: number,
+  refundReason?: string
+): Promise<{ creditRefunded: number; pointsDeducted: number }> => {
   const profileId = reserva.profile_id;
-  if (!profileId || !reserva.total_price || reserva.total_price <= 0) {
+  if (!profileId) {
     return { creditRefunded: 0, pointsDeducted: 0 };
   }
 
@@ -75,37 +92,52 @@ export const processCancellation = async (reserva: Reserva, arenaId: string): Pr
   const aluno = allAlunos.find(a => a.profile_id === profileId);
   if (!aluno) return { creditRefunded: 0, pointsDeducted: 0 };
 
-  // Calculate credit refund based on cancellation policy
-  const hoursUntilReservation = differenceInHours(parseDateStringAsLocal(`${reserva.date}T${reserva.start_time}`), new Date());
-  let creditToRefund = 0;
-  let refundReason = "Cancelamento com menos de 12h";
+  let finalCreditToRefund = 0;
+  let finalRefundReason = refundReason;
 
-  if (hoursUntilReservation >= 24) {
-    creditToRefund = reserva.total_price || 0;
-    refundReason = "Reembolso integral (+24h)";
-  } else if (hoursUntilReservation >= 12) {
-    creditToRefund = (reserva.total_price || 0) * 0.5;
-    refundReason = "Reembolso de 50% (12-24h)";
+  if (creditToRefund !== undefined && refundReason) {
+    finalCreditToRefund = creditToRefund;
+  } else {
+    const reservaDate = parseDateStringAsLocal(reserva.date);
+    const [hours, minutes] = reserva.start_time.split(':').map(Number);
+    reservaDate.setHours(hours, minutes, 0, 0);
+    const reservaStartDateTime = reservaDate;
+    
+    const hoursUntilReservation = differenceInHours(reservaStartDateTime, new Date());
+    const originalPrice = reserva.total_price || 0;
+
+    if (hoursUntilReservation >= 24) {
+      finalCreditToRefund = originalPrice;
+      finalRefundReason = 'Cancelamento com +24h';
+    } else if (hoursUntilReservation >= 12) {
+      finalCreditToRefund = originalPrice * 0.5;
+      finalRefundReason = 'Cancelamento entre 12h e 24h';
+    } else {
+      finalCreditToRefund = 0;
+      finalRefundReason = 'Cancelamento com -12h';
+    }
   }
 
-  // If there's credit to refund, update the student's balance and log the transaction
-  if (creditToRefund > 0) {
+  if (finalCreditToRefund > 0) {
     const updatedAluno = { ...aluno };
-    updatedAluno.credit_balance = (updatedAluno.credit_balance || 0) + creditToRefund;
+    updatedAluno.credit_balance = (updatedAluno.credit_balance || 0) + finalCreditToRefund;
     await localApi.upsert('alunos', [updatedAluno], arenaId);
+
+    const quadraName = quadras.find(q => q.id === reserva.quadra_id)?.name || 'Quadra';
+    const reservaDetails = `${quadraName} em ${format(parseDateStringAsLocal(reserva.date), 'dd/MM/yy')} às ${reserva.start_time.slice(0,5)}`;
+    const newDescription = `Crédito (${finalRefundReason}): ${reservaDetails}`;
 
     await localApi.upsert('credit_transactions', [{
       aluno_id: aluno.id,
       arena_id: arenaId,
-      amount: creditToRefund,
+      amount: finalCreditToRefund,
       type: 'cancellation_credit',
-      description: `Crédito (${refundReason})`,
+      description: newDescription,
       related_reservation_id: reserva.id,
     }], arenaId);
   }
   
-  // No points are deducted because they are only awarded after the reservation is completed.
-  return { creditRefunded: creditToRefund, pointsDeducted: 0 };
+  return { creditRefunded: finalCreditToRefund, pointsDeducted: 0 };
 };
 
 // This function is deprecated with the new logic but kept for safety.

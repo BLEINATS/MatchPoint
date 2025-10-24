@@ -18,13 +18,24 @@ const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const TurmaCard: React.FC<TurmaCardProps> = ({ turma, professor, quadra, onEdit, onDelete, index }) => {
   if (!turma) return null;
 
-  const scheduleString = turma.daysOfWeek.map(d => weekDays[d]).join(' & ');
-  
   const totalUniqueStudents = useMemo(() => {
-    // Defensive check to prevent crash if matriculas is undefined
     const studentIds = (turma.matriculas || []).flatMap(m => m?.student_ids || []);
     return new Set(studentIds).size;
   }, [turma]);
+
+  const scheduleDetails = useMemo(() => {
+    if (!turma.schedule || turma.schedule.length === 0) {
+      return <p className="text-sm text-brand-gray-500">Sem horário definido</p>;
+    }
+    const sortedSchedule = [...turma.schedule].sort((a, b) => a.day - b.day);
+    return sortedSchedule.map(s => (
+      <div key={s.day} className="flex items-center text-brand-gray-700 dark:text-brand-gray-300">
+        <Calendar className="h-4 w-4 mr-2 text-brand-blue-500" />
+        <span className="w-10 font-medium">{weekDays[s.day]}:</span>
+        <span className="font-semibold">{s.start_time} - {s.end_time}</span>
+      </div>
+    ));
+  }, [turma.schedule]);
 
   return (
     <motion.div
@@ -55,14 +66,7 @@ const TurmaCard: React.FC<TurmaCardProps> = ({ turma, professor, quadra, onEdit,
             <MapPin className="h-4 w-4 mr-2 text-brand-blue-500" />
             <span>{quadra?.name || 'Quadra não encontrada'}</span>
           </div>
-          <div className="flex items-center text-brand-gray-700 dark:text-brand-gray-300">
-            <Calendar className="h-4 w-4 mr-2 text-brand-blue-500" />
-            <span>{scheduleString}</span>
-          </div>
-          <div className="flex items-center text-brand-gray-700 dark:text-brand-gray-300">
-            <Clock className="h-4 w-4 mr-2 text-brand-blue-500" />
-            <span>{turma.start_time} - {turma.end_time}</span>
-          </div>
+          <div className="space-y-2">{scheduleDetails}</div>
         </div>
       </div>
 
