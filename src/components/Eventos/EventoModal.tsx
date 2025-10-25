@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Calendar, Clock, Users, DollarSign, Plus, Trash2, Info, Home, AlertCircle } from 'lucide-react';
+import { X, Save, User, Calendar, Clock, Users, DollarSign, Plus, Trash2, Info, Home, AlertTriangle } from 'lucide-react';
 import { Evento, Quadra, EventoTipoPrivado, EventoStatus, Reserva, PricingRule } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
@@ -80,6 +80,7 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
     additionalSpaces: [] as string[],
     services: [] as { name: string; price: string; included: boolean }[],
     depositValue: '',
+    discount: '',
     paymentConditions: '50% de sinal, restante no dia do evento.',
     notes: '',
   });
@@ -125,8 +126,9 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
       const price = parseFloat(service.price.replace(',', '.')) || 0;
       return sum + (service.included ? 0 : price);
     }, 0);
-    return servicesCost + courtCost;
-  }, [formData.services, courtCost]);
+    const discount = parseFloat(formData.discount.replace(',', '.')) || 0;
+    return servicesCost + courtCost - discount;
+  }, [formData.services, courtCost, formData.discount]);
 
   useEffect(() => {
     if (!isOpen || !formData.quadras_ids.length || !formData.startDate || !formData.endDate || !formData.startTime || !formData.endTime) {
@@ -154,10 +156,10 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
               return false;
             }
 
-            const eventStartTime = parse(formData.courtStartTime || formData.startTime, 'HH:mm', day);
-            const eventEndTime = parse(formData.courtEndTime || formData.endTime, 'HH:mm', day);
-            const reservaStartTime = parse(r.start_time, 'HH:mm', day);
-            const reservaEndTime = parse(r.end_time, 'HH:mm', day);
+            const eventStartTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${formData.courtStartTime || formData.startTime}`);
+            const eventEndTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${formData.courtEndTime || formData.endTime}`);
+            const reservaStartTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${r.start_time}`);
+            const reservaEndTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${r.end_time}`);
             
             return eventStartTime < reservaEndTime && eventEndTime > reservaStartTime;
           });
@@ -197,7 +199,8 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
         quadras_ids: initialData.quadras_ids,
         additionalSpaces: initialData.additionalSpaces || [],
         services: initialData.services.map(s => ({ ...s, price: String(s.price).replace('.', ',') })),
-        depositValue: String(initialData.depositValue).replace('.', ','),
+        depositValue: String(initialData.depositValue || '').replace('.', ','),
+        discount: String(initialData.discount || '').replace('.', ','),
         paymentConditions: initialData.paymentConditions,
         notes: initialData.notes,
       });
@@ -216,6 +219,7 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
             { name: 'Segurança (1)', price: '200,00', included: true },
         ],
         depositValue: '',
+        discount: '',
         paymentConditions: '50% de sinal, restante no dia do evento.',
         notes: '',
       });
@@ -227,6 +231,29 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
       alert(conflictWarning);
       return;
     }
+    
+    const depositAmount = parseFloat(formData.depositValue.replace(',', '.')) || 0;
+    
+    let updatedPayments = [...(initialData?.payments || [])];
+    const depositPaymentId = `deposit_${initialData?.id || 'new_event'}`;
+    const existingDepositIndex = updatedPayments.findIndex(p => p.id === depositPaymentId);
+
+    if (depositAmount > 0) {
+        const depositPayment = {
+            id: depositPaymentId,
+            date: existingDepositIndex > -1 ? updatedPayments[existingDepositIndex].date : new Date().toISOString(),
+            amount: depositAmount,
+            method: 'Sinal',
+        };
+        if (existingDepositIndex > -1) {
+            updatedPayments[existingDepositIndex] = depositPayment;
+        } else {
+            updatedPayments.push(depositPayment);
+        }
+    } else if (existingDepositIndex > -1) {
+        updatedPayments.splice(existingDepositIndex, 1);
+    }
+    
     const dataToSave = { 
       ...formData, 
       totalValue,
@@ -234,8 +261,11 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
           ...s,
           price: parseFloat(s.price.replace(',', '.')) || 0,
       })),
-      depositValue: parseFloat(formData.depositValue.replace(',', '.')) || 0,
+      depositValue: depositAmount,
+      discount: parseFloat(formData.discount.replace(',', '.')) || 0,
+      payments: updatedPayments,
     };
+    
     if (isEditing && initialData) {
       onSave({ ...initialData, ...dataToSave });
     } else {
@@ -372,7 +402,7 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
                     <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
                         <div className="flex">
                         <div className="flex-shrink-0">
-                            <AlertCircle className="h-5 w-5 text-red-400" aria-hidden="true" />
+                            <AlertTriangle className="h-5 w-5 text-red-400" aria-hidden="true" />
                         </div>
                         <div className="ml-3">
                             <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Atenção: Horário Indisponível</h3>
@@ -422,6 +452,13 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
                             <span className="text-brand-gray-800 dark:text-white">{courtCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                         </div>
                     )}
+                    <div className="flex justify-between items-center text-sm font-medium">
+                        <span className="text-brand-gray-600 dark:text-brand-gray-400">Custo dos Serviços</span>
+                        <span className="text-brand-gray-800 dark:text-white">
+                          {formData.services.reduce((sum, s) => sum + (s.included ? 0 : parseFloat(s.price.replace(',', '.')) || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </span>
+                    </div>
+                    <Input label="Desconto (R$)" name="discount" type="text" inputMode="decimal" value={formData.discount} onChange={handleChange} />
                     <div className="flex justify-between font-bold text-xl text-brand-gray-800 dark:text-white pt-2 border-t border-brand-gray-200 dark:border-brand-gray-700">
                         <span>Valor Total:</span>
                         <span>{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>

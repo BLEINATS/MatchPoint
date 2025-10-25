@@ -32,6 +32,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ reservas, quadras, onReserv
       ? direction === 'next' ? addWeeks(currentDisplayDate, 1) : subWeeks(currentDisplayDate, 1)
       : direction === 'next' ? addMonths(currentDisplayDate, 1) : subMonths(currentDisplayDate, 1);
     setCurrentDisplayDate(newDate);
+    onDateChange(newDate);
   };
 
   const headerTitle = useMemo(() => {
@@ -80,10 +81,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({ reservas, quadras, onReserv
     let isCurrentPeriod: (day: Date) => boolean;
 
     if (viewMode === 'week') {
-      const weekStart = startOfWeek(currentDisplayDate, { locale: ptBR });
-      const weekEnd = endOfWeek(currentDisplayDate, { locale: ptBR });
-      days = eachDayOfInterval({ start: weekStart, end: weekEnd });
-      isCurrentPeriod = () => true;
+        const weekStart = startOfWeek(currentDisplayDate, { locale: ptBR });
+        const weekEnd = endOfWeek(currentDisplayDate, { locale: ptBR });
+        days = eachDayOfInterval({ start: weekStart, end: weekEnd });
+        isCurrentPeriod = () => true;
     } else { // month view
       const monthStart = startOfMonth(currentDisplayDate);
       const monthEnd = endOfMonth(monthStart);

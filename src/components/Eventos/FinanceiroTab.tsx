@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Evento } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
-import { DollarSign, CreditCard, Plus, Trash2, Banknote } from 'lucide-react';
+import { DollarSign, CreditCard, Plus, Trash2, Banknote, TrendingUp, TrendingDown, FileText, Percent } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -47,10 +47,13 @@ const FinanceiroTab: React.FC<FinanceiroTabProps> = ({ evento, setEvento }) => {
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard label="Valor Total do Evento" value={formatCurrency(evento.totalValue)} color="text-blue-500" />
-        <StatCard label="Total Pago" value={formatCurrency(totalPaid)} color="text-green-500" />
-        <StatCard label="Saldo Devedor" value={formatCurrency(balanceDue)} color={balanceDue > 0 ? "text-red-500" : "text-green-500"} />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard label="Valor Total do Evento" value={formatCurrency(evento.totalValue)} icon={DollarSign} color="text-blue-500" />
+        <StatCard label="Total Pago" value={formatCurrency(totalPaid)} icon={TrendingUp} color="text-green-500" />
+        {evento.discount && evento.discount > 0 && (
+          <StatCard label="Desconto Aplicado" value={formatCurrency(evento.discount)} icon={Percent} color="text-yellow-500" />
+        )}
+        <StatCard label="Saldo Devedor" value={formatCurrency(balanceDue)} icon={TrendingDown} color={balanceDue > 0 ? "text-red-500" : "text-green-500"} />
       </div>
 
       <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
@@ -123,10 +126,17 @@ const FinanceiroTab: React.FC<FinanceiroTabProps> = ({ evento, setEvento }) => {
   );
 };
 
-const StatCard: React.FC<{ label: string, value: string | number, color: string }> = ({ label, value, color }) => (
+const StatCard: React.FC<{ label: string, value: string | number, color: string, icon: React.ElementType }> = ({ label, value, color, icon: Icon }) => (
   <div className="bg-brand-gray-50 dark:bg-brand-gray-900/50 rounded-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-    <p className="text-sm font-medium text-brand-gray-600 dark:text-brand-gray-400">{label}</p>
-    <p className={`text-3xl font-bold ${color}`}>{value}</p>
+    <div className="flex items-center">
+      <div className={`p-3 rounded-lg mr-4 ${color.replace('text-', 'bg-').replace('-500', '-100')} dark:${color.replace('text-', 'bg-').replace('-500', '-900/50')}`}>
+        <Icon className={`h-6 w-6 ${color}`} />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-brand-gray-600 dark:text-brand-gray-400">{label}</p>
+        <p className={`text-2xl font-bold text-brand-gray-900 dark:text-white`}>{value}</p>
+      </div>
+    </div>
   </div>
 );
 

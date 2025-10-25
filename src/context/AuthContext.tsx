@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { AuthState, User, Profile, Arena, ArenaMembership, Aluno } from '../types';
+import { AuthState, User, Profile, Arena, ArenaMembership, Aluno, Reserva, GamificationSettings, GamificationPointTransaction } from '../types';
 import { useToast } from './ToastContext';
 import { localApi } from '../lib/localApi';
 import { v4 as uuidv4 } from 'uuid';
 import { seedInitialData } from '../lib/seedData';
-import { format } from 'date-fns';
+import { format, isBefore } from 'date-fns';
+import { parseDateStringAsLocal } from '../utils/dateUtils';
+import { awardPointsForCompletedReservation } from '../utils/gamificationUtils';
 
 interface AuthContextType extends AuthState {
   allArenas: Arena[];
@@ -117,6 +119,61 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [profile, selectedArenaContext, isLoading, refreshAlunoProfile]);
 
+  const processCompletedReservations = useCallback(async () => {
+    if (!profile || !selectedArenaContext || profile.role !== 'admin_arena') {
+      return;
+    }
+
+    try {
+      const { data: settingsData } = await localApi.select<GamificationSettings>('gamification_settings', selectedArenaContext.id);
+      const settings = settingsData?.[0];
+      if (!settings || !settings.is_enabled) return;
+
+      const { data: allReservas } = await localApi.select<Reserva>('reservas', selectedArenaContext.id);
+      if (!allReservas || allReservas.length === 0) return;
+
+      const now = new Date();
+      const completedReservations = allReservas.filter(r => {
+        if (r.status !== 'confirmada' && r.status !== 'realizada') return false;
+        try {
+          const endDateTime = parseDateStringAsLocal(`${r.date}T${r.end_time}`);
+          return isBefore(endDateTime, now);
+        } catch { return false; }
+      });
+
+      if (completedReservations.length === 0) return;
+
+      const { data: transactions } = await localApi.select<GamificationPointTransaction>('gamification_point_transactions', selectedArenaContext.id);
+      const processedIds = new Set((transactions || []).filter(t => t.type === 'reservation_completed').map(t => t.related_reservation_id));
+      
+      const reservationsToProcess = completedReservations.filter(r => !r.id || !processedIds.has(r.id));
+      
+      if (reservationsToProcess.length > 0) {
+        let pointsAwarded = false;
+        for (const reserva of reservationsToProcess) {
+          await awardPointsForCompletedReservation(reserva, selectedArenaContext.id);
+          pointsAwarded = true;
+        }
+        if (pointsAwarded) {
+          console.log(`[AuthContext] ${reservationsToProcess.length} reservation(s) processed for gamification points.`);
+        }
+      }
+    } catch (error) {
+      console.error("Error processing completed reservations in AuthContext:", error);
+    }
+  }, [profile, selectedArenaContext]);
+
+  useEffect(() => {
+    if (profile?.role === 'admin_arena') {
+      const interval = setInterval(() => {
+        processCompletedReservations();
+      }, 60 * 1000); // Check every minute
+
+      processCompletedReservations(); // Also run on load
+
+      return () => clearInterval(interval);
+    }
+  }, [processCompletedReservations, profile]);
 
   const signUp = async (email: string, password: string, name?: string, role: 'cliente' | 'admin_arena' = 'cliente') => {
     return Promise.resolve();

@@ -10,7 +10,7 @@
   || "Você confirma que deseja alterar a lógica de crédito/preço?"  ||
   ====================================================================
 */}`}
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, Calendar, Clock, User, Phone, Repeat, Tag, DollarSign, Info, AlertTriangle, CreditCard, ShoppingBag, Handshake, Users, CheckCircle, Loader2 } from 'lucide-react';
 import { Aluno, Quadra, Reserva, PricingRule, DurationDiscount, ReservationType, RentalItem, Profile, AtletaAluguel, Friendship, RecurringType, Arena } from '../../types';
@@ -91,7 +91,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   const [recurringPayment, setRecurringPayment] = useState<number | null>(null);
   const [proRataOccurrences, setProRataOccurrences] = useState<number | null>(null);
   const [isRecurringIndefinite, setIsRecurringIndefinite] = useState(false);
-
+  
   const [formData, setFormData] = useState({
     date: format(selectedDate, 'yyyy-MM-dd'),
     start_time: '09:00',
@@ -117,6 +117,113 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   });
 
   const isEditing = !!reservation;
+  const isInitialized = useRef(false);
+
+  useEffect(() => {
+    if (isOpen && !isInitialized.current) {
+      const loadAndSetData = async () => {
+        setIsLoading(true);
+        let reservationToUse: Reserva | null = null;
+        
+        if (reservation?.id && arenaId) {
+          try {
+            const { data: allReservas } = await localApi.select<Reserva>('reservas', arenaId);
+            reservationToUse = allReservas.find(r => r.id === reservation.id) || reservation;
+          } catch {
+            reservationToUse = reservation;
+          }
+        } else {
+          reservationToUse = reservation;
+        }
+    
+        let baseData: any = {
+          date: format(selectedDate, 'yyyy-MM-dd'),
+          start_time: '09:00',
+          end_time: '10:00',
+          quadra_id: quadras.length > 0 ? quadras[0].id : '',
+          clientName: '',
+          clientPhone: '',
+          status: 'confirmada' as Reserva['status'],
+          type: 'avulsa' as ReservationType,
+          sport_type: 'Beach Tennis',
+          total_price: 0,
+          credit_used: 0,
+          isRecurring: false,
+          recurringType: 'none' as RecurringType,
+          recurringEndDate: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
+          rented_items: [] as { itemId: string; name: string; quantity: number; price: number }[],
+          payment_status: 'pendente' as Reserva['payment_status'],
+          notes: '',
+          atleta_aluguel_id: null as string | null,
+          participants: [] as { profile_id: string; name: string; avatar_url: string | null; status: 'pending' | 'accepted' | 'declined', payment_status: 'pendente' | 'pago' }[],
+        };
+    
+        if (reservationToUse) {
+          const creditAlreadyUsed = reservationToUse.credit_used || 0;
+          baseData = {
+            ...baseData,
+            ...reservationToUse,
+            start_time: reservationToUse.start_time.slice(0, 5),
+            end_time: reservationToUse.end_time.slice(0, 5),
+            credit_used: creditAlreadyUsed,
+            recurringType: reservationToUse.recurringType || 'none',
+          };
+          setOriginalCreditUsed(creditAlreadyUsed);
+          setIsManuallyPaid(reservationToUse.payment_status === 'pago');
+          setIsRecurringIndefinite(!reservationToUse.recurringEndDate);
+          const initialSelectedItems: Record<string, number> = {};
+          if (reservationToUse.rented_items) {
+            for (const item of reservationToUse.rented_items) {
+              initialSelectedItems[item.itemId] = item.quantity;
+            }
+          }
+          setSelectedItems(initialSelectedItems);
+          const initialInvitedIds = reservationToUse.participants?.filter(p => p.profile_id !== userProfile?.id).map(p => p.profile_id) || [];
+          setInvitedFriendIds(initialInvitedIds);
+          setIsGroupBooking(!!reservationToUse.participants && reservationToUse.participants.length > 1);
+        } else if (newReservationSlot) {
+          const startTime = newReservationSlot.time || '09:00';
+          const quadraId = newReservationSlot.quadraId || (quadras.length > 0 ? quadras[0].id : '');
+          const selectedQuadra = quadras.find(q => q.id === quadraId);
+          const duration = selectedQuadra?.booking_duration_minutes || 60;
+          const startTimeDate = parse(startTime, 'HH:mm', new Date());
+          const endTimeDate = addMinutes(startTimeDate, duration);
+          const endTime = format(endTimeDate, 'HH:mm');
+          
+          baseData = {
+            ...baseData,
+            quadra_id: quadraId,
+            start_time: startTime,
+            end_time: endTime,
+            type: newReservationSlot.type || 'avulsa',
+            sport_type: selectedQuadra?.sports?.[0] || 'Beach Tennis',
+          };
+          
+          if (newReservationSlot.type === 'bloqueio') {
+            baseData.clientName = 'Horário Bloqueado';
+          }
+    
+          if (isClientBooking && userProfile) {
+              baseData.clientName = userProfile.name;
+              baseData.clientPhone = userProfile.phone || '';
+          }
+          setOriginalCreditUsed(0);
+          setIsManuallyPaid(false);
+          setSelectedItems({});
+          setInvitedFriendIds([]);
+          setIsGroupBooking(false);
+          setIsRecurringIndefinite(false);
+        }
+        
+        setFormData(baseData);
+        isInitialized.current = true;
+        setIsLoading(false);
+      };
+      loadAndSetData();
+    } else if (!isOpen) {
+      isInitialized.current = false;
+    }
+  }, [isOpen, reservation, newReservationSlot, quadras, selectedDate, isClientBooking, userProfile, arenaId]);
 
   const selectedClient = useMemo(() => {
     if (isClientBooking) return clientProfile;
@@ -226,111 +333,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     };
     fetchData();
   }, [isOpen, arenaId, addToast]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-  
-    const loadAndSetData = async () => {
-      setIsLoading(true);
-      let reservationToUse: Reserva | null = null;
-      
-      if (reservation?.id && arenaId) {
-        try {
-          const { data: allReservas } = await localApi.select<Reserva>('reservas', arenaId);
-          reservationToUse = allReservas.find(r => r.id === reservation.id) || reservation;
-        } catch {
-          reservationToUse = reservation;
-        }
-      } else {
-        reservationToUse = reservation;
-      }
-  
-      let baseData: any = {
-        date: format(selectedDate, 'yyyy-MM-dd'),
-        start_time: '09:00',
-        end_time: '10:00',
-        quadra_id: quadras.length > 0 ? quadras[0].id : '',
-        clientName: '',
-        clientPhone: '',
-        status: 'confirmada' as Reserva['status'],
-        type: 'avulsa' as ReservationType,
-        sport_type: 'Beach Tennis',
-        total_price: 0,
-        credit_used: 0,
-        isRecurring: false,
-        recurringType: 'none' as RecurringType,
-        recurringEndDate: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
-        rented_items: [] as { itemId: string; name: string; quantity: number; price: number }[],
-        payment_status: 'pendente' as Reserva['payment_status'],
-        notes: '',
-        atleta_aluguel_id: null as string | null,
-        participants: [] as { profile_id: string; name: string; avatar_url: string | null; status: 'pending' | 'accepted' | 'declined', payment_status: 'pendente' | 'pago' }[],
-      };
-  
-      if (reservationToUse) {
-        const creditAlreadyUsed = reservationToUse.credit_used || 0;
-        baseData = {
-          ...baseData,
-          ...reservationToUse,
-          start_time: reservationToUse.start_time.slice(0, 5),
-          end_time: reservationToUse.end_time.slice(0, 5),
-          credit_used: creditAlreadyUsed,
-          recurringType: reservationToUse.recurringType || 'none',
-        };
-        setOriginalCreditUsed(creditAlreadyUsed);
-        setIsManuallyPaid(reservationToUse.payment_status === 'pago');
-        setIsRecurringIndefinite(!reservationToUse.recurringEndDate);
-        const initialSelectedItems: Record<string, number> = {};
-        if (reservationToUse.rented_items) {
-          for (const item of reservationToUse.rented_items) {
-            initialSelectedItems[item.itemId] = item.quantity;
-          }
-        }
-        setSelectedItems(initialSelectedItems);
-        const initialInvitedIds = reservationToUse.participants?.filter(p => p.profile_id !== userProfile?.id).map(p => p.profile_id) || [];
-        setInvitedFriendIds(initialInvitedIds);
-        setIsGroupBooking(!!reservationToUse.participants && reservationToUse.participants.length > 1);
-      } else if (newReservationSlot) {
-        const startTime = newReservationSlot.time || '09:00';
-        const quadraId = newReservationSlot.quadraId || (quadras.length > 0 ? quadras[0].id : '');
-        const selectedQuadra = quadras.find(q => q.id === quadraId);
-        const duration = selectedQuadra?.booking_duration_minutes || 60;
-        const startTimeDate = parse(startTime, 'HH:mm', new Date());
-        const endTimeDate = addMinutes(startTimeDate, duration);
-        const endTime = format(endTimeDate, 'HH:mm');
-        
-        baseData = {
-          ...baseData,
-          quadra_id: quadraId,
-          start_time: startTime,
-          end_time: endTime,
-          type: newReservationSlot.type || 'avulsa',
-          sport_type: selectedQuadra?.sports?.[0] || 'Beach Tennis',
-        };
-        
-        if (newReservationSlot.type === 'bloqueio') {
-          baseData.clientName = 'Horário Bloqueado';
-        }
-  
-        if (isClientBooking && userProfile) {
-            baseData.clientName = userProfile.name;
-            baseData.clientPhone = userProfile.phone || '';
-        }
-        setOriginalCreditUsed(0);
-        setIsManuallyPaid(false);
-        setSelectedItems({});
-        setInvitedFriendIds([]);
-        setIsGroupBooking(false);
-        setIsRecurringIndefinite(false);
-      }
-      
-      setFormData(baseData);
-      
-      setIsLoading(false);
-    };
-    loadAndSetData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, reservation, newReservationSlot]);
 
   const findMatchingRule = useCallback((
     rules: PricingRule[], sport: string, date: string, startTime: string
@@ -546,18 +548,16 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
         if (isManuallyPaid) {
           newPaymentStatus = 'pago';
-        } else if (isEditing) {
-          if (reservation?.payment_status === 'pago') {
-            if (valorAPagar > 0) {
-              newPaymentStatus = 'pendente';
-            } else {
-              newPaymentStatus = 'pago';
-            }
-          } else {
-            newPaymentStatus = valorAPagar <= 0 ? 'pago' : 'pendente';
+        } else if (isEditing && reservation?.payment_status === 'pago') {
+          if (valorAPagar > 0) {
+            newPaymentStatus = 'pendente';
           }
         } else {
-          newPaymentStatus = valorAPagar <= 0 ? 'pago' : 'pendente';
+          // Only update to 'pago' if the price is truly zero and not a transient state.
+          // A simple check: if there's a breakdown, the price is considered calculated.
+          if (priceBreakdown.length > 0 || rentalCost > 0 || professionalCost > 0 || totalCreditOnReservation > 0) {
+            newPaymentStatus = valorAPagar <= 0 ? 'pago' : 'pendente';
+          }
         }
 
         if (prev.type === 'bloqueio') {
@@ -578,7 +578,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   }, [
     formData.quadra_id, formData.sport_type, formData.date, formData.start_time, formData.end_time, formData.type, formData.recurringType,
     selectedClient, quadras, durationDiscounts, useCredit, availableCredit, isEditing, 
-    originalCreditUsed, selectedItems, rentalItems, addToast, profissionais, selectedProfissionalId, findMatchingRule, isClientBooking
+    originalCreditUsed, selectedItems, rentalItems, addToast, profissionais, selectedProfissionalId, findMatchingRule, isClientBooking, reservation, isManuallyPaid, priceBreakdown.length
   ]);
 
   useEffect(() => {
@@ -656,6 +656,34 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
       return;
     }
     
+    let finalAlunoId = selectedClientId;
+    if (!finalAlunoId && formData.clientName && !isClientBooking) {
+      try {
+        const { data: allAlunos } = await localApi.select<Aluno>('alunos', arenaId);
+        const existingAluno = allAlunos.find(a => a.name.toLowerCase() === formData.clientName.toLowerCase());
+        
+        if (existingAluno) {
+            finalAlunoId = existingAluno.id;
+        } else {
+            const { data: newAlunos } = await localApi.upsert('alunos', [{
+              arena_id: arenaId,
+              name: formData.clientName,
+              phone: formData.clientPhone || null,
+              status: 'ativo',
+              plan_name: 'Avulso',
+              join_date: format(new Date(), 'yyyy-MM-dd')
+            }], arenaId);
+            if (newAlunos && newAlunos[0]) {
+              finalAlunoId = newAlunos[0].id;
+              addToast({ message: `Novo cliente "${formData.clientName}" criado.`, type: 'info' });
+            }
+        }
+      } catch (e) {
+        addToast({ message: 'Erro ao criar ou encontrar cliente.', type: 'error' });
+        return;
+      }
+    }
+
     const participants: any[] = [];
     if (isGroupBooking && userProfile) {
         participants.push({
@@ -679,7 +707,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         });
     }
 
-    let dataToSave: Partial<Reserva> = { ...formData, participants, originalCreditUsed: originalCreditUsed, aluno_id: selectedClientId };
+    let dataToSave: Partial<Reserva> = { ...formData, participants, originalCreditUsed: originalCreditUsed, aluno_id: finalAlunoId };
     
     if (!isEditing) {
       dataToSave.created_by_name = userProfile?.name;

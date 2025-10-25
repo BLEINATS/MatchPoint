@@ -1,6 +1,6 @@
 import React from 'react';
 import { Evento, EventoStatus, EventoTipoPrivado, Quadra } from '../../types';
-import { Calendar, Clock, Users, DollarSign, PartyPopper, User, Phone, Mail, Home } from 'lucide-react';
+import { Calendar, Clock, Users, DollarSign, PartyPopper, User, Phone, Mail, Home, Percent } from 'lucide-react';
 import { format } from 'date-fns';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatters';
@@ -73,7 +73,9 @@ const VisaoGeralTab: React.FC<VisaoGeralTabProps> = ({ evento, quadras }) => {
         <StatCard icon={PartyPopper} label="Status" value={statusProps.label} color={statusProps.color} />
         <StatCard icon={Users} label="Convidados" value={evento.expectedGuests} color="text-blue-500" />
         <StatCard icon={DollarSign} label="Valor Total" value={formatCurrency(evento.totalValue)} color="text-green-500" />
-        <StatCard icon={PartyPopper} label="Tipo" value={getTypeLabel(evento.type)} color="text-purple-500" />
+        {evento.discount && evento.discount > 0 && (
+          <StatCard icon={Percent} label="Desconto Aplicado" value={formatCurrency(evento.discount)} color="text-yellow-500" />
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

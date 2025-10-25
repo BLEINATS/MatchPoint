@@ -409,6 +409,7 @@ export interface Evento {
   services: { name: string; price: number; included: boolean }[];
   totalValue: number;
   depositValue: number;
+  discount?: number;
   paymentConditions: string;
   notes: string;
   checklist: { id: string; text: string; completed: boolean }[];

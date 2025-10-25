@@ -57,8 +57,6 @@ const Reservations: React.FC = () => {
   const [isManualCancelModalOpen, setIsManualCancelModalOpen] = useState(false);
   const [reservationToCancel, setReservationToCancel] = useState<Reserva | null>(null);
   
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-
   const canView = useMemo(() => 
     profile?.role === 'admin_arena' || 
     profile?.permissions?.reservas === 'view' || 
@@ -114,23 +112,14 @@ const Reservations: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [loadData, refreshTrigger]);
-
-  useEffect(() => {
-    const interval = setInterval(loadData, 60000);
-    window.addEventListener('focus', loadData);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', loadData);
-    };
   }, [loadData]);
-  
+
   const closeModal = useCallback(() => {
     setIsModalOpen(false);
     setSelectedReservation(null);
     setNewReservationSlot(null);
-    setRefreshTrigger(v => v + 1);
-  }, []);
+    loadData(); // Direct call to ensure data is fresh
+  }, [loadData]);
 
   useEffect(() => {
     let stateHandled = false;
@@ -232,7 +221,9 @@ const Reservations: React.FC = () => {
         dataToUpsert.created_by_name = profile.name;
         if (dataToUpsert.total_price && dataToUpsert.total_price > 0 && dataToUpsert.payment_status === 'pendente') {
           dataToUpsert.status = 'aguardando_pagamento';
-          const paymentWindow = selectedArenaContext.single_booking_payment_window_minutes || 30;
+          const { data: arenas } = await localApi.select<Arena>('arenas', 'all');
+          const currentArena = arenas.find(a => a.id === selectedArenaContext.id);
+          const paymentWindow = currentArena?.single_booking_payment_window_minutes || 30;
           dataToUpsert.payment_deadline = addMinutes(new Date(), paymentWindow).toISOString();
         } else {
           dataToUpsert.status = 'confirmada';
@@ -277,7 +268,7 @@ const Reservations: React.FC = () => {
         if (reserva.total_price && reserva.total_price > 0) updatePayload.payment_status = 'pago';
         await localApi.upsert('reservas', [{ ...reserva, ...updatePayload }], selectedArenaContext.id);
         addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
-        setRefreshTrigger(v => v + 1);
+        loadData();
     } catch (error: any) { addToast({ message: `Erro ao cancelar reserva: ${error.message}`, type: 'error' }); }
     finally { setIsManualCancelModalOpen(false); setReservationToCancel(null); }
   };
@@ -304,7 +295,7 @@ const Reservations: React.FC = () => {
     } finally {
         setIsCancellationModalOpen(false);
         setReservationToCancel(null);
-        setRefreshTrigger(v => v + 1);
+        loadData();
     }
   };
 

@@ -6,7 +6,7 @@ import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { localApi } from '../lib/localApi';
-import { Aluno, Professor, Quadra, Turma, Reserva, AtletaAluguel, PlanoAula } from '../types';
+import { Aluno, Professor, Quadra, Turma, Reserva, AtletaAluguel, PlanoAula, GamificationPointTransaction } from '../types';
 import Button from '../components/Forms/Button';
 import Input from '../components/Forms/Input';
 import AlunoModal from '../components/Alunos/AlunoModal';
@@ -14,13 +14,14 @@ import ProfessorModal from '../components/Alunos/ProfessorModal';
 import TurmaModal from '../components/Alunos/TurmaModal';
 import TurmaCard from '../components/Alunos/TurmaCard';
 import ConfirmationModal from '../components/Shared/ConfirmationModal';
-import { format } from 'date-fns';
+import { format, isBefore } from 'date-fns';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
 import { formatCurrency } from '../utils/formatters';
 import AtletaAluguelModal from '../components/Alunos/AtletaAluguelModal';
 import { localUploadPhoto } from '../lib/localApi';
 import ProfessorAgendaView from '../components/Alunos/ProfessorAgendaView';
 import { syncTurmaReservations } from '../utils/bookingSyncUtils';
+import { awardPointsForCompletedReservation } from '../utils/gamificationUtils';
 
 type TabType = 'clientes' | 'alunos' | 'professores' | 'atletas' | 'turmas';
 type ProfessoresViewMode = 'list' | 'agenda';
@@ -66,15 +67,45 @@ const Alunos: React.FC = () => {
         return;
     }
     try {
-      const [alunosRes, professoresRes, turmasRes, quadrasRes, atletasRes, planosRes] = await Promise.all([
+      const [alunosRes, professoresRes, turmasRes, quadrasRes, atletasRes, planosRes, reservasRes, transactionsRes] = await Promise.all([
         localApi.select<Aluno>('alunos', arena.id),
         localApi.select<Professor>('professores', arena.id),
         localApi.select<Turma>('turmas', arena.id),
         localApi.select<Quadra>('quadras', arena.id),
         localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
         localApi.select<PlanoAula>('planos_aulas', arena.id),
+        localApi.select<Reserva>('reservas', arena.id),
+        localApi.select<GamificationPointTransaction>('gamification_point_transactions', arena.id),
       ]);
-      setAlunos(alunosRes.data || []);
+
+      // Processar pontos de gamificação para reservas concluídas
+      const now = new Date();
+      const completedReservations = (reservasRes.data || []).filter(r => {
+        if (r.status !== 'confirmada' && r.status !== 'realizada') return false;
+        try {
+          const endDateTime = parseDateStringAsLocal(`${r.date}T${r.end_time}`);
+          return isBefore(endDateTime, now);
+        } catch { return false; }
+      });
+
+      if (completedReservations.length > 0) {
+        const processedIds = new Set((transactionsRes.data || []).filter(t => t.type === 'reservation_completed').map(t => t.related_reservation_id));
+        const reservationsToProcess = completedReservations.filter(r => !r.id || !processedIds.has(r.id));
+        
+        if (reservationsToProcess.length > 0) {
+          for (const reserva of reservationsToProcess) {
+            await awardPointsForCompletedReservation(reserva, arena.id);
+          }
+          // Refetch alunos data after awarding points
+          const { data: updatedAlunos } = await localApi.select<Aluno>('alunos', arena.id);
+          setAlunos(updatedAlunos || []);
+        } else {
+          setAlunos(alunosRes.data || []);
+        }
+      } else {
+        setAlunos(alunosRes.data || []);
+      }
+
       setProfessores(professoresRes.data || []);
       setTurmas(turmasRes.data || []);
       setQuadras(quadrasRes.data || []);
@@ -409,7 +440,7 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, on
 
   const handleInvite = (phone: string, name: string) => {
     const message = encodeURIComponent(`Olá ${name}, para acompanhar suas reservas, pontos e receber notificações da nossa arena, crie sua conta em nossa plataforma: ${window.location.origin}/auth`);
-    window.open(`https://wa.me/55${phone.replace(/\D/g, '')}?text=${message}`, '_blank');
+    window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${message}`, '_blank');
   };
 
   return (

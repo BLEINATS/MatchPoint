@@ -1,24 +1,25 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { 
     DollarSign, Users, Plus, Lock, Send, Calendar, Clock, 
     User, Sparkles, Star, TrendingUp, TrendingDown, Phone, MessageCircle, Bookmark, Loader2, GraduationCap,
-    CheckCircle, AlertCircle, CreditCard, ClipboardList, XCircle, Repeat, ShoppingBag, PieChart
+    CheckCircle, AlertCircle, CreditCard, ClipboardList, XCircle, Repeat, ShoppingBag, PieChart, Trophy, PartyPopper
 } from 'lucide-react';
 import StatCard from './StatCard';
-import { Quadra, Reserva, Aluno } from '../../types';
+import { Quadra, Reserva, Aluno, Torneio, Evento } from '../../types';
 import { expandRecurringReservations, getReservationTypeDetails } from '../../utils/reservationUtils';
-import { getAvailableSlotsForDay } from '../../utils/analytics';
+import { getAvailableSlotsForDay, calculateMonthlyOccupancy } from '../../utils/analytics';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { localApi } from '../../lib/localApi';
-import { isSameDay, startOfMonth, endOfMonth, format, parse, startOfDay, formatDistanceToNow, getDay, addDays, differenceInMinutes, endOfDay } from 'date-fns';
+import { isSameDay, startOfMonth, endOfMonth, format, parse, startOfDay, formatDistanceToNow, getDay, addDays, differenceInMinutes, endOfDay, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Button from '../Forms/Button';
 import { formatCurrency } from '../../utils/formatters';
 import Timer from '../Shared/Timer';
+import InsightsWidget from './InsightsWidget';
 
 const AnalyticsDashboard: React.FC = () => {
   const { selectedArenaContext: arena, profile } = useAuth();
@@ -27,6 +28,8 @@ const AnalyticsDashboard: React.FC = () => {
   const [quadras, setQuadras] = useState<Quadra[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
+  const [torneios, setTorneios] = useState<Torneio[]>([]);
+  const [eventos, setEventos] = useState<Evento[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const canManageReservas = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.reservas === 'edit', [profile]);
@@ -38,17 +41,19 @@ const AnalyticsDashboard: React.FC = () => {
         return;
     }
     try {
-      const { data: quadrasData, error: quadrasError } = await localApi.select<Quadra>('quadras', arena.id);
-      if (quadrasError) throw quadrasError;
-      setQuadras(quadrasData || []);
-
-      const { data: reservasData, error: reservasError } = await localApi.select<Reserva>('reservas', arena.id);
-      if (reservasError) throw reservasError;
-      setReservas(reservasData || []);
-
-      const { data: alunosData, error: alunosError } = await localApi.select<Aluno>('alunos', arena.id);
-      if (alunosError) throw alunosError;
-      setAlunos(alunosData || []);
+      const [quadrasRes, reservasRes, alunosRes, torneiosRes, eventosRes] = await Promise.all([
+        localApi.select<Quadra>('quadras', arena.id),
+        localApi.select<Reserva>('reservas', arena.id),
+        localApi.select<Aluno>('alunos', arena.id),
+        localApi.select<Torneio>('torneios', arena.id),
+        localApi.select<Evento>('eventos', arena.id),
+      ]);
+      
+      setQuadras(quadrasRes.data || []);
+      setReservas(reservasRes.data || []);
+      setAlunos(alunosRes.data || []);
+      setTorneios(torneiosRes.data || []);
+      setEventos(eventosRes.data || []);
     } catch (error: any) {
       addToast({ message: `Erro ao carregar dados do dashboard: ${error.message}`, type: 'error' });
     } finally {
@@ -59,6 +64,34 @@ const AnalyticsDashboard: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const upcomingEvents = useMemo(() => {
+    const now = startOfDay(new Date());
+
+    const futureTorneios = (torneios || [])
+      .filter(t => !isBefore(parseDateStringAsLocal(t.start_date), now))
+      .map(t => ({
+        id: t.id,
+        name: t.name,
+        date: t.start_date,
+        type: 'torneio' as const,
+        path: `/torneios/${t.id}`
+      }));
+    
+    const futureEventos = (eventos || [])
+      .filter(e => !isBefore(parseDateStringAsLocal(e.startDate), now))
+      .map(e => ({
+        id: e.id,
+        name: e.name,
+        date: e.startDate,
+        type: 'evento' as const,
+        path: `/eventos/${e.id}`
+      }));
+
+    return [...futureTorneios, ...futureEventos]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(0, 3);
+  }, [torneios, eventos]);
 
   const analyticsData = useMemo(() => {
     const today = new Date();
@@ -169,6 +202,28 @@ const AnalyticsDashboard: React.FC = () => {
     };
   }, [quadras, reservas, alunos]);
   
+  const topCourtsData = useMemo(() => {
+    const monthStart = startOfMonth(new Date());
+    const allExpandedReservationsInMonth = expandRecurringReservations(reservas, monthStart, endOfMonth(new Date()), quadras);
+
+    return quadras
+      .map(quadra => {
+        const quadraReservations = allExpandedReservationsInMonth.filter(
+          r => r.quadra_id === quadra.id && r.status !== 'cancelada'
+        );
+        
+        const occupancy = calculateMonthlyOccupancy(new Date(), quadraReservations, [quadra]);
+
+        return {
+          id: quadra.id,
+          name: quadra.name,
+          occupancy: occupancy,
+        };
+      })
+      .sort((a, b) => b.occupancy - a.occupancy)
+      .slice(0, 3);
+  }, [quadras, reservas]);
+
   const todaysReservations = useMemo(() => {
     const today = startOfDay(new Date());
     return expandRecurringReservations(reservas, today, today, quadras)
@@ -375,13 +430,39 @@ const AnalyticsDashboard: React.FC = () => {
           <RecentActivityFeed activities={recentActivities} />
         </div>
         <div className="space-y-8">
-          <InsightsWidget />
-          <TopCourtsWidget quadras={quadras} />
+          <InsightsWidget reservas={reservas} alunos={alunos} quadras={quadras} />
+          <UpcomingEventsWidget events={upcomingEvents} />
+          <TopCourtsWidget topCourts={topCourtsData} />
         </div>
       </div>
     </div>
   );
 };
+
+const UpcomingEventsWidget: React.FC<{ events: any[] }> = ({ events }) => (
+  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+    <h3 className="font-bold text-xl text-brand-gray-900 dark:text-white mb-4">Próximos Eventos</h3>
+    <div className="space-y-4">
+      {events.length > 0 ? events.map(event => (
+        <Link to={event.path} key={event.id} className="block p-3 rounded-lg hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 transition-colors">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-full ${event.type === 'torneio' ? 'bg-orange-100 dark:bg-orange-900/50' : 'bg-pink-100 dark:bg-pink-900/50'}`}>
+              {event.type === 'torneio' ? <Trophy className="h-5 w-5 text-orange-500" /> : <PartyPopper className="h-5 w-5 text-pink-500" />}
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-sm text-brand-gray-800 dark:text-brand-gray-200 truncate">{event.name}</p>
+              <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">
+                {format(parseDateStringAsLocal(event.date), "dd 'de' MMMM", { locale: ptBR })}
+              </p>
+            </div>
+          </div>
+        </Link>
+      )) : (
+        <p className="text-sm text-center text-brand-gray-500 py-4">Nenhum evento futuro agendado.</p>
+      )}
+    </div>
+  </motion.div>
+);
 
 const MiniStat: React.FC<{ icon: React.ElementType, label: string, value: string | number, color: 'blue' | 'green' | 'yellow' | 'red' | 'purple' }> = ({ icon: Icon, label, value, color }) => {
     const colors = {
@@ -541,30 +622,32 @@ const RecentActivityFeed: React.FC<{ activities: any[] }> = ({ activities }) => 
     );
 };
 
-const InsightsWidget: React.FC = () => {
-    return (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-gradient-to-br from-brand-blue-500 to-brand-blue-700 dark:from-brand-blue-600 dark:to-brand-blue-800 rounded-xl shadow-lg p-6 text-white">
-            <h3 className="font-bold text-xl mb-4 flex items-center"><Sparkles className="h-5 w-5 mr-2 text-yellow-300" /> Insights & Oportunidades</h3>
-            <p className="text-sm text-blue-100">Nenhum insight disponível no momento. Continue usando o sistema para gerar análises.</p>
-        </motion.div>
-    );
-};
+interface TopCourtData {
+  id: string;
+  name: string;
+  occupancy: number;
+}
 
-const TopCourtsWidget: React.FC<{ quadras: Quadra[] }> = ({ quadras }) => (
+const TopCourtsWidget: React.FC<{ topCourts: TopCourtData[] }> = ({ topCourts }) => (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
         <h3 className="font-bold text-xl text-brand-gray-900 dark:text-white mb-4">Top Quadras</h3>
-        <div className="space-y-3">
-            {quadras.slice(0, 3).map((q, i) => (
+        <div className="space-y-4">
+            {topCourts.length > 0 ? topCourts.map((q, i) => (
                 <div key={q.id} className="flex items-center gap-3">
-                    <span className="font-bold text-brand-gray-500">{i + 1}</span>
+                    <span className="font-bold text-brand-gray-500 w-4 text-center">{i + 1}</span>
                     <div className="flex-1">
-                        <p className="text-sm font-medium text-brand-gray-800 dark:text-brand-gray-200">{q.name}</p>
-                        <div className="w-full bg-brand-gray-200 dark:bg-brand-gray-700 rounded-full h-1.5 mt-1">
-                            <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${80 - i * 15}%` }}></div>
+                        <div className="flex justify-between items-baseline mb-1">
+                            <p className="text-sm font-medium text-brand-gray-800 dark:text-brand-gray-200">{q.name}</p>
+                            <p className="text-sm font-bold text-brand-gray-700 dark:text-brand-gray-300">{q.occupancy.toFixed(0)}%</p>
+                        </div>
+                        <div className="w-full bg-brand-gray-200 dark:bg-brand-gray-700 rounded-full h-1.5">
+                            <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${q.occupancy}%` }}></div>
                         </div>
                     </div>
                 </div>
-            ))}
+            )) : (
+                <p className="text-sm text-center text-brand-gray-500 py-4">Dados de ocupação insuficientes.</p>
+            )}
         </div>
     </motion.div>
 );
