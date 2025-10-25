@@ -7,7 +7,7 @@ import {
     CheckCircle, AlertCircle, CreditCard, ClipboardList, XCircle, Repeat, ShoppingBag, PieChart, Trophy, PartyPopper
 } from 'lucide-react';
 import StatCard from './StatCard';
-import { Quadra, Reserva, Aluno, Torneio, Evento } from '../../types';
+import { Quadra, Reserva, Aluno, Torneio, Evento, Notificacao, Professor, AtletaAluguel } from '../../types';
 import { expandRecurringReservations, getReservationTypeDetails } from '../../utils/reservationUtils';
 import { getAvailableSlotsForDay, calculateMonthlyOccupancy } from '../../utils/analytics';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
@@ -20,6 +20,7 @@ import Button from '../Forms/Button';
 import { formatCurrency } from '../../utils/formatters';
 import Timer from '../Shared/Timer';
 import InsightsWidget from './InsightsWidget';
+import NotificationComposerModal from '../Notificacoes/NotificationComposerModal';
 
 const AnalyticsDashboard: React.FC = () => {
   const { selectedArenaContext: arena, profile } = useAuth();
@@ -28,9 +29,12 @@ const AnalyticsDashboard: React.FC = () => {
   const [quadras, setQuadras] = useState<Quadra[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
+  const [professores, setProfessores] = useState<Professor[]>([]);
+  const [atletas, setAtletas] = useState<AtletaAluguel[]>([]);
   const [torneios, setTorneios] = useState<Torneio[]>([]);
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
   const canManageReservas = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.reservas === 'edit', [profile]);
   const canManageAlunos = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.gerenciamento_arena === 'edit', [profile]);
@@ -41,12 +45,14 @@ const AnalyticsDashboard: React.FC = () => {
         return;
     }
     try {
-      const [quadrasRes, reservasRes, alunosRes, torneiosRes, eventosRes] = await Promise.all([
+      const [quadrasRes, reservasRes, alunosRes, torneiosRes, eventosRes, profsRes, atletasRes] = await Promise.all([
         localApi.select<Quadra>('quadras', arena.id),
         localApi.select<Reserva>('reservas', arena.id),
         localApi.select<Aluno>('alunos', arena.id),
         localApi.select<Torneio>('torneios', arena.id),
         localApi.select<Evento>('eventos', arena.id),
+        localApi.select<Professor>('professores', arena.id),
+        localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
       ]);
       
       setQuadras(quadrasRes.data || []);
@@ -54,6 +60,8 @@ const AnalyticsDashboard: React.FC = () => {
       setAlunos(alunosRes.data || []);
       setTorneios(torneiosRes.data || []);
       setEventos(eventosRes.data || []);
+      setProfessores(profsRes.data || []);
+      setAtletas(atletasRes.data || []);
     } catch (error: any) {
       addToast({ message: `Erro ao carregar dados do dashboard: ${error.message}`, type: 'error' });
     } finally {
@@ -317,10 +325,53 @@ const AnalyticsDashboard: React.FC = () => {
         navigate('/alunos', { state: { openModal: true } });
         break;
       case 'Notificação':
-        addToast({ message: 'Funcionalidade de notificações em desenvolvimento.', type: 'info' });
+        if (profile?.role !== 'admin_arena') {
+            addToast({ message: 'Apenas administradores podem enviar notificações.', type: 'error' });
+            return;
+        }
+        setIsNotificationModalOpen(true);
         break;
       default:
         break;
+    }
+  };
+  
+  const handleSendNotification = async (target: 'all' | 'students' | 'clients' | 'individual', message: string, profileId?: string) => {
+    if (!arena) return;
+
+    let targetProfileIds: string[] = [];
+
+    if (target === 'individual' && profileId) {
+        targetProfileIds = [profileId];
+    } else if (target === 'all') {
+      targetProfileIds = alunos.map(a => a.profile_id).filter((id): id is string => !!id);
+    } else if (target === 'students') {
+      targetProfileIds = alunos.filter(a => a.plan_id).map(a => a.profile_id).filter((id): id is string => !!id);
+    } else if (target === 'clients') {
+      targetProfileIds = alunos.filter(a => !a.plan_id).map(a => a.profile_id).filter((id): id is string => !!id);
+    }
+
+    const uniqueProfileIds = [...new Set(targetProfileIds)];
+
+    if (uniqueProfileIds.length === 0) {
+      addToast({ message: 'Nenhum destinatário encontrado para este público.', type: 'info' });
+      return;
+    }
+
+    const newNotifications: Omit<Notificacao, 'id' | 'created_at'>[] = uniqueProfileIds.map(pId => ({
+      arena_id: arena.id,
+      profile_id: pId,
+      message,
+      type: 'announcement',
+      read: false,
+    }));
+
+    try {
+      await localApi.upsert('notificacoes', newNotifications, arena.id);
+      addToast({ message: `Notificação enviada para ${uniqueProfileIds.length} usuário(s)!`, type: 'success' });
+      setIsNotificationModalOpen(false);
+    } catch (error: any) {
+      addToast({ message: `Erro ao enviar notificação: ${error.message}`, type: 'error' });
     }
   };
 
@@ -435,6 +486,14 @@ const AnalyticsDashboard: React.FC = () => {
           <TopCourtsWidget topCourts={topCourtsData} />
         </div>
       </div>
+      <NotificationComposerModal
+        isOpen={isNotificationModalOpen}
+        onClose={() => setIsNotificationModalOpen(false)}
+        onSubmit={handleSendNotification}
+        alunos={alunos}
+        professores={professores}
+        atletas={atletas}
+      />
     </div>
   );
 };
@@ -652,4 +711,24 @@ const TopCourtsWidget: React.FC<{ topCourts: TopCourtData[] }> = ({ topCourts })
     </motion.div>
 );
 
-export default AnalyticsDashboard;
+const Dashboard: React.FC = () => {
+    const { profile } = useAuth();
+
+    if (!profile) {
+        return <Layout><div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-brand-blue-500"/></div></Layout>;
+    }
+
+    if (profile.role === 'cliente') {
+        return <ClientDashboard />;
+    }
+
+    return (
+        <Layout>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <AnalyticsDashboard />
+            </div>
+        </Layout>
+    );
+};
+
+export default Dashboard;

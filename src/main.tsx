@@ -24,6 +24,7 @@ import TorneioPublico from './pages/TorneioPublico.tsx';
 import Financeiro from './pages/Financeiro.tsx';
 import ProfessorProfilePage from './pages/ProfessorProfilePage.tsx';
 import SuperAdminPage from './pages/SuperAdmin.tsx';
+import Notificacoes from './pages/Notificacoes.tsx';
 
 // Context Providers
 import { AuthProvider } from './context/AuthContext';
@@ -95,6 +96,10 @@ const router = createBrowserRouter([
        {
         path: 'financeiro',
         element: <ProtectedRoute><Financeiro /></ProtectedRoute>,
+      },
+      {
+        path: 'notificacoes',
+        element: <ProtectedRoute><Notificacoes /></ProtectedRoute>,
       },
       {
         path: 'perfil',

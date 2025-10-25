@@ -33,6 +33,7 @@ import Timer from '../components/Shared/Timer';
 import PaymentModal from '../components/Shared/PaymentModal';
 import ProfileDetailModal from '../components/Client/ProfileDetailModal';
 import AttendanceReportModal from '../components/Client/Student/AttendanceReportModal';
+import Header from '../components/Layout/Header';
 
 type View = 'inicio' | 'aulas' | 'reservas' | 'amigos' | 'perfil';
 
@@ -633,8 +634,11 @@ const ClientDashboard: React.FC = () => {
     <div className="flex flex-col md:flex-row h-screen bg-brand-gray-50 dark:bg-brand-gray-950">
       <SideNavBar items={navItems} activeView={activeView} setActiveView={setActiveView} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-24 md:pb-8">
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 flex flex-col md:flex-row justify-between md:items-center gap-4">
+        <div className="md:hidden">
+          <Header />
+        </div>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-24 pt-16 md:pt-8">
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 md:flex flex-col md:flex-row justify-between md:items-center gap-4 hidden">
             <div><h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Meu Painel</h1><p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Gerencie suas reservas, aulas e perfil.</p></div>
             <ArenaSelector arenas={myArenas} selectedArena={selectedArenaContext} onSelect={switchArenaContext} />
           </motion.div>

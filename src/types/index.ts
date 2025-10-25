@@ -319,6 +319,7 @@ export interface Reserva {
     payment_status: 'pendente' | 'pago';
   }[] | null;
   invites_closed?: boolean;
+  attendance?: Record<string, 'presente' | 'falta' | 'pendente'>;
 }
 
 // Alias para compatibilidade

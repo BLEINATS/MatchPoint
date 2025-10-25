@@ -171,7 +171,7 @@ const Quadras: React.FC = () => {
 
   return (
     <Layout>
-      <main className="flex-1 p-4 sm:p-6 bg-brand-gray-50 dark:bg-brand-gray-950">
+      <div className="p-4 sm:p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-brand-gray-800 dark:text-white">Gerenciamento de Quadras</h1>
           {activeTab === 'quadras' && canEdit && (
@@ -273,7 +273,7 @@ const Quadras: React.FC = () => {
             )}
           </motion.div>
         </AnimatePresence>
-      </main>
+      </div>
 
       <AnimatePresence>
         {isModalOpen && (

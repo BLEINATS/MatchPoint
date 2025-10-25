@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   LogOut, Sun, Moon, Settings, Bookmark, LayoutGrid, 
   User as UserIcon, LayoutDashboard, GraduationCap, Trophy, 
-  PartyPopper, Calendar, ChevronDown, Loader2, Bell, Gift, DollarSign, Clock, Users, BarChart2
+  PartyPopper, Calendar, ChevronDown, Loader2, Bell, Gift, DollarSign, Clock, Users, BarChart2, Send
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -129,7 +129,7 @@ const Header: React.FC = () => {
   );
 
   return (
-    <header className="bg-white dark:bg-brand-gray-800 shadow-sm border-b border-brand-gray-200 dark:border-brand-gray-700 sticky top-0 z-40">
+    <header className="bg-white dark:bg-brand-gray-800 shadow-sm border-b border-brand-gray-200 dark:border-brand-gray-700 fixed top-0 left-0 right-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
@@ -169,7 +169,7 @@ const Header: React.FC = () => {
             ) : user && profile ? (
               <>
                 {isAdminView && (
-                  <>
+                  <div className="hidden md:flex items-center gap-1">
                     <NavIconButton to="/quadras" title="Minhas Quadras"><LayoutGrid className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/reservas" title="Reservas"><Bookmark className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/alunos" title="Gerenciamento"><GraduationCap className="h-5 w-5" /></NavIconButton>
@@ -177,10 +177,11 @@ const Header: React.FC = () => {
                     <NavIconButton to="/eventos" title="Eventos"><PartyPopper className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/financeiro" title="Financeiro"><DollarSign className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/gamification" title="Gamificação"><Gift className="h-5 w-5" /></NavIconButton>
-                  </>
+                    <NavIconButton to="/notificacoes" title="Notificações"><Send className="h-5 w-5" /></NavIconButton>
+                  </div>
                 )}
                 {isStaffView && (
-                  <>
+                  <div className="hidden md:flex items-center gap-1">
                     {profile.permissions?.reservas !== 'none' && <NavIconButton to="/reservas" title="Reservas"><Bookmark className="h-5 w-5" /></NavIconButton>}
                     {profile.permissions?.quadras !== 'none' && <NavIconButton to="/quadras" title="Quadras"><LayoutGrid className="h-5 w-5" /></NavIconButton>}
                     {profile.permissions?.gerenciamento_arena !== 'none' && <NavIconButton to="/alunos" title="Gerenciamento"><GraduationCap className="h-5 w-5" /></NavIconButton>}
@@ -188,7 +189,7 @@ const Header: React.FC = () => {
                     {profile.permissions?.eventos !== 'none' && <NavIconButton to="/eventos" title="Eventos"><PartyPopper className="h-5 w-5" /></NavIconButton>}
                     {profile.permissions?.financeiro !== 'none' && <NavIconButton to="/financeiro" title="Financeiro"><DollarSign className="h-5 w-5" /></NavIconButton>}
                     {profile.permissions?.gamification !== 'none' && <NavIconButton to="/gamification" title="Gamificação"><Gift className="h-5 w-5" /></NavIconButton>}
-                  </>
+                  </div>
                 )}
                 
                 <div className="relative" ref={notificationsRef}>

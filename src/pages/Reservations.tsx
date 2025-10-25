@@ -23,6 +23,7 @@ import { parseDateStringAsLocal } from '../utils/dateUtils';
 import { awardPointsForCompletedReservation, processCancellation } from '../utils/gamificationUtils';
 import { formatCurrency } from '../utils/formatters';
 import DayDetailView from '../components/Reservations/DayDetailView';
+import MensalistaDetailModal from '../components/Reservations/MensalistaDetailModal';
 
 type ViewMode = 'agenda' | 'calendar' | 'list';
 
@@ -56,6 +57,8 @@ const Reservations: React.FC = () => {
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [isManualCancelModalOpen, setIsManualCancelModalOpen] = useState(false);
   const [reservationToCancel, setReservationToCancel] = useState<Reserva | null>(null);
+  const [isMensalistaModalOpen, setIsMensalistaModalOpen] = useState(false);
+  const [selectedMensalistaReserva, setSelectedMensalistaReserva] = useState<Reserva | null>(null);
   
   const canView = useMemo(() => 
     profile?.role === 'admin_arena' || 
@@ -118,7 +121,13 @@ const Reservations: React.FC = () => {
     setIsModalOpen(false);
     setSelectedReservation(null);
     setNewReservationSlot(null);
-    loadData(); // Direct call to ensure data is fresh
+    loadData();
+  }, [loadData]);
+  
+  const closeMensalistaModal = useCallback(() => {
+    setIsMensalistaModalOpen(false);
+    setSelectedMensalistaReserva(null);
+    loadData();
   }, [loadData]);
 
   useEffect(() => {
@@ -250,6 +259,19 @@ const Reservations: React.FC = () => {
     } catch (error: any) { addToast({ message: `Erro ao salvar reserva: ${error.message}`, type: 'error' }); }
   };
 
+  const handleUpdateMasterReserva = async (updatedReserva: Reserva) => {
+    if (!selectedArenaContext) return;
+    try {
+      await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
+      addToast({ message: 'Dados do mensalista atualizados!', type: 'success' });
+      loadData();
+    } catch (error: any) {
+      addToast({ message: `Erro ao salvar: ${error.message}`, type: 'error' });
+    } finally {
+      closeMensalistaModal();
+    }
+  };
+
   const handleCancelReservation = (reserva: Reserva) => {
     const masterId = reserva.masterId || reserva.id;
     const masterReserva = reservas.find(r => r.id === masterId);
@@ -321,10 +343,17 @@ const Reservations: React.FC = () => {
   };
   
   const openEditReservationModal = (reserva: Reserva) => {
-    const master = reserva.masterId ? reservas.find(r => r.id === reserva.masterId) : reserva;
-    setSelectedReservation(master || null);
-    setNewReservationSlot(null);
-    setIsModalOpen(true);
+    const isRecurring = reserva.isRecurring || reserva.recurringType !== 'none';
+    const masterReserva = reserva.masterId ? reservas.find(r => r.id === reserva.masterId) : reserva;
+    
+    if (isRecurring && masterReserva) {
+      setSelectedMensalistaReserva(masterReserva);
+      setIsMensalistaModalOpen(true);
+    } else {
+      setSelectedReservation(masterReserva || null);
+      setNewReservationSlot(null);
+      setIsModalOpen(true);
+    }
   };
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => { const newDate = parseDateStringAsLocal(e.target.value); if (!isNaN(newDate.getTime())) setSelectedDate(newDate); };
@@ -382,6 +411,7 @@ const Reservations: React.FC = () => {
       <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={selectedArenaContext?.id || ''} selectedDate={selectedDate} profissionais={atletas} isReadOnly={!canEdit} />}</AnimatePresence>
       <AnimatePresence>{isCancellationModalOpen && (<CancellationModal isOpen={isCancellationModalOpen} onClose={() => { setIsCancellationModalOpen(false); setReservationToCancel(null); }} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} />)}</AnimatePresence>
       <AnimatePresence>{isManualCancelModalOpen && (<ManualCancellationModal isOpen={isManualCancelModalOpen} onClose={() => { setIsManualCancelModalOpen(false); setReservationToCancel(null); }} onConfirm={handleConfirmManualCancel} reservaName={reservationToCancel?.clientName || 'Reserva'} />)}</AnimatePresence>
+      <AnimatePresence>{isMensalistaModalOpen && selectedMensalistaReserva && <MensalistaDetailModal isOpen={isMensalistaModalOpen} onClose={closeMensalistaModal} reserva={selectedMensalistaReserva} aluno={alunos.find(a => a.id === selectedMensalistaReserva.aluno_id)} onSave={handleUpdateMasterReserva} />}</AnimatePresence>
     </Layout>
   );
 };
