@@ -3,11 +3,11 @@ import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
     DollarSign, Users, Plus, Lock, Send, Calendar, Clock, 
-    User, Sparkles, Star, TrendingUp, TrendingDown, Phone, MessageCircle, Bookmark, Loader2, GraduationCap,
+    User, Sparkles, Star, TrendingUp, TrendingDown, Phone, MessageSquare, MessageCircle, Bookmark, Loader2, GraduationCap,
     CheckCircle, AlertCircle, CreditCard, ClipboardList, XCircle, Repeat, ShoppingBag, PieChart, Trophy, PartyPopper
 } from 'lucide-react';
 import StatCard from './StatCard';
-import { Quadra, Reserva, Aluno, Torneio, Evento, Notificacao, Professor, AtletaAluguel } from '../../types';
+import { Quadra, Reserva, Aluno, Torneio, Evento, Professor, AtletaAluguel, Notificacao } from '../../types';
 import { expandRecurringReservations, getReservationTypeDetails } from '../../utils/reservationUtils';
 import { getAvailableSlotsForDay, calculateMonthlyOccupancy } from '../../utils/analytics';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
@@ -711,24 +711,4 @@ const TopCourtsWidget: React.FC<{ topCourts: TopCourtData[] }> = ({ topCourts })
     </motion.div>
 );
 
-const Dashboard: React.FC = () => {
-    const { profile } = useAuth();
-
-    if (!profile) {
-        return <Layout><div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-brand-blue-500"/></div></Layout>;
-    }
-
-    if (profile.role === 'cliente') {
-        return <ClientDashboard />;
-    }
-
-    return (
-        <Layout>
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <AnalyticsDashboard />
-            </div>
-        </Layout>
-    );
-};
-
-export default Dashboard;
+export default AnalyticsDashboard;
