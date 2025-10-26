@@ -43,7 +43,7 @@ const TurmaCard: React.FC<TurmaCardProps> = ({ turma, professor, quadra, onEdit,
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col justify-between"
+      className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col justify-between border-l-4 border-pink-500"
     >
       <div>
         <div className="flex justify-between items-start mb-4">

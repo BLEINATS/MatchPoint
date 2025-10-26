@@ -1,5 +1,5 @@
 import { Reserva, Torneio, Evento, Quadra, Turma } from '../types';
-import { eachDayOfInterval, format, parse, addMinutes, getDay, isWithinInterval, startOfDay, endOfDay, addYears, differenceInMinutes } from 'date-fns';
+import { eachDayOfInterval, format, parse, addMinutes, getDay, isWithinInterval, startOfDay, endOfDay, addYears, differenceInMinutes, isBefore } from 'date-fns';
 import { parseDateStringAsLocal } from './dateUtils';
 
 /**
@@ -101,28 +101,56 @@ export const syncTurmaReservations = (
   turma: Turma,
   allReservas: Reserva[]
 ): Reserva[] => {
+  // 1. Filtra as reservas que NÃO pertencem a esta turma
   const otherReservas = allReservas.filter(r => r.turma_id !== turma.id);
-  const newReservationsForTurma: Reserva[] = [];
-
+  
+  // Se a turma não tem horário, não há nada a gerar.
   if (!turma.schedule || turma.schedule.length === 0) {
     return otherReservas;
   }
 
+  const newReservationsForTurma: Reserva[] = [];
+
+  // 2. Define o intervalo de datas para criar as novas reservas
   const loopStartDate = parseDateStringAsLocal(turma.start_date);
-  const loopEndDate = turma.end_date ? parseDateStringAsLocal(turma.end_date) : addYears(loopStartDate, 1);
   
+  // LÓGICA CORRIGIDA PARA DATA FINAL:
+  // Se `end_date` for fornecido e válido, usa-o.
+  // Caso contrário, limita a 1 ano para evitar loops infinitos.
+  let loopEndDate: Date;
+  if (turma.end_date && turma.end_date.trim() !== '') {
+    loopEndDate = parseDateStringAsLocal(turma.end_date);
+  } else {
+    loopEndDate = addYears(loopStartDate, 1);
+  }
+
+  // Checagem de segurança para garantir que o intervalo de datas é válido.
+  if (isNaN(loopEndDate.getTime()) || isBefore(loopEndDate, loopStartDate)) {
+      console.warn(`Intervalo de datas inválido para a Turma ${turma.id}.`);
+      return otherReservas;
+  }
+
+  // 3. Obtém todos os dias dentro do intervalo
   const classDays = eachDayOfInterval({ start: loopStartDate, end: loopEndDate });
 
+  // 4. Itera sobre cada dia e cria as reservas se corresponderem ao cronograma
   for (const day of classDays) {
     const scheduleForDay = turma.schedule.find(s => s.day === getDay(day));
     
     if (scheduleForDay) {
       try {
         const blockStartTime = parse(scheduleForDay.start_time, 'HH:mm', new Date());
-        const blockEndTime = parse(scheduleForDay.end_time, 'HH:mm', new Date());
+        let blockEndTime = parse(scheduleForDay.end_time, 'HH:mm', new Date());
+
+        // Lida com horários que atravessam a meia-noite (ex: 22:00 - 01:00)
+        if (blockEndTime <= blockStartTime) {
+          blockEndTime = addDays(blockEndTime, 1);
+        }
+
         const blockDuration = differenceInMinutes(blockEndTime, blockStartTime);
         
         if (blockDuration > 0) {
+          // Assume que cada aula dura 60 minutos
           const numberOfSlots = Math.floor(blockDuration / 60);
 
           for (let i = 0; i < numberOfSlots; i++) {
@@ -147,10 +175,11 @@ export const syncTurmaReservations = (
           }
         }
       } catch (e) {
-        console.error("Error processing schedule for turma:", turma.name, e);
+        console.error("Erro ao processar o horário da turma:", turma.name, e);
       }
     }
   }
 
+  // 5. Retorna as outras reservas junto com as recém-geradas para esta turma
   return [...otherReservas, ...newReservationsForTurma];
 };

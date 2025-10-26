@@ -3,14 +3,26 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { localApi } from '../../lib/localApi';
 import { PlanoAula } from '../../types';
-import { Loader2, Plus, Edit, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Edit, Trash2, Tag, Calendar, DollarSign, Hash } from 'lucide-react';
 import Button from '../../components/Forms/Button';
 import ConfirmationModal from '../../components/Shared/ConfirmationModal';
 import PlanoAulaModal from '../../components/Settings/PlanoAulaModal';
 import { formatCurrency } from '../../utils/formatters';
 
+const seedDefaultPlanosAulas = async (arenaId: string) => {
+  const defaultPlanos: Omit<PlanoAula, 'id' | 'arena_id' | 'created_at'>[] = [
+    { name: 'Aula Avulsa', duration_type: 'avulso', price: 80, description: 'Uma única aula para experimentar ou para alunos esporádicos.', is_active: true, num_aulas: 1 },
+    { name: 'Plano Mensal - 1x/semana', duration_type: 'mensal', price: 280, description: 'Pacote com 4 aulas no mês, uma por semana.', is_active: true, num_aulas: 4 },
+    { name: 'Plano Mensal - 2x/semana', duration_type: 'mensal', price: 480, description: 'Pacote com 8 aulas no mês, duas por semana.', is_active: true, num_aulas: 8 },
+    { name: 'Plano Trimestral - 2x/semana', duration_type: 'trimestral', price: 1350, description: 'Pacote de 3 meses com 8 aulas por mês. Desconto aplicado.', is_active: true, num_aulas: 24 },
+    { name: 'Plano Semestral - 2x/semana', duration_type: 'semestral', price: 2500, description: 'Pacote de 6 meses com 8 aulas por mês. Desconto maior.', is_active: true, num_aulas: 48 },
+    { name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, description: 'Acesso livre a todas as turmas compatíveis durante o ano.', is_active: false, num_aulas: null },
+  ];
+  await localApi.upsert('planos_aulas', defaultPlanos, arenaId, true);
+};
+
 const PlanosAulasTab: React.FC = () => {
-  const { arena } = useAuth();
+  const { selectedArenaContext: arena } = useAuth();
   const { addToast } = useToast();
   const [planos, setPlanos] = useState<PlanoAula[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,6 +35,12 @@ const PlanosAulasTab: React.FC = () => {
     if (!arena) return;
     setIsLoading(true);
     try {
+      const seedKey = `planos_aulas_seeded_v3_${arena.id}`;
+      if (!localStorage.getItem(seedKey)) {
+        await seedDefaultPlanosAulas(arena.id);
+        localStorage.setItem(seedKey, 'true');
+      }
+
       const { data, error } = await localApi.select<PlanoAula>('planos_aulas', arena.id);
       if (error) throw error;
       setPlanos(data || []);
@@ -89,64 +107,39 @@ const PlanosAulasTab: React.FC = () => {
       </div>
       
       {planos.length > 0 ? (
-        <>
-          {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="min-w-full divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
-              <thead className="bg-brand-gray-50 dark:bg-brand-gray-700/50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Nome do Plano</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Duração</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Preço</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Status</th>
-                  <th className="relative px-6 py-3"><span className="sr-only">Ações</span></th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-brand-gray-800 divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
-                {planos.map(plano => (
-                  <tr key={plano.id}>
-                    <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-brand-gray-900 dark:text-white">{plano.name}</div><p className="text-xs text-brand-gray-500 truncate max-w-xs">{plano.description}</p></td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500 dark:text-brand-gray-400 capitalize">{plano.duration_type}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600 dark:text-green-400">{formatCurrency(plano.price)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${plano.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
-                        {plano.is_active ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Button variant="ghost" size="sm" onClick={() => openModal(plano)}><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteRequest(plano)} className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {/* Mobile Card View */}
-          <div className="md:hidden space-y-4">
-            {planos.map(plano => (
-              <div key={plano.id} className="bg-white dark:bg-brand-gray-800 p-4 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {planos.map(plano => (
+            <div key={plano.id} className="bg-white dark:bg-brand-gray-800 p-5 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 flex flex-col">
+              <div className="flex-1">
                 <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-bold text-brand-gray-900 dark:text-white">{plano.name}</h4>
-                    <span className={`px-2 mt-1 inline-flex text-xs leading-5 font-semibold rounded-full ${plano.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
-                      {plano.is_active ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </div>
-                  <div className="flex items-center">
-                    <Button variant="ghost" size="sm" onClick={() => openModal(plano)}><Edit className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteRequest(plano)} className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
-                  </div>
+                  <h4 className="font-bold text-brand-gray-900 dark:text-white">{plano.name}</h4>
+                  <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${plano.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
+                    {plano.is_active ? 'Ativo' : 'Inativo'}
+                  </span>
                 </div>
-                <p className="text-sm text-brand-gray-500 mt-2">{plano.description}</p>
-                <div className="mt-4 pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 flex justify-between items-center">
-                  <span className="text-sm text-brand-gray-500 dark:text-brand-gray-400 capitalize">{plano.duration_type}</span>
-                  <span className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(plano.price)}</span>
+                <p className="text-sm text-brand-gray-500 mt-2 min-h-[40px]">{plano.description}</p>
+              </div>
+              <div className="mt-4 pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-brand-gray-500 dark:text-brand-gray-400 flex items-center"><Calendar className="h-4 w-4 mr-1.5"/>Duração</span>
+                  <span className="font-medium capitalize">{plano.duration_type}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-brand-gray-500 dark:text-brand-gray-400 flex items-center"><Hash className="h-4 w-4 mr-1.5"/>Aulas/Créditos</span>
+                  <span className="font-medium">{plano.num_aulas === null ? 'Ilimitado' : plano.num_aulas}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-brand-gray-500 dark:text-brand-gray-400 flex items-center"><DollarSign className="h-4 w-4 mr-1.5"/>Preço</span>
+                  <span className="font-bold text-lg text-green-600 dark:text-green-400">{formatCurrency(plano.price)}</span>
                 </div>
               </div>
-            ))}
-          </div>
-        </>
+              <div className="mt-4 flex gap-2">
+                <Button variant="outline" size="sm" className="w-full" onClick={() => openModal(plano)}><Edit className="h-4 w-4 mr-2"/>Editar</Button>
+                <Button variant="ghost" size="sm" onClick={() => handleDeleteRequest(plano)} className="w-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/50"><Trash2 className="h-4 w-4 mr-2"/>Excluir</Button>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="text-center py-12 border-2 border-dashed border-brand-gray-300 dark:border-brand-gray-700 rounded-lg">
           <h3 className="mt-2 text-sm font-medium text-brand-gray-900 dark:text-white">Nenhum plano de aula cadastrado</h3>

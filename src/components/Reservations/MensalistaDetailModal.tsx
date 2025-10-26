@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Aluno, Reserva } from '../../types';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isPast, isToday, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isPast, isToday, addMonths, subMonths, isBefore, isAfter, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { X, Calendar, DollarSign, Check, XCircle, UserCheck, UserX, ChevronLeft, ChevronRight, Save } from 'lucide-react';
+import { X, Calendar, DollarSign, UserCheck, UserX, ChevronLeft, ChevronRight, Save, Hash, BookOpen, Edit, Trash2, XCircle, AlertTriangle, CheckCircle } from 'lucide-react';
 import Button from '../Forms/Button';
 import { formatCurrency } from '../../utils/formatters';
+import { parseDateStringAsLocal } from '../../utils/dateUtils';
 
 interface MensalistaDetailModalProps {
   isOpen: boolean;
@@ -13,49 +14,113 @@ interface MensalistaDetailModalProps {
   reserva: Reserva;
   aluno: Aluno | undefined;
   onSave: (reserva: Reserva) => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
-const MensalistaDetailModal: React.FC<MensalistaDetailModalProps> = ({ isOpen, onClose, reserva, aluno, onSave }) => {
+const MensalistaDetailModal: React.FC<MensalistaDetailModalProps> = ({ isOpen, onClose, reserva, aluno, onSave, onEdit, onDelete }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [localAttendance, setLocalAttendance] = useState(reserva.attendance || {});
+  const [localMonthlyPayments, setLocalMonthlyPayments] = useState(reserva.monthly_payments || {});
 
   useEffect(() => {
-    setLocalAttendance(reserva.attendance || {});
-  }, [reserva.attendance]);
+    if (isOpen) {
+      setCurrentMonth(new Date());
+      setLocalAttendance(reserva.attendance || {});
+      setLocalMonthlyPayments(reserva.monthly_payments || {});
+    }
+  }, [isOpen, reserva.attendance, reserva.monthly_payments]);
 
+  const recurringDayOfWeek = useMemo(() => {
+    if (!reserva.date) return '';
+    const masterDate = parseDateStringAsLocal(reserva.date);
+    return format(masterDate, 'EEEE', { locale: ptBR });
+  }, [reserva.date]);
+  
   const monthlyOccurrences = useMemo(() => {
+    if (!reserva.date) return [];
     const monthStart = startOfMonth(currentMonth);
     const monthEnd = endOfMonth(currentMonth);
     const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
-    const masterDate = new Date(reserva.date);
+    
+    const masterDate = startOfDay(parseDateStringAsLocal(reserva.date));
     const recurringDay = getDay(masterDate);
 
+    const recurrenceEndDate = reserva.recurringEndDate ? startOfDay(parseDateStringAsLocal(reserva.recurringEndDate)) : null;
+
     return daysInMonth
-      .filter(day => getDay(day) === recurringDay)
+      .filter(day => {
+        const currentDay = startOfDay(day);
+        const isCorrectDayOfWeek = getDay(currentDay) === recurringDay;
+        const isAfterStartDate = !isBefore(currentDay, masterDate);
+        const isBeforeEndDate = recurrenceEndDate ? !isAfter(currentDay, recurrenceEndDate) : true;
+        
+        return isCorrectDayOfWeek && isAfterStartDate && isBeforeEndDate;
+      })
       .map(day => {
         const dateString = format(day, 'yyyy-MM-dd');
+        const status = localAttendance[dateString] || (isPast(day) && !isToday(day) ? 'pendente' : 'futura');
         return {
           date: day,
-          status: localAttendance[dateString] || (isPast(day) ? 'pendente' : 'futura'),
+          status: status,
+          isPayable: status !== 'cancelada',
         };
       });
-  }, [currentMonth, reserva.date, localAttendance]);
+  }, [currentMonth, reserva.date, reserva.recurringEndDate, localAttendance]);
 
   const stats = useMemo(() => {
-    const presencas = Object.values(localAttendance).filter(s => s === 'presente').length;
-    const faltas = Object.values(localAttendance).filter(s => s === 'falta').length;
+    const presencas = monthlyOccurrences.filter(occ => occ.status === 'presente').length;
+    const faltas = monthlyOccurrences.filter(occ => occ.status === 'falta').length;
     const aulasDadas = presencas + faltas;
-    const totalAulasMes = monthlyOccurrences.length;
-    return { presencas, faltas, aulasDadas, totalAulasMes };
-  }, [localAttendance, monthlyOccurrences]);
+    const totalAulasMes = monthlyOccurrences.filter(occ => occ.isPayable).length;
+    const aulasRestantesMes = totalAulasMes - aulasDadas;
+
+    return { presencas, faltas, aulasDadas, totalAulasMes, aulasRestantesMes };
+  }, [monthlyOccurrences]);
+
+  const valorMensal = useMemo(() => {
+    const pricePerSession = reserva.total_price || 0;
+    return pricePerSession * stats.totalAulasMes;
+  }, [reserva.total_price, stats.totalAulasMes]);
+
+  const monthKey = format(currentMonth, 'yyyy-MM');
+  const paymentStatusForMonth = localMonthlyPayments[monthKey]?.status || 'pendente';
 
   const handleAttendanceChange = (date: Date, status: 'presente' | 'falta') => {
     const dateString = format(date, 'yyyy-MM-dd');
-    setLocalAttendance(prev => ({ ...prev, [dateString]: status }));
+    setLocalAttendance(prev => {
+      const currentStatus = prev[dateString];
+      if (currentStatus === status) {
+        const newAttendance = { ...prev };
+        delete newAttendance[dateString];
+        return newAttendance;
+      }
+      return { ...prev, [dateString]: status };
+    });
+  };
+
+  const handleCancelOccurrence = (date: Date) => {
+    const dateString = format(date, 'yyyy-MM-dd');
+    setLocalAttendance(prev => ({ ...prev, [dateString]: 'cancelada' }));
+  };
+  
+  const handleMarkAsPaid = () => {
+    setLocalMonthlyPayments(prev => ({
+        ...prev,
+        [monthKey]: {
+            status: 'pago',
+            method: 'local',
+            paid_at: new Date().toISOString(),
+        }
+    }));
   };
 
   const handleSaveChanges = () => {
-    const updatedReserva = { ...reserva, attendance: localAttendance };
+    const updatedReserva = { 
+        ...reserva, 
+        attendance: localAttendance,
+        monthly_payments: localMonthlyPayments,
+    };
     onSave(updatedReserva);
   };
 
@@ -64,32 +129,37 @@ const MensalistaDetailModal: React.FC<MensalistaDetailModalProps> = ({ isOpen, o
     const monthEnd = endOfMonth(monthStart);
     const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
     const prefixDaysCount = getDay(monthStart);
+    const masterDate = parseDateStringAsLocal(reserva.date);
+    const recurringDay = getDay(masterDate);
+    const recurrenceEndDate = reserva.recurringEndDate ? parseDateStringAsLocal(reserva.recurringEndDate) : null;
 
     return (
-      <div>
-        <div className="flex justify-between items-center mb-2">
+      <div className="p-4">
+        <div className="flex justify-between items-center mb-4">
           <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}><ChevronLeft/></Button>
-          <h4 className="font-semibold capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</h4>
+          <h4 className="font-semibold capitalize text-center">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</h4>
           <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}><ChevronRight/></Button>
         </div>
-        <div className="grid grid-cols-7 gap-1 text-center text-xs text-brand-gray-500">
-          {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={i} className="py-1">{d}</div>)}
+        <div className="grid grid-cols-7 gap-1 text-center text-xs text-brand-gray-500 mb-2">
+          {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={i} className="w-8 h-8 flex items-center justify-center">{d}</div>)}
         </div>
         <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: prefixDaysCount }).map((_, i) => <div key={`empty-${i}`} />)}
+          {Array.from({ length: prefixDaysCount }).map((_, i) => <div key={`empty-${i}`} className="w-8 h-8" />)}
           {daysInMonth.map(day => {
-            const occurrence = monthlyOccurrences.find(o => isSameDay(o.date, day));
-            const isSelected = !!occurrence;
-            const isPastDay = isPast(day) && !isToday(day);
+            const isRecurringDay = getDay(day) === recurringDay && !isBefore(day, masterDate) && (recurrenceEndDate ? !isAfter(day, recurrenceEndDate) : true);
             let bgColor = 'bg-transparent';
-            if (isSelected) {
-              if (occurrence.status === 'presente') bgColor = 'bg-green-500 text-white';
-              else if (occurrence.status === 'falta') bgColor = 'bg-red-500 text-white';
-              else if (isPastDay) bgColor = 'bg-yellow-400 text-yellow-900';
-              else bgColor = 'bg-blue-500 text-white';
+            if (isRecurringDay) {
+              const occurrence = monthlyOccurrences.find(o => isSameDay(o.date, day));
+              if (occurrence) {
+                if (occurrence.status === 'presente') bgColor = 'bg-green-500 text-white';
+                else if (occurrence.status === 'falta') bgColor = 'bg-red-500 text-white';
+                else if (occurrence.status === 'cancelada') bgColor = 'bg-gray-500 text-white line-through';
+                else if (isPast(day) && !isToday(day)) bgColor = 'bg-yellow-400 text-yellow-900';
+                else bgColor = 'bg-blue-500 text-white';
+              }
             }
             return (
-              <div key={day.toString()} className={`aspect-square flex items-center justify-center text-sm rounded-full ${bgColor}`}>
+              <div key={day.toString()} className={`w-8 h-8 flex items-center justify-center text-sm rounded-full transition-colors ${bgColor}`}>
                 {format(day, 'd')}
               </div>
             );
@@ -102,56 +172,97 @@ const MensalistaDetailModal: React.FC<MensalistaDetailModalProps> = ({ isOpen, o
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-[60]" onClick={onClose}>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[60]" onClick={onClose}>
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white dark:bg-brand-gray-900 rounded-lg w-full max-w-2xl shadow-xl flex flex-col max-h-[90vh]"
+            className="bg-brand-gray-800 text-white rounded-lg w-full max-w-4xl shadow-xl flex flex-col max-h-[90vh]"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex justify-between items-center p-6 border-b border-brand-gray-200 dark:border-brand-gray-700">
+            <div className="flex justify-between items-center p-6 border-b border-brand-gray-700">
               <div>
                 <h3 className="text-xl font-bold">Detalhes do Mensalista</h3>
-                <p className="text-sm text-brand-gray-500">{aluno?.name || reserva.clientName}</p>
+                <p className="text-sm text-brand-gray-400 capitalize">
+                  {aluno?.name || reserva.clientName} - Toda {recurringDayOfWeek} às {reserva.start_time.slice(0,5)}
+                </p>
               </div>
               <Button variant="ghost" size="sm" onClick={onClose}><X className="h-5 w-5" /></Button>
             </div>
             <div className="p-6 space-y-6 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                <StatCard label="Valor Mensal" value={formatCurrency(aluno?.monthly_fee)} icon={DollarSign} />
-                <StatCard label="Aulas no Mês" value={`${stats.aulasDadas}/${stats.totalAulasMes}`} icon={Calendar} />
-                <StatCard label="Aulas Restantes" value={aluno?.aulas_restantes ?? '∞'} icon={Calendar} />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <StatCard label="Valor Mensal" value={formatCurrency(valorMensal)} icon={DollarSign} />
+                <StatCard label="Aulas no Mês" value={`${stats.aulasDadas}/${stats.totalAulasMes}`} icon={BookOpen} />
+                <StatCard label="Aulas Restantes no Mês" value={stats.aulasRestantesMes} icon={Hash} />
+              </div>
+
+              <div className="mt-4 p-4 bg-brand-gray-900 rounded-lg flex justify-between items-center">
+                <div>
+                    <p className="text-sm text-brand-gray-400">Pagamento ({format(currentMonth, 'MMMM', { locale: ptBR })})</p>
+                    <p className={`text-lg font-bold ${paymentStatusForMonth === 'pago' ? 'text-green-400' : 'text-yellow-400'}`}>
+                        {paymentStatusForMonth === 'pago' ? 'Recebido' : 'Pendente'}
+                    </p>
+                    {paymentStatusForMonth === 'pago' && localMonthlyPayments[monthKey]?.method === 'local' && (
+                        <p className="text-xs text-brand-gray-500">Recebido localmente em {format(new Date(localMonthlyPayments[monthKey]!.paid_at!), 'dd/MM/yy')}</p>
+                    )}
+                </div>
+                {paymentStatusForMonth === 'pendente' && (
+                    <Button onClick={handleMarkAsPaid} size="sm" className="bg-green-600 hover:bg-green-700">
+                        Marcar como Pago
+                    </Button>
+                )}
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {renderCalendar()}
                 <div>
-                  <h4 className="font-semibold mb-2">Frequência do Mês</h4>
+                  <h4 className="font-semibold mb-4 text-center">Frequência do Mês</h4>
                   <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                    {monthlyOccurrences.map(occ => (
-                      <div key={occ.date.toString()} className="flex items-center justify-between p-2 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-md">
-                        <div>
-                          <p className="font-medium capitalize text-sm">{format(occ.date, "EEEE, dd/MM", { locale: ptBR })}</p>
-                          <p className={`text-xs font-bold ${occ.status === 'presente' ? 'text-green-500' : occ.status === 'falta' ? 'text-red-500' : 'text-brand-gray-500'}`}>
-                            {occ.status === 'presente' ? 'Presença' : occ.status === 'falta' ? 'Falta' : isPast(occ.date) ? 'Pendente' : 'Próxima'}
-                          </p>
-                        </div>
-                        {isPast(occ.date) && (
-                          <div className="flex gap-1">
-                            <Button size="sm" variant={occ.status === 'presente' ? 'primary' : 'ghost'} onClick={() => handleAttendanceChange(occ.date, 'presente')}><UserCheck className="h-4 w-4" /></Button>
-                            <Button size="sm" variant={occ.status === 'falta' ? 'danger' : 'ghost'} onClick={() => handleAttendanceChange(occ.date, 'falta')}><UserX className="h-4 w-4" /></Button>
+                    {monthlyOccurrences.map(occ => {
+                      const isPastDay = isPast(occ.date) && !isToday(occ.date);
+                      const isFutureDay = isAfter(occ.date, new Date());
+                      return (
+                        <div key={occ.date.toString()} className="flex items-center justify-between p-3 bg-brand-gray-700/50 rounded-md">
+                          <div>
+                            <p className="font-medium capitalize text-sm">{format(occ.date, "EEEE, dd/MM", { locale: ptBR })}</p>
+                            <div className="flex items-baseline gap-2">
+                                <p className={`text-xs font-bold ${occ.status === 'presente' ? 'text-green-400' : occ.status === 'falta' ? 'text-red-400' : occ.status === 'cancelada' ? 'text-gray-400' : 'text-brand-gray-400'}`}>
+                                  {occ.status === 'presente' ? 'Presença' : occ.status === 'falta' ? 'Falta' : occ.status === 'cancelada' ? 'Cancelada' : isPastDay ? 'Pendente' : 'Próxima'}
+                                </p>
+                                {occ.isPayable && (
+                                    <span className="text-xs font-semibold text-green-400/80">
+                                        ({formatCurrency(reserva.total_price || 0)})
+                                    </span>
+                                )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          <div className="flex gap-2">
+                            {(isPastDay || isToday(occ.date)) && occ.status !== 'cancelada' && (
+                              <>
+                                <Button size="sm" variant={occ.status === 'presente' ? 'primary' : 'ghost'} onClick={() => handleAttendanceChange(occ.date, 'presente')} className={occ.status === 'presente' ? 'bg-green-500 hover:bg-green-600' : ''}><UserCheck className="h-4 w-4" /></Button>
+                                <Button size="sm" variant={occ.status === 'falta' ? 'danger' : 'ghost'} onClick={() => handleAttendanceChange(occ.date, 'falta')} className={occ.status === 'falta' ? 'bg-red-500 hover:bg-red-600' : ''}><UserX className="h-4 w-4" /></Button>
+                              </>
+                            )}
+                            {isFutureDay && occ.status !== 'cancelada' && (
+                               <Button size="sm" variant="ghost" onClick={() => handleCancelOccurrence(occ.date)} className="text-red-400 hover:bg-red-500/20" title="Cancelar esta aula"><XCircle className="h-4 w-4" /></Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
             </div>
-            <div className="p-6 mt-auto border-t border-brand-gray-200 dark:border-brand-gray-700 flex justify-end gap-3">
-              <Button variant="outline" onClick={onClose}>Fechar</Button>
-              <Button onClick={handleSaveChanges}><Save className="h-4 w-4 mr-2"/> Salvar Frequência</Button>
+            <div className="p-6 mt-auto border-t border-brand-gray-700 flex justify-between items-center">
+              <div>
+                <Button variant="danger" onClick={onDelete}><Trash2 className="h-4 w-4 mr-2"/> Excluir Plano</Button>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={onClose}>Fechar</Button>
+                <Button onClick={onEdit}><Edit className="h-4 w-4 mr-2"/> Editar Plano</Button>
+                <Button onClick={handleSaveChanges}><Save className="h-4 w-4 mr-2"/> Salvar Frequência</Button>
+              </div>
             </div>
           </motion.div>
         </div>
@@ -160,12 +271,26 @@ const MensalistaDetailModal: React.FC<MensalistaDetailModalProps> = ({ isOpen, o
   );
 };
 
-const StatCard: React.FC<{ label: string; value: string | number; icon: React.ElementType }> = ({ label, value, icon: Icon }) => (
-  <div className="p-4 bg-brand-gray-100 dark:bg-brand-gray-800 rounded-lg">
-    <Icon className="h-6 w-6 text-brand-blue-500 mx-auto mb-2" />
-    <p className="text-2xl font-bold text-brand-gray-900 dark:text-white">{value}</p>
-    <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">{label}</p>
-  </div>
-);
+const StatCard: React.FC<{ label: string; value: string | number; icon: React.ElementType, color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple' }> = ({ label, value, icon: Icon, color = 'blue' }) => {
+    const colors = {
+        blue: { text: 'text-brand-blue-400', bg: 'bg-brand-blue-500/20' },
+        green: { text: 'text-green-400', bg: 'bg-green-500/20' },
+        yellow: { text: 'text-yellow-400', bg: 'bg-yellow-500/20' },
+        red: { text: 'text-red-400', bg: 'bg-red-500/20' },
+        purple: { text: 'text-purple-400', bg: 'bg-purple-500/20' },
+    };
+    const selectedColor = colors[color];
+    return (
+        <div className="p-4 bg-brand-gray-900 rounded-lg flex items-center gap-4">
+            <div className={`p-3 ${selectedColor.bg} rounded-lg`}>
+                <Icon className={`h-6 w-6 ${selectedColor.text}`} />
+            </div>
+            <div>
+                <p className="text-2xl font-bold">{value}</p>
+                <p className="text-sm text-brand-gray-400">{label}</p>
+            </div>
+        </div>
+    );
+};
 
 export default MensalistaDetailModal;

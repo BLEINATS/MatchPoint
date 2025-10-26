@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { format, isSameDay } from 'date-fns';
 import { Quadra, Reserva } from '../../types';
@@ -10,14 +10,14 @@ import Timer from '../Shared/Timer';
 
 interface AgendaViewProps {
   quadras: Quadra[];
-  reservas: Reserva[];
+  reservationsForDay: Reserva[];
   selectedDate: Date;
   onSlotClick: (quadraId: string, time: string) => void;
   onReservationClick: (reserva: Reserva) => void;
   onDataChange: () => void;
 }
 
-const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate, onSlotClick, onReservationClick, onDataChange }) => {
+const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservationsForDay, selectedDate, onSlotClick, onReservationClick, onDataChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const timeSlots = Array.from({ length: 23 - 6 + 1 }, (_, i) => { // Hourly slots from 6:00 to 23:00
@@ -33,9 +33,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ quadras, reservas, selectedDate
     if (am8) {
       am8.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
-  }, []);
-
-  const reservationsForDay = reservas.filter(r => isSameDay(parseDateStringAsLocal(r.date), selectedDate) && r.status !== 'cancelada');
+  }, [selectedDate]);
 
   const getPaymentStatusIcon = (status?: 'pago' | 'pendente' | 'parcialmente_pago') => {
     switch (status) {

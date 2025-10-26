@@ -1,21 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Building, FileText, BarChart2, CheckCircle, Save, ArrowLeft, User, Lock, CreditCard, DollarSign, Bell, Users as UsersIcon, Star } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
-import { Arena, Profile } from '../types';
+import { Arena, Profile, Plan, Subscription } from '../types';
 import Button from '../components/Forms/Button';
 import ProfileTab from '../components/Settings/ProfileTab';
 import ClientProfileSettingsTab from '../components/Settings/ClientProfileSettingsTab';
 import OperationTab from '../components/Settings/OperationTab';
 import PlanTab from '../components/Settings/PlanTab';
 import PaymentSettingsTab from '../components/Settings/PaymentSettingsTab';
-import PlanosAulasTab from '../components/Settings/PlanosAulasTab';
+import PlanosAulasTab from './Settings/PlanosAulasTab';
 import NotificationSettingsTab from './Settings/NotificationSettingsTab';
 import SecurityTab from '../components/Settings/SecurityTab';
 import TeamSettingsTab from '../components/Settings/TeamSettingsTab';
 import FaturamentoTab from '../components/Settings/FaturamentoTab';
+import { localApi } from '../lib/localApi';
 
 type AdminTabType = 'profile' | 'operation' | 'payments' | 'planos_aulas' | 'team' | 'plan' | 'faturamento';
 type ClientTabType = 'my-profile' | 'notifications' | 'security';
@@ -23,9 +24,12 @@ type StaffTabType = 'planos_aulas'; // Staff can only see what they have permiss
 
 const Settings: React.FC = () => {
   const { arena, updateArena, profile, updateProfile, isLoading: isAuthLoading } = useAuth();
+  const location = useLocation();
   
   const [arenaFormData, setArenaFormData] = useState<Partial<Arena>>({});
   const [profileFormData, setProfileFormData] = useState<Partial<Profile>>({});
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -59,6 +63,12 @@ const Settings: React.FC = () => {
 
   const tabs = isAdmin ? adminTabs : (isStaff ? staffTabs : clientTabs);
   const [activeTab, setActiveTab] = useState(tabs.length > 0 ? tabs[0].id : '');
+  
+  useEffect(() => {
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     if (arena && isAdmin) {
@@ -66,6 +76,21 @@ const Settings: React.FC = () => {
     }
     if (profile && !isAdmin) {
       setProfileFormData(profile);
+    }
+    if (isAdmin) {
+      const loadSaasData = async () => {
+        try {
+          const [plansRes, subsRes] = await Promise.all([
+            localApi.select<Plan>('plans', 'all'),
+            localApi.select<Subscription>('subscriptions', 'all'),
+          ]);
+          setPlans(plansRes.data || []);
+          setSubscriptions(subsRes.data || []);
+        } catch (error) {
+          console.error("Failed to load SaaS data", error);
+        }
+      };
+      loadSaasData();
     }
   }, [arena, profile, isAdmin]);
 
@@ -89,6 +114,7 @@ const Settings: React.FC = () => {
 
   const renderContent = () => {
     if (isAdmin) {
+      const currentSubscription = subscriptions.find(s => s.arena_id === arena?.id);
       switch (activeTab) {
         case 'profile': return <ProfileTab formData={arenaFormData} setFormData={setArenaFormData} />;
         case 'operation': return <OperationTab formData={arenaFormData} setFormData={setArenaFormData} />;
@@ -96,7 +122,7 @@ const Settings: React.FC = () => {
         case 'planos_aulas': return <PlanosAulasTab />;
         case 'faturamento': return <FaturamentoTab formData={arenaFormData} setFormData={setArenaFormData} />;
         case 'team': return <TeamSettingsTab />;
-        case 'plan': return <PlanTab />;
+        case 'plan': return <PlanTab plans={plans} currentSubscription={currentSubscription || null} arena={arena} />;
         default: return null;
       }
     } else { // Client or Staff

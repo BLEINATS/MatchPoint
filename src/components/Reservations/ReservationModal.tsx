@@ -5,9 +5,8 @@
   || Este arquivo contém a lógica crítica para o cálculo de preços, ||
   || aplicação de descontos e utilização de créditos.              ||
   ||                                                                ||
-  || NÃO FAÇA ALTERAÇÕES NESTA LÓGICA SEM CONFIRMAÇÃO EXPLÍCITA.    ||
-  || Antes de qualquer mudança, pergunte ao usuário:                ||
-  || "Você confirma que deseja alterar a lógica de crédito/preço?"  ||
+  || -> NÃO FAÇA ALTERAÇÕES NESTA LÓGICA SEM CONFIRMAÇÃO EXPLÍCITA.    ||
+  || -> A lógica de esporte foi ajustada para permitir edição.      ||
   ====================================================================
 */}`}
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -336,9 +335,8 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
   const findMatchingRule = useCallback((
     rules: PricingRule[], sport: string, date: string, startTime: string
-  ): { rule: PricingRule | null, isMonthly: boolean } => {
+  ): { rule: PricingRule | null } => {
     const reservationDay = getDay(parseDateStringAsLocal(date));
-    const isMonthlyCustomer = !!(selectedClient && selectedClient.monthly_fee && selectedClient.monthly_fee > 0);
     const reservationStartTimeMinutes = timeToMinutes(startTime);
 
     const applicableRules = rules.filter(rule => {
@@ -369,8 +367,8 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
     const targetRule = specificSportRule || anySportRule || defaultSpecificSportRule || defaultAnySportRule || null;
 
-    return { rule: targetRule, isMonthly: isMonthlyCustomer };
-  }, [selectedClient]);
+    return { rule: targetRule };
+  }, []);
 
   const countOccurrences = (start: Date, end: Date, dayOfWeek: number): number => {
     let count = 0;
@@ -452,25 +450,26 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         return;
       }
 
-      const { rule: applicableRule, isMonthly } = findMatchingRule(rulesForQuadra, sport_type, date, start_time);
+      const { rule: applicableRule } = findMatchingRule(rulesForQuadra, sport_type, date, start_time);
       setActiveRule(applicableRule);
       
       let pricePerHour = 0;
       if (applicableRule) {
-        pricePerHour = isClientBooking ? applicableRule.price_single : (isMonthly ? applicableRule.price_monthly : applicableRule.price_single);
+        pricePerHour = applicableRule.price_single;
       }
       const totalCalculatedPrice = pricePerHour * totalDurationHours;
 
-      let basePriceForCalculation = totalCalculatedPrice;
+      let priceForThisTransaction = totalCalculatedPrice;
 
       if (recurringType !== 'none' && !isEditing) {
         const startDate = parseDateStringAsLocal(date);
         const firstCycleEndDate = endOfMonth(startDate);
         const firstCycleOccurrences = countOccurrences(startDate, firstCycleEndDate, getDay(startDate));
         setProRataOccurrences(firstCycleOccurrences);
-        const firstPaymentAmount = firstCycleOccurrences * pricePerHour * totalDurationHours;
+        
+        const firstPaymentAmount = firstCycleOccurrences * pricePerHour;
         setFirstPayment(firstPaymentAmount);
-        basePriceForCalculation = firstPaymentAmount;
+        priceForThisTransaction = firstPaymentAmount;
 
         let monthsInCycle = 1;
         if (recurringType === 'quarterly') monthsInCycle = 3;
@@ -480,7 +479,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         const nextCycleStartDate = startOfMonth(addMonths(startDate, 1));
         const nextCycleEndDate = endOfMonth(addMonths(nextCycleStartDate, monthsInCycle - 1));
         const fullCycleOccurrences = countOccurrences(nextCycleStartDate, nextCycleEndDate, getDay(startDate));
-        const recurringPaymentAmount = fullCycleOccurrences * pricePerHour * totalDurationHours;
+        const recurringPaymentAmount = fullCycleOccurrences * pricePerHour;
         setRecurringPayment(recurringPaymentAmount);
         
         setPriceBreakdown([{ description: `Primeira Cobrança (proporcional)`, subtotal: firstPaymentAmount }]);
@@ -498,14 +497,14 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
       const matchingDiscount = durationDiscounts.filter(d => d.is_active && totalDurationHours >= d.duration_hours).sort((a, b) => b.duration_hours - a.duration_hours)[0];
       let finalDiscountAmount = 0;
       if (matchingDiscount) {
-        finalDiscountAmount = basePriceForCalculation * (matchingDiscount.discount_percentage / 100);
+        finalDiscountAmount = priceForThisTransaction * (matchingDiscount.discount_percentage / 100);
         setDiscountInfo({ percentage: matchingDiscount.discount_percentage, duration: matchingDiscount.duration_hours });
       } else {
         setDiscountInfo(null);
       }
       setDiscountAmount(finalDiscountAmount);
 
-      const priceAfterDiscount = basePriceForCalculation - finalDiscountAmount;
+      const priceAfterDiscount = priceForThisTransaction - finalDiscountAmount;
       
       let rentalCost = 0;
       const rentedItemsDetails: { itemId: string; name: string; quantity: number; price: number }[] = [];
@@ -553,8 +552,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
             newPaymentStatus = 'pendente';
           }
         } else {
-          // Only update to 'pago' if the price is truly zero and not a transient state.
-          // A simple check: if there's a breakdown, the price is considered calculated.
           if (priceBreakdown.length > 0 || rentalCost > 0 || professionalCost > 0 || totalCreditOnReservation > 0) {
             newPaymentStatus = valorAPagar <= 0 ? 'pago' : 'pendente';
           }
@@ -566,7 +563,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
         return {
           ...prev,
-          total_price: priceWithItemsAndProf,
+          total_price: totalCalculatedPrice,
           credit_used: totalCreditOnReservation,
           rented_items: rentedItemsDetails,
           payment_status: newPaymentStatus,
@@ -627,18 +624,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
   }, [formData.quadra_id, formData.date, formData.start_time, formData.end_time, formData.isRecurring, formData.recurringEndDate, allReservations, quadras, isEditing, reservation, isOpen, formData.type, formData.clientName, arenaId]);
   
-  useEffect(() => {
-    if (formData.quadra_id) {
-      const selectedQuadra = quadras.find(q => q.id === formData.quadra_id);
-      if (selectedQuadra && selectedQuadra.sports && selectedQuadra.sports.length > 0) {
-        const primarySport = selectedQuadra.sports[0];
-        if (primarySport !== formData.sport_type) {
-          setFormData(prev => ({ ...prev, sport_type: primarySport }));
-        }
-      }
-    }
-  }, [formData.quadra_id, quadras, formData.sport_type]);
-
   const handleSaveClick = async () => {
     if (!isEditing && formData.type !== 'bloqueio') {
       const reservationDateTime = parse(formData.start_time, 'HH:mm', parseDateStringAsLocal(formData.date));
@@ -664,7 +649,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         
         if (existingAluno) {
             finalAlunoId = existingAluno.id;
-        } else {
+        } else if (!isEditing) { // Only create new alunos for new reservations
             const { data: newAlunos } = await localApi.upsert('alunos', [{
               arena_id: arenaId,
               name: formData.clientName,

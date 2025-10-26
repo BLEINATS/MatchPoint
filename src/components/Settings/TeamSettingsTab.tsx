@@ -3,10 +3,12 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { localApi } from '../../lib/localApi';
 import { Profile, PermissionLevel, ProfilePermissions } from '../../types';
-import { Loader2, Plus, Edit, Trash2, Shield } from 'lucide-react';
+import { Loader2, Plus, Edit, Trash2, Shield, AlertTriangle } from 'lucide-react';
 import Button from '../Forms/Button';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import TeamMemberModal from './TeamMemberModal';
+import { useSubscriptionStatus } from '../../hooks/useSubscriptionStatus';
+import Alert from '../Shared/Alert';
 
 export const PERMISSIONS_CONFIG: Record<keyof ProfilePermissions, { label: string; levels: Record<string, string> }> = {
   reservas: { label: 'Reservas', levels: { none: 'Nenhum Acesso', view: 'Visualizar', edit: 'Gerenciar' } },
@@ -22,6 +24,7 @@ export const PERMISSIONS_CONFIG: Record<keyof ProfilePermissions, { label: strin
 const TeamSettingsTab: React.FC = () => {
   const { selectedArenaContext: arena } = useAuth();
   const { addToast } = useToast();
+  const { canAddTeamMember, limits, isExpired, isActive } = useSubscriptionStatus();
   const [teamMembers, setTeamMembers] = useState<Profile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -87,6 +90,13 @@ const TeamSettingsTab: React.FC = () => {
   };
 
   const openModal = (member: Profile | null = null) => {
+    if (!member && !canAddTeamMember) {
+      const message = isExpired
+        ? 'Seu plano expirou. Para adicionar mais funcionários, por favor, renove sua assinatura.'
+        : `Limite de ${limits.maxTeamMembers} funcionário(s) atingido para o seu plano atual. Para adicionar mais, considere fazer um upgrade.`;
+      addToast({ message, type: 'error' });
+      return;
+    }
     setEditingMember(member);
     setIsModalOpen(true);
   };
@@ -102,8 +112,18 @@ const TeamSettingsTab: React.FC = () => {
           <h3 className="text-lg font-semibold text-brand-gray-900 dark:text-white">Equipe e Permissões</h3>
           <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">Adicione funcionários e defina o que cada um pode acessar.</p>
         </div>
-        <Button onClick={() => openModal()}><Plus className="h-4 w-4 mr-2" />Novo Membro</Button>
+        <Button onClick={() => openModal()} disabled={!canAddTeamMember}>
+          <Plus className="h-4 w-4 mr-2" />Novo Membro
+        </Button>
       </div>
+
+      {!canAddTeamMember && isActive && (
+        <Alert
+          type="warning"
+          title="Limite de Funcionários Atingido"
+          message={`Você atingiu o limite de ${limits.maxTeamMembers} funcionário(s) para o seu plano atual. Para adicionar mais, considere fazer um upgrade.`}
+        />
+      )}
       
       <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 overflow-hidden">
         <div className="overflow-x-auto">

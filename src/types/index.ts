@@ -61,6 +61,11 @@ export interface Plan {
   id: string;
   name: string;
   price: number;
+  billing_cycle: 'monthly' | 'quarterly' | 'semiannual' | 'annual';
+  duration_days?: number | null;
+  trial_days?: number | null;
+  max_quadras?: number | null;
+  max_team_members?: number | null;
   features: string[];
   is_active: boolean;
 }
@@ -319,7 +324,8 @@ export interface Reserva {
     payment_status: 'pendente' | 'pago';
   }[] | null;
   invites_closed?: boolean;
-  attendance?: Record<string, 'presente' | 'falta' | 'pendente'>;
+  attendance?: Record<string, 'presente' | 'falta' | 'pendente' | 'cancelada'>;
+  monthly_payments?: Record<string, { status: 'pago' | 'pendente'; method?: 'local' | 'sistema'; paid_at?: string }>;
 }
 
 // Alias para compatibilidade
@@ -533,6 +539,25 @@ export interface Friendship {
   user2_id: string; // profile_id
   status: 'pending' | 'accepted';
   requested_by: string; // profile_id of the requester
+  created_at: string;
+}
+
+export interface ProductVariant {
+  id: string;
+  name: string;
+  stock: number;
+}
+
+export interface Product {
+  id: string;
+  arena_id: string;
+  name: string;
+  description: string;
+  price: number;
+  photo_urls: string[];
+  stock: number;
+  variants?: ProductVariant[];
+  is_active: boolean;
   created_at: string;
 }
 

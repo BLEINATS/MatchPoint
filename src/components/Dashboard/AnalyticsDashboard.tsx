@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
     DollarSign, Users, Plus, Lock, Send, Calendar, Clock, 
     User, Sparkles, Star, TrendingUp, TrendingDown, Phone, MessageSquare, MessageCircle, Bookmark, Loader2, GraduationCap,
-    CheckCircle, AlertCircle, CreditCard, ClipboardList, XCircle, Repeat, ShoppingBag, PieChart, Trophy, PartyPopper
+    CheckCircle, AlertCircle, CreditCard, ClipboardList, XCircle, Repeat, ShoppingBag, PieChart, Trophy, PartyPopper, Edit, Trash2
 } from 'lucide-react';
 import StatCard from './StatCard';
 import { Quadra, Reserva, Aluno, Torneio, Evento, Professor, AtletaAluguel, Notificacao } from '../../types';
@@ -21,6 +21,176 @@ import { formatCurrency } from '../../utils/formatters';
 import Timer from '../Shared/Timer';
 import InsightsWidget from './InsightsWidget';
 import NotificationComposerModal from '../Notificacoes/NotificationComposerModal';
+import MensalistasHojeWidget from './MensalistasHojeWidget';
+import MensalistaDetailModal from '../Reservations/MensalistaDetailModal';
+import ConfirmationModal from '../Shared/ConfirmationModal';
+
+interface TopCourtData {
+  id: string;
+  name: string;
+  totalBookedHours: number;
+  totalRevenue: number;
+}
+
+const TopCourtsWidget: React.FC<{ topCourts: TopCourtData[] }> = ({ topCourts }) => {
+  const maxHours = topCourts.length > 0 ? Math.max(...topCourts.map(c => c.totalBookedHours), 1) : 1;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+        <h3 className="font-bold text-xl text-brand-gray-900 dark:text-white mb-4">Top Quadras</h3>
+        <div className="space-y-4">
+            {topCourts.length > 0 ? topCourts.map((q, i) => {
+              const percentage = maxHours > 0 ? (q.totalBookedHours / maxHours) * 100 : 0;
+              return (
+                <div key={q.id} className="flex items-center gap-4">
+                    <span className="font-bold text-brand-gray-500 text-lg w-4 text-center">{i + 1}</span>
+                    <div className="flex-1">
+                        <p className="text-sm font-semibold text-brand-gray-800 dark:text-brand-gray-200">{q.name}</p>
+                        <div className="w-full bg-brand-gray-200 dark:bg-brand-gray-700 rounded-full h-2 mt-1">
+                            <div className="bg-green-500 h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
+                        </div>
+                    </div>
+                    <div className="text-right flex-shrink-0 w-24">
+                        <p className="font-bold text-brand-gray-800 dark:text-white">{q.totalBookedHours}h</p>
+                        <p className="text-xs font-semibold text-green-600 dark:text-green-400">{formatCurrency(q.totalRevenue)}</p>
+                    </div>
+                </div>
+              )
+            }) : (
+                <p className="text-sm text-center text-brand-gray-500 py-4">Dados de ocupação insuficientes.</p>
+            )}
+        </div>
+    </motion.div>
+  );
+};
+
+const getPaymentStatusDetails = (status?: 'pago' | 'pendente' | 'parcialmente_pago') => {
+    switch (status) {
+        case 'pago':
+            return { icon: CheckCircle, label: 'Pago', classes: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' };
+        case 'pendente':
+            return { icon: AlertCircle, label: 'Pendente', classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' };
+        case 'parcialmente_pago':
+            return { icon: DollarSign, label: 'Parcial', classes: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' };
+        default:
+            return null;
+    }
+};
+
+const TodaysAgenda: React.FC<{ reservations: Reserva[], quadras: Quadra[], allReservas: Reserva[], arenaName: string }> = ({ reservations, quadras, allReservas, arenaName }) => {
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+      <h3 className="font-bold text-xl text-brand-gray-900 dark:text-white mb-4">Agenda do Dia</h3>
+      <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+        {reservations.length > 0 ? reservations.map(r => {
+          const quadra = quadras.find(q => q.id === r.quadra_id);
+          const clientReservations = allReservas.filter(res => res.clientName === r.clientName && res.status !== 'cancelada').length;
+          const typeDetails = getReservationTypeDetails(r.type, r.isRecurring);
+          const paymentStatus = getPaymentStatusDetails(r.payment_status);
+          
+          let durationHours = 0;
+          if (r.start_time && r.end_time) {
+              try {
+                  const startTime = parse(r.start_time.slice(0, 5), 'HH:mm', new Date());
+                  let endTime = parse(r.end_time.slice(0, 5), 'HH:mm', new Date());
+                  if (!isNaN(startTime.getTime()) && !isNaN(endTime.getTime())) {
+                      if (endTime <= startTime) {
+                          endTime = addDays(endTime, 1);
+                      }
+                      const diffMinutes = differenceInMinutes(endTime, startTime);
+                      durationHours = diffMinutes / 60;
+                  }
+              } catch (e) { /* silent */ }
+          }
+
+          const totalRentedItems = r.rented_items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+          const rentedItemsTitle = totalRentedItems > 0
+            ? `Itens: ${r.rented_items?.map(i => `${i.quantity}x ${i.name}`).join(', ')}`
+            : undefined;
+
+          return (
+            <div key={r.id} className="flex items-start gap-4 p-3 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg">
+              <div className="flex flex-col items-center justify-center rounded-lg p-2 w-20 text-center bg-brand-blue-500 text-white flex-shrink-0">
+                <span className="font-bold text-lg">{r.start_time.slice(0, 5)}</span>
+                <span className="text-xs">às {r.end_time.slice(0, 5)}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-start mb-1">
+                    <p className="font-semibold text-brand-gray-800 dark:text-brand-gray-200 truncate pr-2">
+                        {r.clientName}
+                    </p>
+                    {paymentStatus && (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${paymentStatus.classes}`}>
+                            <paymentStatus.icon className="h-3 w-3 mr-1" />
+                            {paymentStatus.label}
+                        </span>
+                    )}
+                </div>
+                <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 truncate">{quadra?.name || arenaName} • {r.sport_type || 'Esporte'} ({typeDetails.label})</p>
+                
+                <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-brand-gray-500 dark:text-brand-gray-400">
+                  {r.clientPhone && (
+                      <span className="flex items-center">
+                          <Phone className="h-3 w-3 mr-1" />
+                          {r.clientPhone}
+                      </span>
+                  )}
+                  <span className="flex items-center">
+                      <Bookmark className="h-3 w-3 mr-1" />
+                      {clientReservations} reserva(s)
+                  </span>
+                </div>
+
+                <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-brand-gray-500 dark:text-brand-gray-400">
+                  <span className="font-semibold text-brand-gray-700 dark:text-brand-gray-300 flex items-center text-sm">
+                      {formatCurrency(r.total_price)}
+                  </span>
+                  
+                  {durationHours > 0 && (
+                    <span className="flex items-center">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {durationHours.toFixed(1).replace('.', ',')}h
+                    </span>
+                  )}
+
+                  {r.credit_used && r.credit_used > 0 && (
+                    <span className="flex items-center text-blue-500 dark:text-blue-400" title={`Pago com ${formatCurrency(r.credit_used)} de crédito`}>
+                        <CreditCard className="h-4 w-4 mr-1" />
+                        Crédito
+                    </span>
+                  )}
+                  
+                  {totalRentedItems > 0 && (
+                    <span className="flex items-center text-purple-500 dark:text-purple-400" title={rentedItemsTitle}>
+                      <ShoppingBag className="h-4 w-4 mr-1" />
+                      {totalRentedItems} {totalRentedItems > 1 ? 'itens' : 'item'}
+                    </span>
+                  )}
+                </div>
+              </div>
+               {r.clientPhone && (
+                  <a
+                      href={`https://wa.me/55${r.clientPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${r.clientName}! Lembrete da sua reserva na ${arenaName}, quadra ${quadra?.name}, hoje das ${r.start_time.slice(0, 5)} às ${r.end_time.slice(0, 5)}.`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 rounded-full text-green-500 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-900 self-center"
+                      title="Enviar lembrete no WhatsApp"
+                  >
+                      <MessageCircle className="h-5 w-5" />
+                  </a>
+              )}
+            </div>
+          );
+        }) : (
+          <div className="text-center py-10">
+            <Calendar className="h-10 w-10 mx-auto text-brand-gray-400 mb-2" />
+            <p className="text-brand-gray-500">Nenhuma reserva para hoje.</p>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
 
 const AnalyticsDashboard: React.FC = () => {
   const { selectedArenaContext: arena, profile } = useAuth();
@@ -35,6 +205,11 @@ const AnalyticsDashboard: React.FC = () => {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  
+  const [isMensalistaModalOpen, setIsMensalistaModalOpen] = useState(false);
+  const [selectedMensalista, setSelectedMensalista] = useState<Reserva | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'reserva' } | null>(null);
 
   const canManageReservas = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.reservas === 'edit', [profile]);
   const canManageAlunos = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.gerenciamento_arena === 'edit', [profile]);
@@ -72,6 +247,44 @@ const AnalyticsDashboard: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleOpenMensalistaModal = (reserva: Reserva) => {
+    setSelectedMensalista(reserva);
+    setIsMensalistaModalOpen(true);
+  };
+
+  const handleUpdateMasterReserva = async (updatedReserva: Reserva) => {
+    if (!arena) return;
+    try {
+      await localApi.upsert('reservas', [updatedReserva], arena.id);
+      addToast({ message: 'Dados do mensalista atualizados!', type: 'success' });
+      loadData();
+    } catch (error: any) {
+      addToast({ message: `Erro ao salvar: ${error.message}`, type: 'error' });
+    } finally {
+      setIsMensalistaModalOpen(false);
+    }
+  };
+
+  const handleDeleteRequest = (id: string, name: string) => {
+    setItemToDelete({ id, name, type: 'reserva' });
+    setIsDeleteModalOpen(true);
+    setIsMensalistaModalOpen(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete || !arena) return;
+    try {
+      await localApi.delete('reservas', [itemToDelete.id], arena.id);
+      addToast({ message: 'Plano de mensalista excluído com sucesso.', type: 'success' });
+      await loadData();
+    } catch (error: any) {
+      addToast({ message: `Erro ao excluir: ${error.message}`, type: 'error' });
+    } finally {
+      setIsDeleteModalOpen(false);
+      setItemToDelete(null);
+    }
+  };
 
   const upcomingEvents = useMemo(() => {
     const now = startOfDay(new Date());
@@ -211,24 +424,42 @@ const AnalyticsDashboard: React.FC = () => {
   }, [quadras, reservas, alunos]);
   
   const topCourtsData = useMemo(() => {
-    const monthStart = startOfMonth(new Date());
-    const allExpandedReservationsInMonth = expandRecurringReservations(reservas, monthStart, endOfMonth(new Date()), quadras);
+    const historyStartDate = new Date(2020, 0, 1); // A far-back date
+    const today = new Date();
+    
+    const allExpandedReservations = expandRecurringReservations(reservas, historyStartDate, endOfDay(today), quadras);
 
     return quadras
       .map(quadra => {
-        const quadraReservations = allExpandedReservationsInMonth.filter(
+        const quadraReservations = allExpandedReservations.filter(
           r => r.quadra_id === quadra.id && r.status !== 'cancelada'
         );
         
-        const occupancy = calculateMonthlyOccupancy(new Date(), quadraReservations, [quadra]);
+        const totalBookedHours = quadraReservations.reduce((total, r) => {
+          if (!r.start_time || !r.end_time) return total;
+          try {
+            const start = parse(r.start_time.slice(0, 5), 'HH:mm', new Date());
+            let end = parse(r.end_time.slice(0, 5), 'HH:mm', new Date());
+            if (end <= start) end = addDays(end, 1);
+            const duration = differenceInMinutes(end, start) / 60;
+            return total + (isNaN(duration) ? 0 : duration);
+          } catch {
+            return total;
+          }
+        }, 0);
+
+        const totalRevenue = quadraReservations
+          .filter(r => r.payment_status === 'pago')
+          .reduce((total, r) => total + (r.total_price || 0), 0);
 
         return {
           id: quadra.id,
           name: quadra.name,
-          occupancy: occupancy,
+          totalBookedHours: Math.round(totalBookedHours),
+          totalRevenue: totalRevenue,
         };
       })
-      .sort((a, b) => b.occupancy - a.occupancy)
+      .sort((a, b) => b.totalBookedHours - a.totalBookedHours)
       .slice(0, 3);
   }, [quadras, reservas]);
 
@@ -272,7 +503,7 @@ const AnalyticsDashboard: React.FC = () => {
         color = 'text-red-500';
       } else {
         text = `Nova reserva (${typeDetails.label})`;
-        details = `${r.clientName || 'Cliente'} na {quadraName} - ${formatCurrency(r.total_price)}`;
+        details = `${r.clientName || 'Cliente'} na ${quadraName} - ${formatCurrency(r.total_price)}`;
         icon = typeDetails.icon;
         color = 'text-blue-500';
       }
@@ -483,6 +714,7 @@ const AnalyticsDashboard: React.FC = () => {
         <div className="space-y-8">
           <InsightsWidget reservas={reservas} alunos={alunos} quadras={quadras} />
           <UpcomingEventsWidget events={upcomingEvents} />
+          <MensalistasHojeWidget reservas={reservas} quadras={quadras} alunos={alunos} arena={arena} onCardClick={handleOpenMensalistaModal} />
           <TopCourtsWidget topCourts={topCourtsData} />
         </div>
       </div>
@@ -493,6 +725,30 @@ const AnalyticsDashboard: React.FC = () => {
         alunos={alunos}
         professores={professores}
         atletas={atletas}
+      />
+      <AnimatePresence>
+        {isMensalistaModalOpen && selectedMensalista && (
+          <MensalistaDetailModal
+            isOpen={isMensalistaModalOpen}
+            onClose={() => setIsMensalistaModalOpen(false)}
+            reserva={selectedMensalista}
+            aluno={alunos.find(a => a.id === selectedMensalista.aluno_id)}
+            onSave={handleUpdateMasterReserva}
+            onEdit={() => {
+              setIsMensalistaModalOpen(false);
+              navigate('/reservas', { state: { editReservaId: selectedMensalista.id, forceEdit: true } });
+            }}
+            onDelete={() => handleDeleteRequest(selectedMensalista.id, selectedMensalista.clientName)}
+          />
+        )}
+      </AnimatePresence>
+       <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Confirmar Exclusão"
+        message={<><p>Tem certeza que deseja excluir o plano de mensalista de <strong>{itemToDelete?.name}</strong>?</p><p className="mt-2 text-xs text-red-500 dark:text-red-400">Todas as futuras ocorrências serão removidas.</p></>}
+        confirmText="Sim, Excluir"
       />
     </div>
   );
@@ -547,112 +803,6 @@ const QuickActionButton: React.FC<{ icon: React.ElementType, label: string, onCl
   </Button>
 );
 
-const TodaysAgenda: React.FC<{ reservations: Reserva[], quadras: Quadra[], allReservas: Reserva[], arenaName: string }> = ({ reservations, quadras, allReservas, arenaName }) => {
-  return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-      <h3 className="font-bold text-xl text-brand-gray-900 dark:text-white mb-4">Agenda do Dia</h3>
-      <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-        {reservations.length > 0 ? reservations.map(r => {
-          const quadra = quadras.find(q => q.id === r.quadra_id);
-          const clientReservations = allReservas.filter(res => res.clientName === r.clientName && res.status !== 'cancelada').length;
-          const typeDetails = getReservationTypeDetails(r.type, r.isRecurring);
-          
-          let durationHours = 0;
-          if (r.start_time && r.end_time) {
-              try {
-                  const startTime = parse(r.start_time.slice(0, 5), 'HH:mm', new Date());
-                  let endTime = parse(r.end_time.slice(0, 5), 'HH:mm', new Date());
-                  if (!isNaN(startTime.getTime()) && !isNaN(endTime.getTime())) {
-                      if (endTime <= startTime) {
-                          endTime = addDays(endTime, 1);
-                      }
-                      const diffMinutes = differenceInMinutes(endTime, startTime);
-                      durationHours = diffMinutes / 60;
-                  }
-              } catch (e) { /* silent */ }
-          }
-
-          const totalRentedItems = r.rented_items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
-          const rentedItemsTitle = totalRentedItems > 0
-            ? `Itens: ${r.rented_items?.map(i => `${i.quantity}x ${i.name}`).join(', ')}`
-            : undefined;
-
-          return (
-            <div key={r.id} className="flex items-start gap-4 p-3 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg">
-              <div className="flex flex-col items-center justify-center rounded-lg p-2 w-20 text-center bg-brand-blue-500 text-white flex-shrink-0">
-                <span className="font-bold text-lg">{r.start_time.slice(0, 5)}</span>
-                <span className="text-xs">às {r.end_time.slice(0, 5)}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-brand-gray-800 dark:text-brand-gray-200 truncate">
-                  {r.clientName}
-                </p>
-                <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 truncate">{quadra?.name || arenaName} ({typeDetails.label})</p>
-                
-                <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-brand-gray-500 dark:text-brand-gray-400">
-                  {r.clientPhone && (
-                      <span className="flex items-center">
-                          <Phone className="h-3 w-3 mr-1" />
-                          {r.clientPhone}
-                      </span>
-                  )}
-                  <span className="flex items-center">
-                      <Bookmark className="h-3 w-3 mr-1" />
-                      {clientReservations} reserva(s)
-                  </span>
-                </div>
-
-                <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-brand-gray-500 dark:text-brand-gray-400">
-                  <span className="font-semibold text-brand-gray-700 dark:text-brand-gray-300 flex items-center text-sm">
-                      {formatCurrency(r.total_price)}
-                  </span>
-                  
-                  {durationHours > 0 && (
-                    <span className="flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {durationHours.toFixed(1).replace('.', ',')}h
-                    </span>
-                  )}
-
-                  {r.credit_used && r.credit_used > 0 && (
-                    <span className="flex items-center text-blue-500 dark:text-blue-400" title={`Pago com ${formatCurrency(r.credit_used)} de crédito`}>
-                        <CreditCard className="h-4 w-4 mr-1" />
-                        Crédito
-                    </span>
-                  )}
-                  
-                  {totalRentedItems > 0 && (
-                    <span className="flex items-center text-purple-500 dark:text-purple-400" title={rentedItemsTitle}>
-                      <ShoppingBag className="h-4 w-4 mr-1" />
-                      {totalRentedItems} {totalRentedItems > 1 ? 'itens' : 'item'}
-                    </span>
-                  )}
-                </div>
-              </div>
-               {r.clientPhone && (
-                  <a
-                      href={`https://wa.me/55${r.clientPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${r.clientName}! Lembrete da sua reserva na ${arenaName}, quadra ${quadra?.name}, hoje das ${r.start_time.slice(0, 5)} às ${r.end_time.slice(0, 5)}.`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2 rounded-full text-green-500 bg-green-100 dark:bg-green-900/50 hover:bg-green-200 dark:hover:bg-green-900 self-center"
-                      title="Enviar lembrete no WhatsApp"
-                  >
-                      <MessageCircle className="h-5 w-5" />
-                  </a>
-              )}
-            </div>
-          );
-        }) : (
-          <div className="text-center py-10">
-            <Calendar className="h-10 w-10 mx-auto text-brand-gray-400 mb-2" />
-            <p className="text-brand-gray-500">Nenhuma reserva para hoje.</p>
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-};
-
 const RecentActivityFeed: React.FC<{ activities: any[] }> = ({ activities }) => {
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
@@ -680,35 +830,5 @@ const RecentActivityFeed: React.FC<{ activities: any[] }> = ({ activities }) => 
         </motion.div>
     );
 };
-
-interface TopCourtData {
-  id: string;
-  name: string;
-  occupancy: number;
-}
-
-const TopCourtsWidget: React.FC<{ topCourts: TopCourtData[] }> = ({ topCourts }) => (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-        <h3 className="font-bold text-xl text-brand-gray-900 dark:text-white mb-4">Top Quadras</h3>
-        <div className="space-y-4">
-            {topCourts.length > 0 ? topCourts.map((q, i) => (
-                <div key={q.id} className="flex items-center gap-3">
-                    <span className="font-bold text-brand-gray-500 w-4 text-center">{i + 1}</span>
-                    <div className="flex-1">
-                        <div className="flex justify-between items-baseline mb-1">
-                            <p className="text-sm font-medium text-brand-gray-800 dark:text-brand-gray-200">{q.name}</p>
-                            <p className="text-sm font-bold text-brand-gray-700 dark:text-brand-gray-300">{q.occupancy.toFixed(0)}%</p>
-                        </div>
-                        <div className="w-full bg-brand-gray-200 dark:bg-brand-gray-700 rounded-full h-1.5">
-                            <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${q.occupancy}%` }}></div>
-                        </div>
-                    </div>
-                </div>
-            )) : (
-                <p className="text-sm text-center text-brand-gray-500 py-4">Dados de ocupação insuficientes.</p>
-            )}
-        </div>
-    </motion.div>
-);
 
 export default AnalyticsDashboard;

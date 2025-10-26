@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Mail, Phone, Calendar, Award, Dribbble, DollarSign, Trash2, Gift, ClipboardList, Hash, Users, UserPlus, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { X, Save, User, Mail, Phone, Calendar, DollarSign, Trash2, Gift, ClipboardList, Hash, Users, UserPlus, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { Aluno, PlanoAula, Profile } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
@@ -13,6 +13,7 @@ import { localApi } from '../../lib/localApi';
 import { formatCurrency } from '../../utils/formatters';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import { useAuth } from '../../context/AuthContext';
+import ActivityTab from './ActivityTab';
 
 interface AlunoModalProps {
   isOpen: boolean;
@@ -37,7 +38,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
     cpf: '', birth_date: '', gender: 'nao_informado'
   });
   const { addToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'details' | 'credits' | 'gamification'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'credits' | 'gamification' | 'atividades'>('details');
   const [internalAluno, setInternalAluno] = useState<Aluno | null>(initialData);
   const [isRenewConfirmOpen, setIsRenewConfirmOpen] = useState(false);
   const [isCreateLoginConfirmOpen, setIsCreateLoginConfirmOpen] = useState(false);
@@ -108,9 +109,9 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
     }
   }, [initialData, isOpen]);
 
-  const handleTabChange = (tab: 'details' | 'credits' | 'gamification') => {
+  const handleTabChange = (tab: 'details' | 'credits' | 'gamification' | 'atividades') => {
     setActiveTab(tab);
-    if (tab === 'credits' || tab === 'gamification') {
+    if (tab === 'credits' || tab === 'gamification' || tab === 'atividades') {
       refreshInternalData();
     }
   };
@@ -307,7 +308,8 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   const modalTitle = isEditing ? `Editar ${modalType}` : `Adicionar Novo ${modalType}`;
   
   const tabs = [
-    { id: 'details', label: 'Dados Cadastrais', icon: ClipboardList },
+    { id: 'details', label: 'Dados', icon: User },
+    { id: 'atividades', label: 'Atividades', icon: ClipboardList },
     { id: 'credits', label: 'Créditos', icon: DollarSign },
     { id: 'gamification', label: 'Gamificação', icon: Gift },
   ];
@@ -339,7 +341,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                     {tabs.map(tab => (
                       <button
                         key={tab.id}
-                        onClick={() => handleTabChange(tab.id as 'details' | 'credits' | 'gamification')}
+                        onClick={() => handleTabChange(tab.id as 'details' | 'credits' | 'gamification' | 'atividades')}
                         className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${
                           activeTab === tab.id
                             ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400'
@@ -456,6 +458,9 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                             />
                         </div>
                       </>
+                    )}
+                    {activeTab === 'atividades' && internalAluno && (
+                      <ActivityTab aluno={internalAluno} />
                     )}
                     {activeTab === 'credits' && internalAluno && (
                       <CreditsTab aluno={internalAluno} onDataChange={handleInternalDataChange} />

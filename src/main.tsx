@@ -25,6 +25,7 @@ import Financeiro from './pages/Financeiro.tsx';
 import ProfessorProfilePage from './pages/ProfessorProfilePage.tsx';
 import SuperAdminPage from './pages/SuperAdmin.tsx';
 import Notificacoes from './pages/Notificacoes.tsx';
+import Loja from './pages/Loja.tsx';
 
 // Context Providers
 import { AuthProvider } from './context/AuthContext';
@@ -104,6 +105,10 @@ const router = createBrowserRouter([
       {
         path: 'perfil',
         element: <ProtectedRoute><ClientProfile /></ProtectedRoute>,
+      },
+      {
+        path: 'loja',
+        element: <ProtectedRoute><Loja /></ProtectedRoute>,
       },
       { path: ':slug', element: <ArenaPublic /> },
     ],

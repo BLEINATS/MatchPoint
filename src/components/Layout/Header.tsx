@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   LogOut, Sun, Moon, Settings, Bookmark, LayoutGrid, 
   User as UserIcon, LayoutDashboard, GraduationCap, Trophy, 
-  PartyPopper, Calendar, ChevronDown, Loader2, Bell, Gift, DollarSign, Clock, Users, BarChart2, Send
+  PartyPopper, Calendar, ChevronDown, Loader2, Bell, Gift, DollarSign, Clock, Users, BarChart2, Send, ShoppingBag
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -31,6 +31,20 @@ const Header: React.FC = () => {
 
   const isAdminView = profile?.role === 'admin_arena';
   const isStaffView = profile?.role === 'funcionario';
+
+  const dashboardPath = useMemo(() => {
+    switch (profile?.role) {
+      case 'super_admin':
+        return '/superadmin';
+      case 'admin_arena':
+      case 'funcionario':
+        return '/dashboard';
+      case 'cliente':
+        return '/perfil';
+      default:
+        return '/';
+    }
+  }, [profile]);
 
   useEffect(() => {
     const timerId = setInterval(() => {
@@ -133,7 +147,7 @@ const Header: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <Link to={profile?.role === 'admin_arena' || profile?.role === 'funcionario' ? "/dashboard" : "/perfil"} className="flex items-center">
+            <Link to={dashboardPath} className="flex items-center">
               <Calendar className="h-8 w-8 text-brand-blue-500" />
               <span className="ml-2 text-xl font-bold text-brand-gray-900 dark:text-white">
                 MatchPlay
@@ -175,6 +189,7 @@ const Header: React.FC = () => {
                     <NavIconButton to="/alunos" title="Gerenciamento"><GraduationCap className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/torneios" title="Torneios"><Trophy className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/eventos" title="Eventos"><PartyPopper className="h-5 w-5" /></NavIconButton>
+                    <NavIconButton to="/loja" title="Loja"><ShoppingBag className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/financeiro" title="Financeiro"><DollarSign className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/gamification" title="Gamificação"><Gift className="h-5 w-5" /></NavIconButton>
                     <NavIconButton to="/notificacoes" title="Notificações"><Send className="h-5 w-5" /></NavIconButton>
@@ -236,7 +251,7 @@ const Header: React.FC = () => {
                           <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 truncate">{profile.email}</p>
                         </div>
                         <div className="py-1 border-t border-brand-gray-200 dark:border-brand-gray-700">
-                          <Link to={profile?.role === 'admin_arena' || profile?.role === 'funcionario' ? '/dashboard' : '/perfil'} onClick={() => setIsProfileMenuOpen(false)} className="flex items-center w-full px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
+                          <Link to={dashboardPath} onClick={() => setIsProfileMenuOpen(false)} className="flex items-center w-full px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
                             <LayoutDashboard className="h-4 w-4 mr-3" /> Meu Painel
                           </Link>
                           <Link to="/settings" onClick={() => setIsProfileMenuOpen(false)} className="flex items-center w-full px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">

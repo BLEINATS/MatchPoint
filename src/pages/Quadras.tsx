@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Loader2, LayoutGrid, ShoppingBag, Percent } from 'lucide-react';
+import { Plus, Loader2, LayoutGrid, ShoppingBag, Percent, AlertTriangle } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import Button from '../components/Forms/Button';
 import QuadraCard from '../components/Dashboard/QuadraCard';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Quadra, PricingRule, Reserva } from '../types';
+import { Quadra, PricingRule } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,6 +13,8 @@ import RentalItemsTab from '../components/Quadras/RentalItemsTab';
 import DiscountsTab from '../components/Quadras/DiscountsTab';
 import { localApi, localUploadPhoto, localDeletePhoto } from '../lib/localApi';
 import QuadraFormTabs from '../components/Forms/QuadraFormTabs';
+import { useSubscriptionStatus } from '../hooks/useSubscriptionStatus';
+import Alert from '../components/Shared/Alert';
 
 const Quadras: React.FC = () => {
   const { user, selectedArenaContext: arena, profile } = useAuth();
@@ -22,6 +24,9 @@ const Quadras: React.FC = () => {
   const [selectedQuadra, setSelectedQuadra] = useState<Quadra | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'quadras' | 'itens' | 'promocoes'>('quadras');
+  
+  const { canAddQuadra, limits, isExpired, isActive } = useSubscriptionStatus();
+  const effectiveCanAdd = canAddQuadra && isActive;
 
   const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.quadras === 'edit', [profile]);
 
@@ -47,6 +52,13 @@ const Quadras: React.FC = () => {
   }, [fetchQuadras]);
 
   const handleOpenModal = (quadra: Quadra | null = null) => {
+    if (!quadra && !effectiveCanAdd) {
+      const message = isExpired
+        ? 'Seu plano expirou. Para adicionar mais quadras, por favor, renove sua assinatura.'
+        : `Limite de ${limits.maxQuadras} quadras atingido para o seu plano atual. Para adicionar mais, considere fazer um upgrade.`;
+      addToast({ message, type: 'error' });
+      return;
+    }
     setSelectedQuadra(quadra);
     setIsModalOpen(true);
   };
@@ -175,12 +187,20 @@ const Quadras: React.FC = () => {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-brand-gray-800 dark:text-white">Gerenciamento de Quadras</h1>
           {activeTab === 'quadras' && canEdit && (
-            <Button onClick={() => handleOpenModal()}>
+            <Button onClick={() => handleOpenModal()} disabled={!effectiveCanAdd}>
               <Plus className="h-4 w-4 mr-2" />
               Adicionar Quadra
             </Button>
           )}
         </div>
+
+        {!canAddQuadra && activeTab === 'quadras' && (
+          <Alert
+            type="warning"
+            title={isExpired ? "Plano Expirado" : "Limite de Quadras Atingido"}
+            message={isExpired ? `Seu plano expirou. Para adicionar mais quadras, por favor, renove sua assinatura.` : `Você atingiu o limite de ${limits.maxQuadras} quadras para o seu plano atual. Para adicionar mais, considere fazer um upgrade.`}
+          />
+        )}
 
         <div className="mb-8 border-b border-brand-gray-200 dark:border-brand-gray-700">
           <nav className="-mb-px flex space-x-4 overflow-x-auto" aria-label="Tabs">
@@ -254,7 +274,7 @@ const Quadras: React.FC = () => {
                     <h3 className="text-lg font-medium text-brand-gray-800 dark:text-white">Nenhuma quadra cadastrada</h3>
                     <p className="mt-2 text-sm text-brand-gray-500 dark:text-brand-gray-400">Comece adicionando sua primeira quadra para gerenciar reservas e horários.</p>
                     {canEdit && (
-                      <Button className="mt-4" onClick={() => handleOpenModal()}>
+                      <Button className="mt-4" onClick={() => handleOpenModal()} disabled={!effectiveCanAdd}>
                         <Plus className="h-4 w-4 mr-2" />
                         Adicionar Primeira Quadra
                       </Button>

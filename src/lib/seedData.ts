@@ -1,5 +1,5 @@
 import { localApi } from './localApi';
-import { Arena, Profile, Quadra, PricingRule, PlanoAula, Aluno, Friendship, Reserva, GamificationSettings, GamificationLevel, GamificationReward, GamificationAchievement, Professor, Turma, Plan, Subscription } from '../types';
+import { Arena, Profile, Quadra, PricingRule, PlanoAula, Aluno, Friendship, Reserva, GamificationSettings, GamificationLevel, GamificationReward, GamificationAchievement, Professor, Turma, Plan, Subscription, Product } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { subDays, format, addDays } from 'date-fns';
 
@@ -20,6 +20,40 @@ const createMinimalPricingRule = (quadraId: string, arenaId: string): PricingRul
   }
 ];
 
+const seedDefaultProducts = async (arenaId: string) => {
+    const products: Omit<Product, 'id' | 'arena_id' | 'created_at'>[] = [
+        {
+            name: 'Raquete de Beach Tennis Profissional',
+            description: 'Raquete de alta performance para jogadores avançados, feita com carbono 3K.',
+            price: 799.90,
+            photo_urls: ['https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/400x400/3b82f6/ffffff?text=Raquete'],
+            stock: 15,
+            is_active: true,
+        },
+        {
+            name: 'Bola de Beach Tennis (Tubo com 3)',
+            description: 'Bolas oficiais aprovadas pela ITF, ideais para treinos e competições.',
+            price: 49.90,
+            photo_urls: ['https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/400x400/16a34a/ffffff?text=Bolas'],
+            stock: 50,
+            is_active: true,
+        },
+        {
+            name: 'Camiseta UV MatchPlay',
+            description: 'Camiseta com proteção UV50+, perfeita para jogos sob o sol. Tecido leve e respirável.',
+            price: 129.90,
+            photo_urls: ['https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/400x400/f97316/ffffff?text=Camiseta'],
+            is_active: true,
+            variants: [
+                { id: uuidv4(), name: 'Tamanho P', stock: 10 },
+                { id: uuidv4(), name: 'Tamanho M', stock: 15 },
+                { id: uuidv4(), name: 'Tamanho G', stock: 5 },
+            ]
+        },
+    ];
+    await localApi.upsert('products', products, arenaId, true);
+};
+
 export const seedInitialData = async () => {
   // localStorage.clear(); // This was causing data loss on reload. It is now removed.
   console.log("Seeding initial data. All previous data cleared.");
@@ -34,11 +68,11 @@ export const seedInitialData = async () => {
   await localApi.upsert('profiles', [adminProfile, superAdminProfile, viniProfile, anaProfile, brunoProfile], 'all', true);
 
   // 2. SaaS Plans
-  const trialPlan: Plan = { id: 'plan_trial_01', name: '7 Dias Grátis', price: 0, features: ['Até 2 quadras', 'Reservas online', '1 funcionário'], is_active: true };
-  const basicPlan: Plan = { id: 'plan_basic_01', name: 'Básico', price: 59.90, features: ['Até 5 quadras', 'Reservas online', 'Dashboard de gestão', 'Gestão de Clientes', '3 funcionários'], is_active: true };
-  const proPlan: Plan = { id: 'plan_pro_01', name: 'Pro', price: 99.90, features: ['Quadras ilimitadas', 'Relatórios avançados', 'Gestão de clientes (CRM)', 'Gamificação', 'Suporte prioritário', 'Funcionários ilimitados'], is_active: true };
+  const basicPlan: Plan = { id: 'plan_basic_01', name: 'Básico', price: 59.90, billing_cycle: 'monthly', features: ['Até 5 quadras', 'Reservas online', 'Dashboard de gestão', 'Gestão de Clientes', '3 funcionários'], is_active: true };
+  const proPlan: Plan = { id: 'plan_pro_01', name: 'Pro', price: 99.90, billing_cycle: 'monthly', features: ['Quadras ilimitadas', 'Relatórios avançados', 'Gestão de clientes (CRM)', 'Gamificação', 'Suporte prioritário', 'Funcionários ilimitados'], is_active: true };
+  const proAnualPlan: Plan = { id: 'plan_pro_anual_01', name: 'Pro Anual', price: 999.00, billing_cycle: 'annual', features: ['Tudo do plano Pro', 'Desconto de ~15%'], is_active: true };
   
-  await localApi.upsert('plans', [trialPlan, basicPlan, proPlan], 'all', true);
+  await localApi.upsert('plans', [basicPlan, proPlan, proAnualPlan], 'all', true);
 
   // 3. Arena
   const arenaId = `arena_${uuidv4()}`;
@@ -232,6 +266,13 @@ export const seedInitialData = async () => {
     { arena_id: arenaId, name: 'Fidelidade Ouro', description: 'Lenda da arena! 100 reservas completadas.', type: 'loyalty_100', points_reward: 2500, icon: 'Trophy' },
   ];
   await localApi.upsert('gamification_achievements', achievements, arenaId, true);
+
+  // 16. Products
+  const seedKeyProducts = `products_seeded_v2_${arenaId}`;
+  if (!localStorage.getItem(seedKeyProducts)) {
+      await seedDefaultProducts(arenaId);
+      localStorage.setItem(seedKeyProducts, 'true');
+  }
 
   // Clear other tables
   await localApi.upsert('atletas_aluguel', [], arenaId, true);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, GraduationCap, BookOpen, Plus, Search, BadgeCheck, BadgeX, Briefcase, Loader2, MessageSquare, MoreVertical, Handshake, UserCheck, Star, Edit, Trash2, Phone, Calendar, List, Mail, Percent, FileText, DollarSign, BadgeHelp, UserPlus } from 'lucide-react';
+import { ArrowLeft, Users, GraduationCap, BookOpen, Plus, Search, BadgeCheck, BadgeX, Briefcase, Loader2, MessageSquare, MoreVertical, Handshake, UserCheck, Star, Edit, Trash2, Phone, Calendar, List, Mail, Percent, FileText, DollarSign, BadgeHelp, UserPlus, Repeat } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -22,8 +22,10 @@ import { localUploadPhoto } from '../lib/localApi';
 import ProfessorAgendaView from '../components/Alunos/ProfessorAgendaView';
 import { syncTurmaReservations } from '../utils/bookingSyncUtils';
 import { awardPointsForCompletedReservation } from '../utils/gamificationUtils';
+import MensalistasTab from '../components/Alunos/MensalistasTab';
+import MensalistaDetailModal from '../components/Reservations/MensalistaDetailModal';
 
-type TabType = 'clientes' | 'alunos' | 'professores' | 'atletas' | 'turmas';
+type TabType = 'clientes' | 'alunos' | 'mensalistas' | 'professores' | 'atletas' | 'turmas';
 type ProfessoresViewMode = 'list' | 'agenda';
 
 const Alunos: React.FC = () => {
@@ -40,6 +42,7 @@ const Alunos: React.FC = () => {
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [quadras, setQuadras] = useState<Quadra[]>([]);
   const [planos, setPlanos] = useState<PlanoAula[]>([]);
+  const [reservas, setReservas] = useState<Reserva[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -56,8 +59,11 @@ const Alunos: React.FC = () => {
   const [editingTurma, setEditingTurma] = useState<Turma | null>(null);
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'aluno' | 'professor' | 'atleta' | 'turma' } | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'aluno' | 'professor' | 'atleta' | 'turma' | 'reserva' } | null>(null);
   
+  const [isMensalistaModalOpen, setIsMensalistaModalOpen] = useState(false);
+  const [selectedMensalista, setSelectedMensalista] = useState<Reserva | null>(null);
+
   const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.gerenciamento_arena === 'edit', [profile]);
 
   const loadData = useCallback(async () => {
@@ -78,7 +84,6 @@ const Alunos: React.FC = () => {
         localApi.select<GamificationPointTransaction>('gamification_point_transactions', arena.id),
       ]);
 
-      // Processar pontos de gamificação para reservas concluídas
       const now = new Date();
       const completedReservations = (reservasRes.data || []).filter(r => {
         if (r.status !== 'confirmada' && r.status !== 'realizada') return false;
@@ -96,7 +101,6 @@ const Alunos: React.FC = () => {
           for (const reserva of reservationsToProcess) {
             await awardPointsForCompletedReservation(reserva, arena.id);
           }
-          // Refetch alunos data after awarding points
           const { data: updatedAlunos } = await localApi.select<Aluno>('alunos', arena.id);
           setAlunos(updatedAlunos || []);
         } else {
@@ -111,6 +115,7 @@ const Alunos: React.FC = () => {
       setQuadras(quadrasRes.data || []);
       setAtletasAluguel(atletasRes.data || []);
       setPlanos(planosRes.data || []);
+      setReservas(reservasRes.data || []);
     } catch (error: any) {
       addToast({ message: `Erro ao carregar dados: ${error.message}`, type: 'error' });
     } finally {
@@ -153,23 +158,24 @@ const Alunos: React.FC = () => {
     }
   };
 
-  const handleDeleteRequest = (id: string, name: string, type: 'aluno' | 'professor' | 'atleta' | 'turma') => {
+  const handleDeleteRequest = (id: string, name: string, type: 'aluno' | 'professor' | 'atleta' | 'turma' | 'reserva') => {
     setItemToDelete({ id, name, type });
     setIsDeleteModalOpen(true);
     setIsAlunoModalOpen(false);
     setIsProfessorModalOpen(false);
     setIsTurmaModalOpen(false);
     setIsAtletaAluguelModalOpen(false);
+    setIsMensalistaModalOpen(false);
   };
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete || !arena) return;
     const { id, type } = itemToDelete;
-    const tableName = type === 'turma' ? 'turmas' : type === 'professor' ? 'professores' : type === 'atleta' ? 'atletas_aluguel' : 'alunos';
+    const tableName = type === 'turma' ? 'turmas' : type === 'professor' ? 'professores' : type === 'atleta' ? 'atletas_aluguel' : type === 'reserva' ? 'reservas' : 'alunos';
     try {
-      if (type === 'turma') {
+      if (type === 'turma' || type === 'reserva') {
         const { data: allReservas } = await localApi.select<Reserva>('reservas', arena.id);
-        const otherReservas = allReservas.filter(r => r.turma_id !== id);
+        const otherReservas = allReservas.filter(r => (type === 'turma' ? r.turma_id : r.id) !== id);
         await localApi.upsert('reservas', otherReservas, arena.id, true);
       }
       await localApi.delete(tableName, [id], arena.id);
@@ -252,6 +258,19 @@ const Alunos: React.FC = () => {
     }
   };
 
+  const handleUpdateMasterReserva = async (updatedReserva: Reserva) => {
+    if (!arena) return;
+    try {
+      await localApi.upsert('reservas', [updatedReserva], arena.id);
+      addToast({ message: 'Dados do mensalista atualizados!', type: 'success' });
+      loadData();
+    } catch (error: any) {
+      addToast({ message: `Erro ao salvar: ${error.message}`, type: 'error' });
+    } finally {
+      setIsMensalistaModalOpen(false);
+    }
+  };
+
   const isAluno = (aluno: Aluno): boolean => !!(aluno.plan_name && aluno.plan_name.trim() !== '' && aluno.plan_name.toLowerCase() !== 'avulso');
 
   const linkedProfileIds = useMemo(() => {
@@ -323,7 +342,9 @@ const Alunos: React.FC = () => {
   };
 
   const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
-    { id: 'clientes', label: 'Clientes', icon: Users }, { id: 'alunos', label: 'Alunos', icon: GraduationCap },
+    { id: 'clientes', label: 'Clientes', icon: Users },
+    { id: 'alunos', label: 'Alunos', icon: GraduationCap },
+    { id: 'mensalistas', label: 'Mensalistas', icon: Repeat },
     { id: 'professores', label: 'Professores', icon: Briefcase },
     { id: 'atletas', label: 'Atletas', icon: Handshake },
     { id: 'turmas', label: 'Turmas', icon: BookOpen },
@@ -333,13 +354,24 @@ const Alunos: React.FC = () => {
     if (activeTab === 'atletas') return 'Adicionar Atleta';
     if (activeTab === 'professores') return 'Adicionar Professor';
     if (activeTab === 'turmas') return 'Adicionar Turma';
+    if (activeTab === 'mensalistas') return 'Criar Mensalista';
     return `Adicionar Cliente`;
   }, [activeTab]);
+
+  const handleAddButtonClick = () => {
+    if (!canEdit) return;
+    if (activeTab.startsWith('cliente') || activeTab.startsWith('aluno')) setIsAlunoModalOpen(true);
+    else if (activeTab === 'professores') setIsProfessorModalOpen(true);
+    else if (activeTab === 'atletas') setIsAtletaAluguelModalOpen(true);
+    else if (activeTab === 'turmas') setIsTurmaModalOpen(true);
+    else if (activeTab === 'mensalistas') navigate('/reservas', { state: { openModal: true, type: 'avulsa', isRecurring: true } });
+  };
 
   const searchPlaceholder = useMemo(() => {
     if (activeTab === 'atletas') return 'Buscar por atleta...';
     if (activeTab === 'professores') return 'Buscar por professor...';
     if (activeTab === 'turmas') return 'Buscar por turma...';
+    if (activeTab === 'mensalistas') return 'Buscar por mensalista...';
     return `Buscar por cliente/aluno...`;
   }, [activeTab]);
 
@@ -348,6 +380,7 @@ const Alunos: React.FC = () => {
     switch (activeTab) {
       case 'clientes': return <AlunosList alunos={filteredClientes} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} canEdit={canEdit} />;
       case 'alunos': return <AlunosList alunos={filteredAlunos} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} canEdit={canEdit} />;
+      case 'mensalistas': return <MensalistasTab reservas={reservas} alunos={alunos} quadras={quadras} onSelect={setSelectedMensalista} canEdit={canEdit} />;
       case 'professores':
         return (
           <div>
@@ -376,6 +409,8 @@ const Alunos: React.FC = () => {
   useEffect(() => { if (!isAtletaAluguelModalOpen) setEditingAtletaAluguel(null); }, [isAtletaAluguelModalOpen]);
   useEffect(() => { if (editingTurma) setIsTurmaModalOpen(true); }, [editingTurma]);
   useEffect(() => { if (!isTurmaModalOpen) setEditingTurma(null); }, [isTurmaModalOpen]);
+  useEffect(() => { if (selectedMensalista) setIsMensalistaModalOpen(true); }, [selectedMensalista]);
+  useEffect(() => { if (!isMensalistaModalOpen) setSelectedMensalista(null); }, [isMensalistaModalOpen]);
 
   if (isAuthLoading) {
     return (
@@ -415,7 +450,7 @@ const Alunos: React.FC = () => {
         <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-4 mb-8 border border-brand-gray-200 dark:border-brand-gray-700">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="w-full sm:w-auto sm:flex-1"><Input placeholder={searchPlaceholder} icon={<Search className="h-4 w-4 text-brand-gray-400" />} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-            <Button onClick={() => { if (activeTab.startsWith('cliente') || activeTab.startsWith('aluno')) setIsAlunoModalOpen(true); else if (activeTab === 'professores') setIsProfessorModalOpen(true); else if (activeTab === 'atletas') setIsAtletaAluguelModalOpen(true); else setIsTurmaModalOpen(true); }} disabled={!canEdit}><Plus className="h-4 w-4 mr-2" />{addButtonLabel}</Button>
+            <Button onClick={handleAddButtonClick} disabled={!canEdit}><Plus className="h-4 w-4 mr-2" />{addButtonLabel}</Button>
           </div>
         </div>
         <AnimatePresence mode="wait"><motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>{renderContent()}</motion.div></AnimatePresence>
@@ -424,11 +459,31 @@ const Alunos: React.FC = () => {
       <ProfessorModal isOpen={isProfessorModalOpen} onClose={() => setIsProfessorModalOpen(false)} onSave={handleSaveProfessor} onDelete={(id) => handleDeleteRequest(id, editingProfessor?.name || '', 'professor')} initialData={editingProfessor} alunos={linkableAlunosForModal} />
       <AtletaAluguelModal isOpen={isAtletaAluguelModalOpen} onClose={() => setIsAtletaAluguelModalOpen(false)} onSave={handleSaveAtletaAluguel} onDelete={(id) => handleDeleteRequest(id, editingAtletaAluguel?.name || '', 'atleta')} initialData={editingAtletaAluguel} alunos={linkableAlunosForModal} />
       <TurmaModal isOpen={isTurmaModalOpen} onClose={() => setIsTurmaModalOpen(false)} onSave={handleSaveTurma} initialData={editingTurma} professores={professores} quadras={quadras} alunos={unlinkedAlunos} planos={planos} onDataChange={handleDataChange} />
+      <AnimatePresence>
+        {isMensalistaModalOpen && selectedMensalista && (
+          <MensalistaDetailModal
+            isOpen={isMensalistaModalOpen}
+            onClose={() => setIsMensalistaModalOpen(false)}
+            reserva={selectedMensalista}
+            aluno={alunos.find(a => a.id === selectedMensalista.aluno_id)}
+            onSave={handleUpdateMasterReserva}
+            onEdit={() => {
+              setIsMensalistaModalOpen(false);
+              navigate('/reservas', { state: { editReservaId: selectedMensalista.id, forceEdit: true } });
+            }}
+            onDelete={() => {
+              setIsMensalistaModalOpen(false);
+              handleDeleteRequest(selectedMensalista.id, selectedMensalista.clientName, 'reserva');
+            }}
+          />
+        )}
+      </AnimatePresence>
       <ConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleConfirmDelete} title="Confirmar Exclusão" message={<><p>Tem certeza que deseja excluir <strong>{itemToDelete?.name}</strong>?</p><p className="mt-2 text-xs text-red-500 dark:text-red-400">Esta ação é irreversível.</p></>} confirmText="Sim, Excluir" />
     </Layout>
   );
 };
 
+// ... (rest of the components remain the same)
 const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, onPromoteToProfessor: (aluno: Aluno) => void, onPromoteToAtleta: (aluno: Aluno) => void, canEdit: boolean }> = ({ alunos, onEdit, onPromoteToProfessor, onPromoteToAtleta, canEdit }) => {
   if (alunos.length === 0) return <PlaceholderTab title="Nenhum cliente/aluno encontrado" description="Cadastre novos clientes ou alunos para vê-los aqui." />;
   
@@ -506,7 +561,7 @@ const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Profe
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {professores.map((prof, index) => (
-        <motion.div key={prof.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col justify-between">
+        <motion.div key={prof.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-purple-500">
           <div>
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-4">
@@ -571,7 +626,7 @@ const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: At
         const statusProps = getStatusProps(atleta.status);
         const specialtiesString = atleta.esportes.map(e => e.position ? `${e.sport} (${e.position})` : e.sport).join(', ');
         return (
-          <motion.div key={atleta.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col">
+          <motion.div key={atleta.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-indigo-500">
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-4">
                 <div className="flex-shrink-0 h-16 w-16">

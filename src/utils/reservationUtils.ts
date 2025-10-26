@@ -13,7 +13,6 @@ export const getReservationTypeDetails = (type: ReservationType, isRecurring?: b
     'aguardando_pagamento': { label: 'Aguardando Pagamento', icon: Clock, bgColor: 'bg-yellow-400', borderColor: 'border-yellow-500', publicBgColor: 'bg-yellow-100 dark:bg-yellow-900/50', publicTextColor: 'text-yellow-700 dark:text-yellow-400' },
   };
 
-  // Fallback to 'avulsa' if type is not recognized
   const details = baseDetails[type as keyof typeof baseDetails] || baseDetails['avulsa'];
 
   if (isRecurring) {
@@ -52,43 +51,41 @@ export const expandRecurringReservations = (
   const displayReservations: Reserva[] = [];
 
   baseReservations.forEach(reserva => {
-    // Case 1: It's a single, non-recurring reservation
     if (!reserva.isRecurring) {
       const rDate = parseDateStringAsLocal(reserva.date);
-      // Check if the single reservation falls within the view window
       if (isWithinInterval(rDate, { start: viewStartDate, end: viewEndDate })) {
         displayReservations.push(reserva);
       }
-      return; // Move to the next reservation in the loop
+      return;
     }
 
-    // Case 2: It's a recurring reservation master. We need to expand it.
-    if (reserva.status === 'cancelada') {
-      return; // Don't expand cancelled recurring masters
-    }
+    if (reserva.status === 'cancelada') return;
 
     const masterDate = startOfDay(parseDateStringAsLocal(reserva.date));
     const quadra = quadras.find(q => q.id === reserva.quadra_id);
-    if (!quadra) return; // Can't expand if we don't know the quadra's schedule
+    if (!quadra) return;
 
-    // Determine the date to start the expansion loop from.
-    // It should be the later of the view start date or the master reservation's start date.
     let runningDate = startOfDay(viewStartDate);
     if (isBefore(runningDate, masterDate)) {
       runningDate = masterDate;
     }
 
-    // Determine the final end date for the recurrence.
-    const recurrenceFinalEndDate = reserva.recurringEndDate
-      ? parseDateStringAsLocal(reserva.recurringEndDate)
-      : addYears(masterDate, 1); // Default to 1 year if no end date
+    const recurrenceFinalEndDate = reserva.recurringEndDate && reserva.recurringEndDate.trim() !== ''
+        ? endOfDay(parseDateStringAsLocal(reserva.recurringEndDate))
+        : null;
 
-    // The loop should not go beyond the view's end date or the recurrence's own end date.
-    const loopEndDate = isBefore(viewEndDate, recurrenceFinalEndDate) ? viewEndDate : recurrenceFinalEndDate;
+    let loopEndDate = viewEndDate;
+    if (recurrenceFinalEndDate && isBefore(recurrenceFinalEndDate, loopEndDate)) {
+        loopEndDate = recurrenceFinalEndDate;
+    }
 
     while (isBefore(runningDate, loopEndDate) || isSameDay(runningDate, loopEndDate)) {
+      if (recurrenceFinalEndDate && isAfter(runningDate, recurrenceFinalEndDate)) {
+        break; 
+      }
+      
       const dayOfWeek = getDay(runningDate);
-
+      
       let shouldCreateInstance = false;
       if (reserva.recurringType === 'daily') {
         let horario;
@@ -106,13 +103,18 @@ export const expandRecurringReservations = (
       }
 
       if (shouldCreateInstance) {
-        const isOriginal = isSameDay(runningDate, masterDate);
-        displayReservations.push({
-          ...reserva,
-          id: isOriginal ? reserva.id : `${reserva.id}_${format(runningDate, 'yyyy-MM-dd')}`,
-          date: format(runningDate, 'yyyy-MM-dd'),
-          masterId: isOriginal ? undefined : reserva.id,
-        });
+        const dateString = format(runningDate, 'yyyy-MM-dd');
+        if (reserva.attendance && reserva.attendance[dateString] === 'cancelada') {
+          // Skip this instance as it's individually cancelled
+        } else {
+          const isOriginal = isSameDay(runningDate, masterDate);
+          displayReservations.push({
+            ...reserva,
+            id: isOriginal ? reserva.id : `${reserva.id}_${format(runningDate, 'yyyy-MM-dd')}`,
+            date: dateString,
+            masterId: isOriginal ? undefined : reserva.id,
+          });
+        }
       }
 
       runningDate = addDays(runningDate, 1);

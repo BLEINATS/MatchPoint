@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Reserva, Quadra } from '../../types';
@@ -6,14 +6,40 @@ import { Calendar, Clock, Phone, DollarSign, AlertCircle, CheckCircle, CreditCar
 import { getReservationTypeDetails } from '../../utils/reservationUtils';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatters';
+import { isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 
 interface ListViewProps {
-  reservas: Reserva[];
+  allReservations: Reserva[];
   quadras: Quadra[];
   onReservationClick: (reserva: Reserva) => void;
+  filters: {
+    startDate: string;
+    endDate: string;
+  };
+  sortOrder: 'asc' | 'desc';
 }
 
-const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationClick }) => {
+const ListView: React.FC<ListViewProps> = ({ allReservations, quadras, onReservationClick, filters, sortOrder }) => {
+  const filteredAndSortedReservas = useMemo(() => {
+    let filtered = allReservations;
+    if (filters.startDate && filters.endDate) {
+      const rangeStart = startOfDay(parseDateStringAsLocal(filters.startDate));
+      const rangeEnd = endOfDay(parseDateStringAsLocal(filters.endDate));
+      filtered = filtered.filter(r => {
+        const rDate = parseDateStringAsLocal(r.date);
+        return isWithinInterval(rDate, { start: rangeStart, end: rangeEnd });
+      });
+    }
+
+    const sorted = [...filtered].sort((a, b) => {
+      const dateTimeA = new Date(`${a.date}T${a.start_time}`);
+      const dateTimeB = new Date(`${b.date}T${b.start_time}`);
+      return sortOrder === 'desc' ? dateTimeB.getTime() - dateTimeA.getTime() : dateTimeA.getTime() - dateTimeB.getTime();
+    });
+
+    return sorted;
+  }, [allReservations, filters, sortOrder]);
+
   const getStatusClasses = (status: Reserva['status']) => {
     switch (status) {
       case 'confirmada': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
@@ -51,7 +77,7 @@ const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationCli
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-brand-gray-800 divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
-            {reservas.map(reserva => {
+            {filteredAndSortedReservas.map(reserva => {
               const typeDetails = getReservationTypeDetails(reserva.type, reserva.isRecurring);
               const paymentStatus = getPaymentStatus(reserva.payment_status);
               const rentedItemsTitle = reserva.rented_items && reserva.rented_items.length > 0 
@@ -112,7 +138,7 @@ const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationCli
                 </tr>
               )
             })}
-             {reservas.length === 0 && (
+             {filteredAndSortedReservas.length === 0 && (
                 <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-sm text-brand-gray-500">
                         Nenhuma reserva encontrada para os filtros selecionados.
@@ -125,7 +151,7 @@ const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationCli
 
       {/* Mobile View: Cards */}
       <div className="md:hidden p-4 space-y-4">
-        {reservas.map(reserva => {
+        {filteredAndSortedReservas.map(reserva => {
           const typeDetails = getReservationTypeDetails(reserva.type, reserva.isRecurring);
           const paymentStatus = getPaymentStatus(reserva.payment_status);
           const rentedItemsTitle = reserva.rented_items && reserva.rented_items.length > 0 
@@ -175,7 +201,7 @@ const ListView: React.FC<ListViewProps> = ({ reservas, quadras, onReservationCli
             </div>
           );
         })}
-        {reservas.length === 0 && (
+        {filteredAndSortedReservas.length === 0 && (
             <div className="px-6 py-8 text-center text-sm text-brand-gray-500">
                 Nenhuma reserva encontrada para os filtros selecionados.
             </div>

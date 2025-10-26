@@ -1,7 +1,24 @@
+{`{/*
+  ======================================================================
+  ||  ATENÇÃO: LÓGICA DE ESTADO CRÍTICA - NÃO ALTERAR LEVEMENTE      ||
+  ======================================================================
+  || Este arquivo foi refatorado para resolver problemas de          ||
+  || inconsistência de estado ao navegar entre as abas (Agenda,      ||
+  || Calendário, Lista) e ao fechar modais. A lógica agora           ||
+  || centraliza o carregamento e a expansão de dados no componente   ||
+  || principal (Reservations) e passa os dados processados para as   ||
+  || abas filhas.                                                    ||
+  ||                                                                 ||
+  || -> NÃO reintroduza lógicas de fetch ou state management         ||
+  ||    separadas dentro das abas individuais.                       ||
+  || -> Qualquer alteração aqui deve ser testada exaustivamente      ||
+  ||    em todos os cenários de navegação e interação.               ||
+  ======================================================================
+*/}`}
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutGrid, Calendar, List, Plus, SlidersHorizontal, ArrowLeft, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
+import { LayoutGrid, Calendar, List, Plus, SlidersHorizontal, ArrowLeft, Loader2, ArrowUp, ArrowDown, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { localApi } from '../lib/localApi';
@@ -17,13 +34,14 @@ import CancellationModal from '../components/Reservations/CancellationModal';
 import ManualCancellationModal from '../components/Reservations/ManualCancellationModal';
 import ReservationLegend from '../components/Reservations/ReservationLegend';
 import FilterPanel from '../components/Reservations/FilterPanel';
-import { startOfDay, format, startOfMonth, endOfMonth, isBefore, parse, addYears, subDays, getDay, addDays, endOfDay, addMinutes } from 'date-fns';
+import { startOfDay, format, startOfMonth, endOfMonth, isBefore, parse, addYears, subYears, getDay, addDays, endOfDay, addMinutes, isSameDay, isWithinInterval } from 'date-fns';
 import { expandRecurringReservations } from '../utils/reservationUtils';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
 import { awardPointsForCompletedReservation, processCancellation } from '../utils/gamificationUtils';
 import { formatCurrency } from '../utils/formatters';
 import DayDetailView from '../components/Reservations/DayDetailView';
 import MensalistaDetailModal from '../components/Reservations/MensalistaDetailModal';
+import ConfirmationModal from '../components/Shared/ConfirmationModal';
 
 type ViewMode = 'agenda' | 'calendar' | 'list';
 
@@ -59,6 +77,8 @@ const Reservations: React.FC = () => {
   const [reservationToCancel, setReservationToCancel] = useState<Reserva | null>(null);
   const [isMensalistaModalOpen, setIsMensalistaModalOpen] = useState(false);
   const [selectedMensalistaReserva, setSelectedMensalistaReserva] = useState<Reserva | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'reserva' } | null>(null);
   
   const canView = useMemo(() => 
     profile?.role === 'admin_arena' || 
@@ -71,7 +91,7 @@ const Reservations: React.FC = () => {
     profile?.permissions?.reservas === 'edit', 
   [profile]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceReload = false) => {
     if (!selectedArenaContext) {
       setIsLoading(false);
       return;
@@ -121,14 +141,13 @@ const Reservations: React.FC = () => {
     setIsModalOpen(false);
     setSelectedReservation(null);
     setNewReservationSlot(null);
-    loadData();
+    loadData(true);
   }, [loadData]);
   
   const closeMensalistaModal = useCallback(() => {
     setIsMensalistaModalOpen(false);
     setSelectedMensalistaReserva(null);
-    loadData();
-  }, [loadData]);
+  }, []);
 
   useEffect(() => {
     let stateHandled = false;
@@ -152,52 +171,44 @@ const Reservations: React.FC = () => {
       });
       setSelectedReservation(null); setIsModalOpen(true); stateHandled = true;
     }
+    if (location.state?.editReservaId) {
+        const reservaToEdit = reservas.find(r => r.id === location.state.editReservaId);
+        if (reservaToEdit) {
+            openEditReservationModal(reservaToEdit, location.state.forceEdit);
+            stateHandled = true;
+        }
+    }
     if (stateHandled) navigate(location.pathname, { replace: true });
-  }, [location.state, navigate, canEdit, addToast]);
+  }, [location.state, navigate, canEdit, addToast, reservas]);
+
+  const allExpandedReservations = useMemo(() => {
+    const viewStartDate = subYears(new Date(), 1);
+    const viewEndDate = addYears(new Date(), 1);
+    return expandRecurringReservations(reservas, viewStartDate, viewEndDate, quadras);
+  }, [reservas, quadras]);
 
   const displayedReservations = useMemo(() => {
-    let sourceReservas = reservas;
-    let viewStartDate, viewEndDate;
+    let filtered = allExpandedReservations;
 
-    if (viewMode === 'list') {
-      const hasDateRangeFilter = filters.startDate && filters.endDate;
-      const defaultStart = subDays(new Date(), 30);
-      const defaultEnd = addDays(new Date(), 30);
-      viewStartDate = hasDateRangeFilter ? parseDateStringAsLocal(filters.startDate) : defaultStart;
-      viewEndDate = hasDateRangeFilter ? parseDateStringAsLocal(filters.endDate) : defaultEnd;
-      sourceReservas = expandRecurringReservations(reservas, viewStartDate, viewEndDate, quadras);
-    } else {
-        if (viewMode === 'calendar') { 
-            const monthStart = startOfMonth(selectedDate); 
-            const monthEnd = endOfMonth(selectedDate); 
-            viewStartDate = startOfDay(subDays(monthStart, getDay(monthStart))); 
-            viewEndDate = endOfDay(addDays(monthEnd, 6 - getDay(monthEnd))); 
-        } else { // agenda view
-            viewStartDate = startOfDay(selectedDate); 
-            viewEndDate = endOfDay(selectedDate); 
-        }
-        sourceReservas = expandRecurringReservations(reservas, viewStartDate, viewEndDate, quadras);
+    if (filters.quadraId !== 'all') {
+      filtered = filtered.filter(r => r.quadra_id === filters.quadraId);
     }
-
-    let filtered = sourceReservas;
-    if (filters.quadraId !== 'all') filtered = filtered.filter(r => r.quadra_id === filters.quadraId);
-    if (filters.status !== 'all') filtered = filtered.filter(r => r.status === filters.status);
-    if (filters.type !== 'all') filtered = filtered.filter(r => r.type === filters.type);
-    if (filters.clientName.trim() !== '') filtered = filtered.filter(r => r.clientName?.toLowerCase().includes(filters.clientName.trim().toLowerCase()));
+    if (filters.status !== 'all') {
+      filtered = filtered.filter(r => r.status === filters.status);
+    }
+    if (filters.type !== 'all') {
+      filtered = filtered.filter(r => r.type === filters.type);
+    }
+    if (filters.clientName.trim() !== '') {
+      filtered = filtered.filter(r => r.clientName?.toLowerCase().includes(filters.clientName.trim().toLowerCase()));
+    }
     
-    if (viewMode === 'list') {
-      filtered.sort((a, b) => {
-        const dateTimeA = new Date(`${a.date}T${a.start_time}`);
-        const dateTimeB = new Date(`${b.date}T${b.start_time}`);
-        if (sortOrder === 'desc') {
-          return dateTimeB.getTime() - dateTimeA.getTime();
-        }
-        return dateTimeA.getTime() - dateTimeB.getTime();
-      });
-    }
-
     return filtered;
-  }, [reservas, quadras, viewMode, filters, selectedDate, sortOrder]);
+  }, [allExpandedReservations, filters]);
+
+  const agendaReservations = useMemo(() => {
+    return displayedReservations.filter(r => isSameDay(parseDateStringAsLocal(r.date), selectedDate) && r.status !== 'cancelada');
+  }, [displayedReservations, selectedDate]);
 
   const filteredQuadras = useMemo(() => filters.quadraId === 'all' ? quadras : quadras.filter(q => q.id === filters.quadraId), [quadras, filters.quadraId]);
   const activeFilterCount = Object.values(filters).filter(value => value !== 'all' && value !== '').length;
@@ -210,22 +221,32 @@ const Reservations: React.FC = () => {
     try {
       const { clientName, clientPhone } = reservaData;
       let alunoForReservation: Aluno | null = null;
-      if (clientName) {
+  
+      // If we are editing and the reservaData already has an aluno_id, trust it first.
+      if (isEditing && (reservaData as Reserva).aluno_id) {
+          alunoForReservation = alunos.find(a => a.id === (reservaData as Reserva).aluno_id) || null;
+      }
+      
+      // If we couldn't find an aluno by ID, or if it's a new reservation, try by name.
+      if (!alunoForReservation && clientName) {
         const existingAluno = alunos.find(a => a.name.toLowerCase() === clientName.toLowerCase());
         if (existingAluno) {
           alunoForReservation = existingAluno;
-        } else {
+        } else if (!isEditing) { // Only create new alunos for new reservations
           const { data: newAlunos } = await localApi.upsert('alunos', [{ arena_id: selectedArenaContext.id, name: clientName, phone: clientPhone || null, status: 'ativo', plan_name: 'Avulso', join_date: format(new Date(), 'yyyy-MM-dd') }], selectedArenaContext.id);
           if (newAlunos && newAlunos[0]) {
             alunoForReservation = newAlunos[0];
-            const { data: allAlunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
-            setAlunos(allAlunos);
           }
         }
       }
   
-      let dataToUpsert: Partial<Reserva> = { ...reservaData, arena_id: selectedArenaContext.id, profile_id: alunoForReservation?.profile_id || null, aluno_id: alunoForReservation?.id || null };
-
+      let dataToUpsert: Partial<Reserva> = { 
+        ...reservaData, 
+        arena_id: selectedArenaContext.id, 
+        aluno_id: alunoForReservation?.id || null,
+        profile_id: alunoForReservation?.profile_id || null,
+      };
+  
       if (!isEditing) {
         dataToUpsert.created_by_name = profile.name;
         if (dataToUpsert.total_price && dataToUpsert.total_price > 0 && dataToUpsert.payment_status === 'pendente') {
@@ -244,15 +265,16 @@ const Reservations: React.FC = () => {
         dataToUpsert.total_price = 0;
         dataToUpsert.credit_used = 0;
         dataToUpsert.status = 'confirmada';
+        dataToUpsert.payment_status = 'pago';
         delete dataToUpsert.payment_deadline;
       }
-
-      const { data: savedReservas } = await localApi.upsert('reservas', [dataToUpsert], selectedArenaContext.id);
-      const savedReserva = savedReservas[0];
-  
-      if (savedReserva && !isEditing && savedReserva.status === 'confirmada') {
-        await awardPointsForCompletedReservation(savedReserva, selectedArenaContext.id);
+    
+      dataToUpsert.isRecurring = reservaData.recurringType !== 'none';
+      if((dataToUpsert as any).isRecurringIndefinite) {
+        dataToUpsert.recurringEndDate = null;
       }
+    
+      await localApi.upsert('reservas', [dataToUpsert], selectedArenaContext.id);
   
       addToast({ message: `Reserva salva com sucesso!`, type: 'success' });
       closeModal();
@@ -288,7 +310,8 @@ const Reservations: React.FC = () => {
         const reserva = reservationToCancel;
         const updatePayload: Partial<Reserva> = { status: 'cancelada' };
         if (reserva.total_price && reserva.total_price > 0) updatePayload.payment_status = 'pago';
-        await localApi.upsert('reservas', [{ ...reserva, ...updatePayload }], selectedArenaContext.id);
+        const updatedReserva = { ...reserva, ...updatePayload };
+        await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
         addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
         loadData();
     } catch (error: any) { addToast({ message: `Erro ao cancelar reserva: ${error.message}`, type: 'error' }); }
@@ -307,17 +330,17 @@ const Reservations: React.FC = () => {
         if (creditAmount === 0 && reserva.total_price && reserva.total_price > 0) {
             updatePayload.payment_status = 'pago';
         }
-        await localApi.upsert('reservas', [{ ...reserva, ...updatePayload }], selectedArenaContext.id);
+        const updatedReserva = { ...reserva, ...updatePayload };
+        await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
         
         addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
         if (creditAmount > 0) addToast({ message: `${formatCurrency(creditAmount)} de crédito aplicado.`, type: 'info' });
-
+        loadData();
     } catch (error: any) {
         addToast({ message: `Erro ao processar cancelamento: ${error.message}`, type: 'error' });
     } finally {
         setIsCancellationModalOpen(false);
         setReservationToCancel(null);
-        loadData();
     }
   };
 
@@ -342,17 +365,37 @@ const Reservations: React.FC = () => {
     setIsModalOpen(true);
   };
   
-  const openEditReservationModal = (reserva: Reserva) => {
+  const openEditReservationModal = (reserva: Reserva, forceEdit = false) => {
     const isRecurring = reserva.isRecurring || reserva.recurringType !== 'none';
     const masterReserva = reserva.masterId ? reservas.find(r => r.id === reserva.masterId) : reserva;
     
-    if (isRecurring && masterReserva) {
-      setSelectedMensalistaReserva(masterReserva);
-      setIsMensalistaModalOpen(true);
-    } else {
+    if (forceEdit || !isRecurring) {
       setSelectedReservation(masterReserva || null);
       setNewReservationSlot(null);
       setIsModalOpen(true);
+    } else if (isRecurring && masterReserva) {
+      setSelectedMensalistaReserva(masterReserva);
+      setIsMensalistaModalOpen(true);
+    }
+  };
+
+  const handleDeleteRequest = (reserva: Reserva) => {
+    setItemToDelete({ id: reserva.id, name: reserva.clientName, type: 'reserva' });
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete || !selectedArenaContext) return;
+    try {
+      await localApi.delete('reservas', [itemToDelete.id], selectedArenaContext.id);
+      addToast({ message: 'Reserva excluída com sucesso.', type: 'success' });
+      loadData();
+    } catch (error: any) {
+      addToast({ message: `Erro ao excluir: ${error.message}`, type: 'error' });
+    } finally {
+      setIsDeleteModalOpen(false);
+      setItemToDelete(null);
+      closeMensalistaModal();
     }
   };
 
@@ -373,16 +416,33 @@ const Reservations: React.FC = () => {
   const renderContent = () => {
     switch (viewMode) {
       case 'agenda':
-        return <AgendaView quadras={filteredQuadras} reservas={displayedReservations} selectedDate={selectedDate} onSlotClick={openNewReservationModal} onReservationClick={openEditReservationModal} onDataChange={loadData} />;
+        return <AgendaView quadras={filteredQuadras} reservationsForDay={agendaReservations} selectedDate={selectedDate} onSlotClick={openNewReservationModal} onReservationClick={openEditReservationModal} onDataChange={loadData} />;
       case 'calendar':
         return (
-          <div className="space-y-8">
-            <CalendarView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} selectedDate={selectedDate} onDateChange={setSelectedDate} onDayDoubleClick={openNewReservationOnDay} onSlotClick={openNewReservationOnDay} />
-            <DayDetailView date={selectedDate} reservas={displayedReservations} quadras={quadras} onSlotClick={(time) => openNewReservationOnDay(selectedDate, time)} onReservationClick={openEditReservationModal} />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <CalendarView 
+                  quadras={quadras} 
+                  allReservations={displayedReservations}
+                  onReservationClick={openEditReservationModal} 
+                  selectedDate={selectedDate} 
+                  onDateChange={setSelectedDate} 
+                  onDayDoubleClick={openNewReservationOnDay} 
+                  onSlotClick={openNewReservationOnDay} 
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <DayDetailView
+                date={selectedDate}
+                reservas={displayedReservations}
+                quadras={quadras}
+                onReservationClick={openEditReservationModal}
+              />
+            </div>
           </div>
         );
       case 'list':
-        return <ListView quadras={quadras} reservas={displayedReservations} onReservationClick={openEditReservationModal} />;
+        return <ListView quadras={quadras} allReservations={displayedReservations} onReservationClick={openEditReservationModal} filters={filters} sortOrder={sortOrder} />;
       default:
         return null;
     }
@@ -411,7 +471,8 @@ const Reservations: React.FC = () => {
       <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={selectedArenaContext?.id || ''} selectedDate={selectedDate} profissionais={atletas} isReadOnly={!canEdit} />}</AnimatePresence>
       <AnimatePresence>{isCancellationModalOpen && (<CancellationModal isOpen={isCancellationModalOpen} onClose={() => { setIsCancellationModalOpen(false); setReservationToCancel(null); }} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} />)}</AnimatePresence>
       <AnimatePresence>{isManualCancelModalOpen && (<ManualCancellationModal isOpen={isManualCancelModalOpen} onClose={() => { setIsManualCancelModalOpen(false); setReservationToCancel(null); }} onConfirm={handleConfirmManualCancel} reservaName={reservationToCancel?.clientName || 'Reserva'} />)}</AnimatePresence>
-      <AnimatePresence>{isMensalistaModalOpen && selectedMensalistaReserva && <MensalistaDetailModal isOpen={isMensalistaModalOpen} onClose={closeMensalistaModal} reserva={selectedMensalistaReserva} aluno={alunos.find(a => a.id === selectedMensalistaReserva.aluno_id)} onSave={handleUpdateMasterReserva} />}</AnimatePresence>
+      <AnimatePresence>{isMensalistaModalOpen && selectedMensalistaReserva && <MensalistaDetailModal isOpen={isMensalistaModalOpen} onClose={closeMensalistaModal} reserva={selectedMensalistaReserva} aluno={alunos.find(a => a.id === selectedMensalistaReserva.aluno_id)} onSave={handleUpdateMasterReserva} onEdit={() => { closeMensalistaModal(); openEditReservationModal(selectedMensalistaReserva, true); }} onDelete={() => handleDeleteRequest(selectedMensalistaReserva)} />}</AnimatePresence>
+      <ConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleConfirmDelete} title="Confirmar Exclusão" message={<><p>Tem certeza que deseja excluir a reserva de <strong>{itemToDelete?.name}</strong>?</p><p className="mt-2 text-xs text-red-500 dark:text-red-400">Se for uma reserva recorrente, todas as futuras ocorrências serão removidas.</p></>} confirmText="Sim, Excluir" />
     </Layout>
   );
 };

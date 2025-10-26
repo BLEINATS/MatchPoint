@@ -34,8 +34,9 @@ import PaymentModal from '../Shared/PaymentModal';
 import ProfileDetailModal from './ProfileDetailModal';
 import AttendanceReportModal from './Student/AttendanceReportModal';
 import Header from '../Layout/Header';
+import LojaView from './LojaView';
 
-type View = 'inicio' | 'aulas' | 'reservas' | 'amigos' | 'perfil';
+type View = 'inicio' | 'aulas' | 'reservas' | 'loja' | 'amigos' | 'perfil';
 
 const ClientDashboard: React.FC = () => {
   const { profile, selectedArenaContext, switchArenaContext, memberships, allArenas, alunoProfileForSelectedArena, refreshAlunoProfile, updateProfile } = useAuth();
@@ -597,6 +598,7 @@ const ClientDashboard: React.FC = () => {
     { id: 'inicio', label: 'Início', icon: LayoutDashboard, visible: true },
     { id: 'aulas', label: 'Aulas', icon: GraduationCap, visible: isStudent },
     { id: 'reservas', label: 'Reservas', icon: Calendar, visible: true },
+    { id: 'loja', label: 'Loja', icon: ShoppingBag, visible: true },
     { id: 'amigos', label: 'Amigos', icon: Users, visible: true },
     { id: 'perfil', label: 'Perfil', icon: User, visible: true },
   ];
@@ -624,6 +626,7 @@ const ClientDashboard: React.FC = () => {
       case 'inicio': return <InicioView alunoProfile={alunoProfileForSelectedArena} planos={planos} levels={levels} rewards={rewards} onOpenProfileModal={handleOpenProfileModal} nextReservation={upcomingReservations[0]} pendingReservations={pendingPaymentReservations} onDetail={handleOpenDetailModal} onDataChange={handleDataChange} nextClass={nextClass} quadras={quadras} reservas={allArenaReservations} onSlotClick={handleSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} arenaName={selectedArenaContext?.name} selectedArena={selectedArenaContext} onOpenAttendanceModal={() => setIsAttendanceModalOpen(true)} />;
       case 'reservas': return <ReservationsTab upcoming={upcomingReservations} past={pastReservations} quadras={quadras} arenaName={selectedArenaContext?.name} onCancel={handleOpenCancelModal} onDetail={handleOpenDetailModal} onHirePlayer={(res) => { setReservationToHireFor(res); setIsHirePlayerModalOpen(true); }} profileId={profile.id} />;
       case 'aulas': return <AulasTab aluno={alunoProfileForSelectedArena!} allAlunos={allArenaAlunos} turmas={studentTurmas} professores={professores} quadras={quadras} planos={planos} onDataChange={handleDataChange} />;
+      case 'loja': return <LojaView />;
       case 'amigos': return <FriendsView />;
       case 'perfil': return <ClientProfileView aluno={alunoProfileForSelectedArena} profile={profile} onProfileUpdate={updateProfile} creditHistory={creditHistory} gamificationHistory={gamificationHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} atletas={atletas} onHireAtleta={(atleta) => { setAtletaToAssign(atleta); setIsAssignModalOpen(true); }} />;
       default: return null;
@@ -633,7 +636,7 @@ const ClientDashboard: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row h-screen bg-brand-gray-50 dark:bg-brand-gray-950">
       <SideNavBar items={navItems} activeView={activeView} setActiveView={setActiveView} />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <div className="md:hidden">
           <Header />
         </div>
