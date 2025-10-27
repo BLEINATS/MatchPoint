@@ -375,12 +375,16 @@ const Alunos: React.FC = () => {
     return `Buscar por cliente/aluno...`;
   }, [activeTab]);
 
+  const handleOpenMensalistaModal = (reserva: Reserva) => {
+    setSelectedMensalista(reserva);
+  };
+
   const renderContent = () => {
     if (isLoading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>;
     switch (activeTab) {
       case 'clientes': return <AlunosList alunos={filteredClientes} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} canEdit={canEdit} />;
       case 'alunos': return <AlunosList alunos={filteredAlunos} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} canEdit={canEdit} />;
-      case 'mensalistas': return <MensalistasTab reservas={reservas} alunos={alunos} quadras={quadras} onSelect={setSelectedMensalista} canEdit={canEdit} />;
+      case 'mensalistas': return <MensalistasTab reservas={reservas} alunos={alunos} quadras={quadras} onEdit={handleOpenMensalistaModal} onDelete={(reserva) => handleDeleteRequest(reserva.id, reserva.clientName, 'reserva')} canEdit={canEdit} />;
       case 'professores':
         return (
           <div>

@@ -1,6 +1,8 @@
 import React from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
 
 export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth();
@@ -18,7 +20,13 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ childr
 
 function App() {
   return (
-    <Outlet />
+    <ThemeProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <Outlet />
+        </AuthProvider>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
 

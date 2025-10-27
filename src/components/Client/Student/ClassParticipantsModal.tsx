@@ -37,12 +37,11 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
   }, [allAlunos, turma, date, time]);
 
   const bookedClassOnDay = useMemo(() => {
-    if (!isUnlimited) return null;
     return scheduledClasses.find(c => isSameDay(c.date, date));
-  }, [scheduledClasses, date, isUnlimited]);
+  }, [scheduledClasses, date]);
 
   const canBook = (isUnlimited || (aluno.aulas_restantes !== null && aluno.aulas_restantes > 0)) && enrolledCount < capacity && !bookedClassOnDay;
-  const canSwap = isUnlimited && !!bookedClassOnDay && enrolledCount < capacity;
+  const canSwap = !!bookedClassOnDay && enrolledCount < capacity && !isEnrolled;
   const oldClassForSwap = bookedClassOnDay;
 
   const handleBookClass = async () => {
@@ -70,10 +69,13 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
       const oldDateString = format(oldClassForSwap.date, 'yyyy-MM-dd');
       const newDateString = format(date, 'yyyy-MM-dd');
       const newBooking = { turma_id: turma.id, date: newDateString, time };
+      
       const updatedAulasAgendadas = (aluno.aulas_agendadas || [])
         .filter(a => !(a.turma_id === oldClassForSwap.turma.id && a.date === oldDateString && a.time === oldClassForSwap.time))
         .concat(newBooking);
+
       const updatedAluno = { ...aluno, aulas_agendadas: updatedAulasAgendadas };
+      
       await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
       addToast({ message: 'Troca de horário realizada com sucesso!', type: 'success' });
       onDataChange();
@@ -115,14 +117,17 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
       return <Button className="w-full" onClick={() => setShowBookConfirm(true)}>Agendar Aula</Button>;
     }
     
-    let reason = 'Créditos Insuficientes';
     if (enrolledCount >= capacity) {
-      reason = 'Turma Lotada';
-    } else if (isUnlimited && hasBookedOnSelectedDate) {
-      reason = 'Troca disponível'; // This state is now handled by canSwap
+      return <Button className="w-full" disabled>Turma Lotada</Button>;
+    }
+    if (bookedClassOnDay) {
+      return <Button className="w-full" disabled>Já possui aula neste dia</Button>;
+    }
+    if (!isUnlimited && (aluno.aulas_restantes === null || aluno.aulas_restantes <= 0)) {
+      return <Button className="w-full" disabled>Créditos Insuficientes</Button>;
     }
     
-    return <Button className="w-full" disabled>{reason}</Button>;
+    return <Button className="w-full" disabled>Indisponível</Button>;
   };
 
   return (

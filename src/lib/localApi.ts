@@ -24,12 +24,36 @@ const saveArenaData = (arenaId: string, data: Record<string, any[]>) => {
   }
 };
 
+const GLOBAL_TABLES = ['profiles', 'arenas', 'subscriptions', 'plans', 'friendships'];
+
 export const localApi = {
   select: async <T>(tableName: string, arenaId: string): Promise<{ data: T[], error: null }> => {
     if (arenaId === 'all') {
+      // If it's a known global table, fetch from its dedicated key.
+      if (GLOBAL_TABLES.includes(tableName)) {
         const allData = localStorage.getItem(`db_${tableName}`);
         return { data: allData ? JSON.parse(allData) : [], error: null };
+      }
+      
+      // Otherwise, it's a per-arena table, so we need to aggregate from all arenas.
+      const aggregatedData: T[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('db_arena_')) {
+          try {
+            const arenaData = JSON.parse(localStorage.getItem(key)!);
+            if (arenaData && arenaData[tableName]) {
+              aggregatedData.push(...arenaData[tableName]);
+            }
+          } catch (e) {
+            console.error(`Failed to parse data for key ${key}`, e);
+          }
+        }
+      }
+      return { data: aggregatedData, error: null };
     }
+
+    // This is the standard case: select from a specific arena.
     const arenaData = getArenaData(arenaId);
     const tableData = arenaData[tableName] || [];
     return { data: tableData as T[], error: null };
@@ -37,6 +61,7 @@ export const localApi = {
 
   upsert: async <T extends { id?: string }>(tableName: string, items: T[], arenaId: string, overwrite: boolean = false): Promise<{ data: T[], error: null }> => {
     if (arenaId === 'all') {
+      if (GLOBAL_TABLES.includes(tableName)) {
         if (overwrite) {
             localStorage.setItem(`db_${tableName}`, JSON.stringify(items));
             return { data: items, error: null };
@@ -61,6 +86,9 @@ export const localApi = {
 
         localStorage.setItem(`db_${tableName}`, JSON.stringify(allData));
         return { data: savedItems, error: null };
+      }
+      console.warn(`[localApi] 'upsert' to 'all' for a per-arena table '${tableName}' is not supported.`);
+      return { data: [], error: null };
     }
     
     if (overwrite) {
@@ -86,7 +114,7 @@ export const localApi = {
         tableData[index] = updatedItem;
         savedItems.push(updatedItem);
       } else {
-        const newItem = { ...item, id: uuidv4(), created_at: new Date().toISOString() } as T;
+        const newItem = { ...item, id: item.id || uuidv4(), created_at: (item as any).created_at || new Date().toISOString() } as T;
         tableData.push(newItem);
         savedItems.push(newItem);
       }
@@ -99,11 +127,15 @@ export const localApi = {
 
   delete: async (tableName: string, ids: string[], arenaId: string): Promise<{ error: null }> => {
     if (arenaId === 'all') {
+      if (GLOBAL_TABLES.includes(tableName)) {
         const allDataStr = localStorage.getItem(`db_${tableName}`);
         let allData: any[] = allDataStr ? JSON.parse(allDataStr) : [];
         allData = allData.filter(item => !ids.includes(item.id));
         localStorage.setItem(`db_${tableName}`, JSON.stringify(allData));
         return { error: null };
+      }
+      console.warn(`[localApi] 'delete' from 'all' for a per-arena table '${tableName}' is not supported.`);
+      return { error: null };
     }
     const arenaData = getArenaData(arenaId);
     let tableData: any[] = arenaData[tableName] || [];

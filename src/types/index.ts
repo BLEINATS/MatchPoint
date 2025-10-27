@@ -190,6 +190,7 @@ export interface Aluno {
   gamification_level_id?: string | null;
   gamification_levels?: { name: string } | null;
   gamification_point_transactions?: { points: number }[];
+  last_credit_reset_date?: string | null;
 }
 
 export interface Professor {

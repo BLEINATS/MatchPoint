@@ -18,7 +18,7 @@ interface RenewPlanModalProps {
 }
 
 const RenewPlanModal: React.FC<RenewPlanModalProps> = ({ isOpen, onClose, aluno, planos, onDataChange }) => {
-  const { arena } = useAuth();
+  const { selectedArenaContext: arena } = useAuth();
   const { addToast } = useToast();
   const [selectedPlanoId, setSelectedPlanoId] = useState<string>(aluno.plan_id || '');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -46,6 +46,7 @@ const RenewPlanModal: React.FC<RenewPlanModalProps> = ({ isOpen, onClose, aluno,
             monthly_fee: selectedPlano.price,
             aulas_restantes: selectedPlano.num_aulas,
             join_date: format(new Date(), 'yyyy-MM-dd'), // Reset join date on renewal
+            last_credit_reset_date: new Date().toISOString(),
         };
         await localApi.upsert('alunos', [updatedAluno], arena.id);
 

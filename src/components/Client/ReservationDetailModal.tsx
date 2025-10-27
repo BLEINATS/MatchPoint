@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Reserva, Quadra, Profile } from '../../types';
 import { format, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Clock, MapPin, X, ShoppingBag, CreditCard, DollarSign, CheckCircle, AlertCircle, User, Info, Users, UserPlus, Trash2, Lock, Unlock } from 'lucide-react';
+import { Calendar, Clock, MapPin, X, ShoppingBag, CreditCard, DollarSign, CheckCircle, AlertTriangle, User, Info, Users, UserPlus, Trash2, Lock, Unlock } from 'lucide-react';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import Button from '../Forms/Button';
 import { formatCurrency } from '../../utils/formatters';
@@ -40,9 +40,9 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
   if (!reserva || !quadra) return null;
 
   const isOrganizer = profile?.id === reserva.profile_id;
-  const isLocked = reserva.invites_closed === true;
   const isAwaitingPayment = reserva.status === 'aguardando_pagamento';
   const isPaymentOverdue = isAwaitingPayment && reserva.payment_deadline && isBefore(new Date(reserva.payment_deadline), new Date());
+  const isLocked = reserva.invites_closed === true;
 
   const handleCancelClick = () => {
     onClose();
@@ -53,6 +53,11 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
     if (!profile || !reserva.participants) return;
     const valorPorJogador = (reserva.total_price || 0) / (reserva.participants.filter(p => p.status === 'accepted').length || 1);
     onPay(reserva, valorPorJogador, true);
+  };
+
+  const handlePayFullAmount = () => {
+    const amountToPay = (reserva.total_price || 0) - (reserva.credit_used || 0);
+    onPay(reserva, amountToPay, false);
   };
 
   const handleAddParticipant = (friend: Profile) => {
@@ -90,8 +95,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
     switch (reserva.payment_status) {
       case 'pago': return { icon: CheckCircle, color: 'text-green-500', label: 'Pago' };
       case 'parcialmente_pago': return { icon: AlertCircle, color: 'text-blue-500', label: 'Parcialmente Pago' };
-      case 'pendente': return { icon: AlertCircle, color: 'text-yellow-500', label: 'Pendente' };
-      default: return { icon: AlertCircle, color: 'text-brand-gray-400', label: 'N/D' };
+      case 'pendente': return { icon: AlertTriangle, color: 'text-yellow-500', label: 'Pendente' };
+      default: return { icon: AlertTriangle, color: 'text-brand-gray-400', label: 'N/D' };
     }
   }, [reserva.payment_status]);
 
@@ -106,6 +111,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
     const numPayers = isLocked ? Math.max(1, numConfirmed) : Math.max(1, totalInvited);
     return totalCost / numPayers;
   }, [reserva.total_price, numConfirmed, totalInvited, isLocked]);
+  
+  const amountToPay = (reserva.total_price || 0) - (reserva.credit_used || 0);
 
   const availableFriendsToInvite = useMemo(() => {
     if (!friends || !reserva.participants) return [];
@@ -168,7 +175,7 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                         <div key={p.profile_id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-md gap-2">
                           <div className="flex items-center gap-3"><img src={p.avatar_url || `https://avatar.vercel.sh/${p.profile_id}.svg`} alt={p.name} className="w-8 h-8 rounded-full object-cover" /><div><span className="text-sm font-medium">{p.name}</span>{isParticipantOrganizer && <span className="ml-2 text-xs font-bold text-blue-500 bg-blue-100 dark:bg-blue-900/50 px-1.5 py-0.5 rounded-full">Organizador</span>}</div></div>
                           <div className="flex items-center justify-end gap-2 flex-wrap">
-                            {canPay ? (<Button size="sm" onClick={handlePayMyPart}>Pagar minha parte</Button>) : (<span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 ${p.payment_status === 'pago' ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300'}`}>{p.payment_status === 'pago' ? <CheckCircle className="h-3 w-3"/> : <AlertCircle className="h-3 w-3"/>}{p.payment_status === 'pago' ? 'Pago' : 'Pendente'}</span>)}
+                            {canPay ? (<Button size="sm" onClick={handlePayMyPart}>Pagar minha parte</Button>) : (<span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 ${p.payment_status === 'pago' ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300'}`}>{p.payment_status === 'pago' ? <CheckCircle className="h-3 w-3"/> : <AlertTriangle className="h-3 w-3"/>}{p.payment_status === 'pago' ? 'Pago' : 'Pendente'}</span>)}
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ p.status === 'accepted' ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' : p.status === 'declined' ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300' }`}>{p.status === 'pending' ? 'Pendente' : p.status === 'accepted' ? 'Confirmado' : 'Recusado'}</span>
                             {isOrganizer && !isLocked && !isParticipantOrganizer && <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-100" onClick={() => handleRemoveParticipant(p.profile_id)}><Trash2 className="h-4 w-4"/></Button>}
                           </div>
@@ -192,7 +199,18 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                   <div className="flex justify-between text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Valor por Jogador</span><div><span className="font-medium">{formatCurrency(valorPorJogador)}</span><span className="text-xs text-brand-gray-500"> ({numConfirmed}/{totalInvited} confirmados)</span></div></div>
                   {(reserva.credit_used || 0) > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-blue-600 dark:text-blue-400">Crédito Utilizado</span><span className="font-medium text-blue-600 dark:text-blue-400">- {formatCurrency(reserva.credit_used)}</span></div>)}
                   <div className="flex justify-between text-lg font-bold border-t-2 border-brand-gray-300 dark:border-brand-gray-600 pt-2 mt-2"><span className="text-brand-gray-800 dark:text-white">Total</span><span className="text-brand-blue-600 dark:text-brand-blue-300">{formatCurrency(reserva.total_price)}</span></div>
-                  <div className="flex justify-end items-center text-xs mt-1"><paymentStatus.icon className={`h-3 w-3 mr-1 ${paymentStatus.color}`} /><span className={`font-medium ${paymentStatus.color}`}>{paymentStatus.label}</span></div>
+                  
+                  {reserva.payment_status === 'pago' ? (
+                    <div className="p-3 rounded-md bg-green-50 dark:bg-green-900/50 flex items-center gap-3 border border-green-200 dark:border-green-800 mt-2">
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                      <p className="text-sm font-medium text-green-800 dark:text-green-300">Pagamento confirmado!</p>
+                    </div>
+                  ) : (
+                    <div className="flex justify-end items-center text-xs mt-1">
+                      <paymentStatus.icon className={`h-3 w-3 mr-1 ${paymentStatus.color}`} />
+                      <span className={`font-medium ${paymentStatus.color}`}>{paymentStatus.label}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -206,6 +224,11 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                 )}
                 <div className="flex-1 flex justify-end gap-3">
                     <Button variant="outline" onClick={onClose}>Fechar</Button>
+                    {isOrganizer && reserva.payment_status !== 'pago' && !isPaymentOverdue && amountToPay > 0 && (
+                      <Button onClick={handlePayFullAmount} className="bg-green-600 hover:bg-green-700">
+                        <DollarSign className="h-4 w-4 mr-2"/> Pagar Agora ({formatCurrency(amountToPay)})
+                      </Button>
+                    )}
                     {isOrganizer && <Button onClick={handleCancelClick} className="bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 focus:ring-red-500">Cancelar Reserva</Button>}
                 </div>
               </div>

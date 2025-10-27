@@ -127,19 +127,36 @@ const Header: React.FC = () => {
     }
   };
 
+  const handleClearAll = async () => {
+    if (!profile || !selectedArenaContext) return;
+
+    const notificationIdsToDelete = notifications.map(n => n.id);
+
+    if (notificationIdsToDelete.length === 0) {
+      addToast({ message: 'Nenhuma notificação para limpar.', type: 'info' });
+      return;
+    }
+
+    try {
+      await localApi.delete('notificacoes', notificationIdsToDelete, selectedArenaContext.id);
+      setNotifications([]);
+      setUnreadCount(0);
+      addToast({ message: 'Notificações limpas.', type: 'success' });
+    } catch (error: any) {
+      addToast({ message: `Erro ao limpar notificações: ${error.message}`, type: 'error' });
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
   };
 
-  const NavIconButton: React.FC<{ to: string; title: string; children: React.ReactNode }> = ({ to, title, children }) => (
-    <button
-      onClick={() => navigate(to)}
-      title={title}
-      className="p-2 rounded-full text-brand-gray-500 dark:text-brand-gray-400 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700"
-    >
+  const DropdownLink: React.FC<{ to: string; icon: React.ElementType; children: React.ReactNode; onClick: () => void }> = ({ to, icon: Icon, children, onClick }) => (
+    <Link to={to} onClick={onClick} className="flex items-center w-full px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
+      <Icon className="h-4 w-4 mr-3" />
       {children}
-    </button>
+    </Link>
   );
 
   return (
@@ -164,7 +181,7 @@ const Header: React.FC = () => {
                     {selectedArenaContext.name ? selectedArenaContext.name.charAt(0).toUpperCase() : '?'}
                   </div>
                 )}
-                <span className="font-semibold text-sm text-brand-gray-800 dark:text-brand-gray-200">
+                <span className="font-semibold text-sm text-brand-gray-800 dark:text-brand-gray-200 truncate max-w-[150px]">
                   {selectedArenaContext.name}
                   {isStaffView && profile && <span className="font-normal text-brand-gray-500"> • {profile.name}</span>}
                 </span>
@@ -182,31 +199,6 @@ const Header: React.FC = () => {
               <Loader2 className="h-5 w-5 animate-spin text-brand-gray-500" />
             ) : user && profile ? (
               <>
-                {isAdminView && (
-                  <div className="hidden md:flex items-center gap-1">
-                    <NavIconButton to="/quadras" title="Minhas Quadras"><LayoutGrid className="h-5 w-5" /></NavIconButton>
-                    <NavIconButton to="/reservas" title="Reservas"><Bookmark className="h-5 w-5" /></NavIconButton>
-                    <NavIconButton to="/alunos" title="Gerenciamento"><GraduationCap className="h-5 w-5" /></NavIconButton>
-                    <NavIconButton to="/torneios" title="Torneios"><Trophy className="h-5 w-5" /></NavIconButton>
-                    <NavIconButton to="/eventos" title="Eventos"><PartyPopper className="h-5 w-5" /></NavIconButton>
-                    <NavIconButton to="/loja" title="Loja"><ShoppingBag className="h-5 w-5" /></NavIconButton>
-                    <NavIconButton to="/financeiro" title="Financeiro"><DollarSign className="h-5 w-5" /></NavIconButton>
-                    <NavIconButton to="/gamification" title="Gamificação"><Gift className="h-5 w-5" /></NavIconButton>
-                    <NavIconButton to="/notificacoes" title="Notificações"><Send className="h-5 w-5" /></NavIconButton>
-                  </div>
-                )}
-                {isStaffView && (
-                  <div className="hidden md:flex items-center gap-1">
-                    {profile.permissions?.reservas !== 'none' && <NavIconButton to="/reservas" title="Reservas"><Bookmark className="h-5 w-5" /></NavIconButton>}
-                    {profile.permissions?.quadras !== 'none' && <NavIconButton to="/quadras" title="Quadras"><LayoutGrid className="h-5 w-5" /></NavIconButton>}
-                    {profile.permissions?.gerenciamento_arena !== 'none' && <NavIconButton to="/alunos" title="Gerenciamento"><GraduationCap className="h-5 w-5" /></NavIconButton>}
-                    {profile.permissions?.torneios !== 'none' && <NavIconButton to="/torneios" title="Torneios"><Trophy className="h-5 w-5" /></NavIconButton>}
-                    {profile.permissions?.eventos !== 'none' && <NavIconButton to="/eventos" title="Eventos"><PartyPopper className="h-5 w-5" /></NavIconButton>}
-                    {profile.permissions?.financeiro !== 'none' && <NavIconButton to="/financeiro" title="Financeiro"><DollarSign className="h-5 w-5" /></NavIconButton>}
-                    {profile.permissions?.gamification !== 'none' && <NavIconButton to="/gamification" title="Gamificação"><Gift className="h-5 w-5" /></NavIconButton>}
-                  </div>
-                )}
-                
                 <div className="relative" ref={notificationsRef}>
                   <button onClick={() => setIsNotificationsOpen(p => !p)} className="p-2 rounded-full text-brand-gray-500 dark:text-brand-gray-400 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700 relative">
                     <Bell className="h-5 w-5" />
@@ -221,6 +213,7 @@ const Header: React.FC = () => {
                         onClose={() => setIsNotificationsOpen(false)}
                         onMarkAsRead={handleMarkAsRead}
                         onMarkAllAsRead={handleMarkAllAsRead}
+                        onClearAll={handleClearAll}
                         unreadCount={unreadCount}
                       />
                     )}
@@ -236,11 +229,9 @@ const Header: React.FC = () => {
                         <UserIcon className="h-5 w-5 text-brand-gray-500" />
                       )}
                     </div>
-                    {(!isAdminView && !isStaffView) && (
-                      <span className="font-semibold text-sm text-brand-gray-800 dark:text-brand-gray-200 hidden sm:block">
-                        {profile.name}
-                      </span>
-                    )}
+                    <span className="font-semibold text-sm text-brand-gray-800 dark:text-brand-gray-200 hidden sm:block">
+                      {profile.name}
+                    </span>
                     <ChevronDown className="h-4 w-4 text-brand-gray-500 hidden sm:block" />
                   </button>
                   <AnimatePresence>
@@ -250,13 +241,35 @@ const Header: React.FC = () => {
                           <p className="text-sm font-medium text-brand-gray-900 dark:text-white truncate">{profile.name}</p>
                           <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 truncate">{profile.email}</p>
                         </div>
+                        
+                        {(isAdminView || isStaffView) && (
+                          <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 py-1">
+                            {isAdminView && (
+                              <>
+                                <DropdownLink to="/quadras" icon={LayoutGrid} onClick={() => setIsProfileMenuOpen(false)}>Quadras</DropdownLink>
+                                <DropdownLink to="/reservas" icon={Bookmark} onClick={() => setIsProfileMenuOpen(false)}>Reservas</DropdownLink>
+                                <DropdownLink to="/alunos" icon={GraduationCap} onClick={() => setIsProfileMenuOpen(false)}>Gerenciamento</DropdownLink>
+                                <DropdownLink to="/torneios" icon={Trophy} onClick={() => setIsProfileMenuOpen(false)}>Torneios</DropdownLink>
+                                <DropdownLink to="/eventos" icon={PartyPopper} onClick={() => setIsProfileMenuOpen(false)}>Eventos</DropdownLink>
+                                <DropdownLink to="/loja" icon={ShoppingBag} onClick={() => setIsProfileMenuOpen(false)}>Loja</DropdownLink>
+                                <DropdownLink to="/financeiro" icon={DollarSign} onClick={() => setIsProfileMenuOpen(false)}>Financeiro</DropdownLink>
+                                <DropdownLink to="/gamification" icon={Gift} onClick={() => setIsProfileMenuOpen(false)}>Gamificação</DropdownLink>
+                                <DropdownLink to="/notificacoes" icon={Send} onClick={() => setIsProfileMenuOpen(false)}>Notificações</DropdownLink>
+                              </>
+                            )}
+                            {isStaffView && (
+                              <>
+                                {profile.permissions?.reservas !== 'none' && <DropdownLink to="/reservas" icon={Bookmark} onClick={() => setIsProfileMenuOpen(false)}>Reservas</DropdownLink>}
+                                {profile.permissions?.quadras !== 'none' && <DropdownLink to="/quadras" icon={LayoutGrid} onClick={() => setIsProfileMenuOpen(false)}>Quadras</DropdownLink>}
+                                {profile.permissions?.gerenciamento_arena !== 'none' && <DropdownLink to="/alunos" icon={GraduationCap} onClick={() => setIsProfileMenuOpen(false)}>Gerenciamento</DropdownLink>}
+                              </>
+                            )}
+                          </div>
+                        )}
+
                         <div className="py-1 border-t border-brand-gray-200 dark:border-brand-gray-700">
-                          <Link to={dashboardPath} onClick={() => setIsProfileMenuOpen(false)} className="flex items-center w-full px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
-                            <LayoutDashboard className="h-4 w-4 mr-3" /> Meu Painel
-                          </Link>
-                          <Link to="/settings" onClick={() => setIsProfileMenuOpen(false)} className="flex items-center w-full px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
-                            <Settings className="h-4 w-4 mr-3" /> Configurações
-                          </Link>
+                          <DropdownLink to={dashboardPath} icon={LayoutDashboard} onClick={() => setIsProfileMenuOpen(false)}>Meu Painel</DropdownLink>
+                          <DropdownLink to="/settings" icon={Settings} onClick={() => setIsProfileMenuOpen(false)}>Configurações</DropdownLink>
                         </div>
                         <div className="py-1 border-t border-brand-gray-200 dark:border-brand-gray-700">
                           <button onClick={handleSignOut} className="w-full text-left flex items-center px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">

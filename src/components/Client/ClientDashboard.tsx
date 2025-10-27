@@ -243,7 +243,7 @@ const ClientDashboard: React.FC = () => {
         if (!isMine || !isConfirmed) return false;
         
         try {
-          const endDateTime = parseDateStringAsLocal(`${r.date}T${r.end_time}`);
+          const endDateTime = new Date(`${r.date}T${r.end_time}`);
           return isBefore(endDateTime, now);
         } catch {
           return false;
@@ -326,16 +326,30 @@ const ClientDashboard: React.FC = () => {
         }
 
         if (savedReserva.participants && savedReserva.participants.length > 1) {
+            const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+            const profilesMap = new Map((allProfiles || []).map(p => [p.id, p]));
+
             const notifications = savedReserva.participants
                 .filter(p => p.profile_id !== profile.id)
-                .map(p => ({
-                    profile_id: p.profile_id,
-                    arena_id: selectedArenaContext.id,
-                    message: `${profile.name} convidou você para um jogo em ${format(parseDateStringAsLocal(savedReserva.date), 'dd/MM')} às ${savedReserva.start_time.slice(0,5)}.`,
-                    type: 'game_invite',
-                    link_to: `/perfil`
-                }));
-            await localApi.upsert('notificacoes', notifications, selectedArenaContext.id);
+                .map(p => {
+                    const recipientProfile = profilesMap.get(p.profile_id);
+                    const wantsGameInvites = recipientProfile?.notification_preferences?.game_invites ?? true;
+                    if (wantsGameInvites) {
+                        return {
+                            profile_id: p.profile_id,
+                            arena_id: selectedArenaContext.id,
+                            message: `${profile.name} convidou você para um jogo em ${format(parseDateStringAsLocal(savedReserva.date), 'dd/MM')} às ${savedReserva.start_time.slice(0,5)}.`,
+                            type: 'game_invite',
+                            link_to: `/perfil`
+                        };
+                    }
+                    return null;
+                })
+                .filter((n): n is NonNullable<typeof n> => n !== null);
+            
+            if (notifications.length > 0) {
+                await localApi.upsert('notificacoes', notifications, selectedArenaContext.id);
+            }
         }
         
         setIsModalOpen(false);
@@ -386,13 +400,19 @@ const ClientDashboard: React.FC = () => {
 
     const ownerProfileId = reserva.profile_id;
     if (ownerProfileId && ownerProfileId !== profile.id) {
-        await localApi.upsert('notificacoes', [{
-            profile_id: ownerProfileId,
-            arena_id: selectedArenaContext.id,
-            message: `${profile.name} ${status === 'accepted' ? 'aceitou' : 'recusou'} seu convite para o jogo.`,
-            type: 'game_invite_response',
-            link_to: `/perfil`
-        }], selectedArenaContext.id);
+        const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+        const ownerProfile = allProfiles.find(p => p.id === ownerProfileId);
+        const wantsGameInvites = ownerProfile?.notification_preferences?.game_invites ?? true;
+
+        if (wantsGameInvites) {
+            await localApi.upsert('notificacoes', [{
+                profile_id: ownerProfileId,
+                arena_id: selectedArenaContext.id,
+                message: `${profile.name} ${status === 'accepted' ? 'aceitou' : 'recusou'} seu convite para o jogo.`,
+                type: 'game_invite_response',
+                link_to: `/perfil`
+            }], selectedArenaContext.id);
+        }
     }
     addToast({ message: `Convite ${status === 'accepted' ? 'aceito' : 'recusado'}!`, type: 'success' });
   };
@@ -637,16 +657,35 @@ const ClientDashboard: React.FC = () => {
     <div className="flex flex-col md:flex-row h-screen bg-brand-gray-50 dark:bg-brand-gray-950">
       <SideNavBar items={navItems} activeView={activeView} setActiveView={setActiveView} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="md:hidden">
-          <Header />
+        <Header />
+        <div className="flex-1 overflow-y-auto pt-16">
+          <main className="p-4 sm:p-6 lg:p-8 pb-24">
+            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 flex flex-col md:flex-row justify-between md:items-center gap-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-brand-gray-900 dark:text-white">Meu Painel</h1>
+                <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-1 md:mt-2">Gerencie suas reservas, aulas e perfil.</p>
+              </div>
+              <div className="w-full md:w-auto">
+                <ArenaSelector arenas={myArenas} selectedArena={selectedArenaContext} onSelect={switchArenaContext} />
+              </div>
+            </motion.div>
+            {!selectedArenaContext ? (
+              <div className="text-center py-16 bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
+                <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
+                  <Compass className="h-12 w-12 text-brand-blue-400 mx-auto mb-4" />
+                  <h2 className="text-2xl font-bold text-brand-gray-800 dark:text-brand-gray-200">Selecione uma arena</h2>
+                  <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Escolha uma das suas arenas para ver seus dados.</p>
+                </motion.div>
+              </div>
+            ) : (
+              <AnimatePresence mode="wait">
+                <motion.div key={activeView} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                  {renderContent()}
+                </motion.div>
+              </AnimatePresence>
+            )}
+          </main>
         </div>
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-24 pt-16 md:pt-8">
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 md:flex flex-col md:flex-row justify-between md:items-center gap-4 hidden">
-            <div><h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Meu Painel</h1><p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Gerencie suas reservas, aulas e perfil.</p></div>
-            <ArenaSelector arenas={myArenas} selectedArena={selectedArenaContext} onSelect={switchArenaContext} />
-          </motion.div>
-          {!selectedArenaContext ? (<div className="text-center py-16 bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700"><motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}><Compass className="h-12 w-12 text-brand-blue-400 mx-auto mb-4" /><h2 className="text-2xl font-bold text-brand-gray-800 dark:text-brand-gray-200">Selecione uma arena</h2><p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Escolha uma das suas arenas para ver seus dados.</p></motion.div></div>) : (<AnimatePresence mode="wait"><motion.div key={activeView} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>{renderContent()}</motion.div></AnimatePresence>)}
-        </main>
       </div>
       <BottomNavBar items={navItems} activeView={activeView} setActiveView={setActiveView} />
       
@@ -662,12 +701,25 @@ const ClientDashboard: React.FC = () => {
   );
 };
 
-const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: Quadra[], arenaName?: string, onCancel: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string}> = ({upcoming, past, quadras, arenaName, onCancel, onDetail, onHirePlayer, profileId}) => (
-  <div className="space-y-8">
-    <ReservationList title="Próximas Reservas" reservations={upcoming} quadras={quadras} arenaName={arenaName} onCancel={onCancel} onDetail={onDetail} onHirePlayer={onHirePlayer} profileId={profileId} />
-    <ReservationList title="Histórico de Reservas" reservations={past} quadras={quadras} arenaName={arenaName} isPast onDetail={onDetail} profileId={profileId} />
-  </div>
-);
+const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: Quadra[], arenaName?: string, onCancel: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string}> = ({upcoming, past, quadras, arenaName, onCancel, onDetail, onHirePlayer, profileId}) => {
+  const [showAllPast, setShowAllPast] = useState(false);
+  const shouldPaginatePast = past.length > 5;
+  const displayedPastReservations = shouldPaginatePast && !showAllPast ? past.slice(0, 5) : past;
+
+  return (
+    <div className="space-y-8">
+      <ReservationList title="Próximas Reservas" reservations={upcoming} quadras={quadras} arenaName={arenaName} onCancel={onCancel} onDetail={onDetail} onHirePlayer={onHirePlayer} profileId={profileId} />
+      <ReservationList title="Histórico de Reservas" reservations={displayedPastReservations} quadras={quadras} arenaName={arenaName} isPast onDetail={onDetail} profileId={profileId} />
+      {shouldPaginatePast && !showAllPast && (
+        <div className="text-center">
+          <Button variant="outline" onClick={() => setShowAllPast(true)}>
+            Ver todo o histórico ({past.length})
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras: Quadra[], arenaName?: string, isPast?: boolean, onCancel?: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string}> = ({title, reservations, quadras, arenaName, isPast, onCancel, onDetail, onHirePlayer, profileId}) => {
   return (

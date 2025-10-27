@@ -27,10 +27,6 @@ import SuperAdminPage from './pages/SuperAdmin.tsx';
 import Notificacoes from './pages/Notificacoes.tsx';
 import Loja from './pages/Loja.tsx';
 
-// Context Providers
-import { AuthProvider } from './context/AuthContext';
-import { ThemeProvider } from './context/ThemeContext';
-import { ToastProvider } from './context/ToastContext';
 import React from 'react';
 
 const router = createBrowserRouter([
@@ -117,12 +113,6 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider>
-      <ToastProvider>
-        <AuthProvider>
-          <RouterProvider router={router} />
-        </AuthProvider>
-      </ToastProvider>
-    </ThemeProvider>
+    <RouterProvider router={router} />
   </StrictMode>,
 );

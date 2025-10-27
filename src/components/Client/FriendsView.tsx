@@ -103,18 +103,37 @@ const FriendsView: React.FC = () => {
 
 
   const handleFriendAction = async (friendship: Friendship, newStatus: 'accepted' | 'declined') => {
+    if (!profile || !selectedArenaContext) return;
+    
     if (newStatus === 'declined') {
         await localApi.delete('friendships', [friendship.id], 'all');
     } else {
-        const updatedFriendship = { ...friendship, status: 'accepted' };
+        const updatedFriendship = { ...friendship, status: 'accepted' as 'accepted' };
         await localApi.upsert('friendships', [updatedFriendship], 'all');
+        
+        const originalRequesterId = friendship.requested_by;
+        const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+        const originalRequesterProfile = allProfiles.find(p => p.id === originalRequesterId);
+        
+        if (originalRequesterProfile) {
+            const wantsFriendRequests = originalRequesterProfile.notification_preferences?.friend_requests ?? true;
+            if (wantsFriendRequests) {
+                await localApi.upsert('notificacoes', [{
+                    profile_id: originalRequesterId,
+                    arena_id: selectedArenaContext.id,
+                    message: `${profile.name} aceitou sua solicitação de amizade.`,
+                    type: 'friend_requests',
+                    link_to: '/perfil',
+                }], selectedArenaContext.id);
+            }
+        }
     }
     loadData();
     addToast({ message: newStatus === 'accepted' ? 'Amigo adicionado!' : 'Solicitação recusada.', type: 'success' });
   };
 
   const handleSendRequest = async (targetUserId: string) => {
-    if (!profile) return;
+    if (!profile || !selectedArenaContext) return;
     const newFriendship: Friendship = {
       id: uuidv4(),
       user1_id: profile.id,
@@ -124,6 +143,22 @@ const FriendsView: React.FC = () => {
       created_at: new Date().toISOString(),
     };
     await localApi.upsert('friendships', [newFriendship], 'all');
+
+    const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+    const targetProfile = allProfiles.find(p => p.id === targetUserId);
+    if (targetProfile) {
+        const wantsFriendRequests = targetProfile.notification_preferences?.friend_requests ?? true;
+        if (wantsFriendRequests) {
+            await localApi.upsert('notificacoes', [{
+                profile_id: targetUserId,
+                arena_id: selectedArenaContext.id,
+                message: `${profile.name} enviou uma solicitação de amizade.`,
+                type: 'friend_requests',
+                link_to: '/perfil',
+            }], selectedArenaContext.id);
+        }
+    }
+
     loadData();
     addToast({ message: 'Solicitação de amizade enviada!', type: 'success' });
   };

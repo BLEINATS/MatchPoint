@@ -43,6 +43,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
   const { addToast } = useToast();
 
+  const setupUserContext = useCallback(async (profileToSetup: Profile) => {
+    const { data: allArenasData } = await localApi.select<Arena>('arenas', 'all');
+    const allArenas = allArenasData || [];
+    setAllArenas(allArenas);
+
+    if (profileToSetup.role === 'super_admin') {
+        setArena(null);
+        setSelectedArenaContext(null);
+    } else if (profileToSetup.role === 'admin_arena') {
+        const userArena = allArenas.find(a => a.owner_id === profileToSetup.id);
+        setArena(userArena || null);
+        setSelectedArenaContext(userArena || null);
+    } else if (profileToSetup.role === 'funcionario') {
+        const employeeArena = allArenas.find(a => a.id === profileToSetup.arena_id);
+        setArena(null);
+        setSelectedArenaContext(employeeArena || null);
+    } else { // cliente
+        const { data: allAlunos } = await localApi.select<Aluno>('alunos', 'all');
+        const myArenaIds = new Set((allAlunos || []).filter(a => a.profile_id === profileToSetup.id).map(a => a.arena_id));
+        const myArenas = allArenas.filter(a => myArenaIds.has(a.id));
+        setMemberships(myArenas.map(a => ({ profile_id: profileToSetup.id, arena_id: a.id })));
+        
+        const lastSelectedArenaId = localStorage.getItem('lastSelectedArenaId');
+        const lastArena = lastSelectedArenaId ? myArenas.find(a => a.id === lastSelectedArenaId) : null;
+
+        if (lastArena) {
+            setSelectedArenaContext(lastArena);
+        } else if (myArenas.length > 0) {
+            setSelectedArenaContext(myArenas[0]);
+        } else {
+            setSelectedArenaContext(null);
+        }
+    }
+  }, []);
+
   useEffect(() => {
     const initializeSession = async () => {
       setIsLoading(true);
@@ -52,9 +87,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           await seedInitialData();
           localStorage.setItem(seedKey, 'true');
         }
-
-        const { data: currentArenas } = await localApi.select<Arena>('arenas', 'all');
-        setAllArenas(currentArenas || []);
 
         const loggedInUserStr = localStorage.getItem('loggedInUser');
         if (!loggedInUserStr) {
@@ -67,34 +99,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         setUser(loggedInUser);
         setProfile(loggedInProfile);
+        await setupUserContext(loggedInProfile);
 
-        if (loggedInProfile.role === 'super_admin') {
-            setArena(null);
-            setSelectedArenaContext(null);
-        } else if (loggedInProfile.role === 'admin_arena') {
-            const userArena = (currentArenas || []).find(a => a.owner_id === loggedInProfile.id);
-            if (userArena) {
-                setArena(userArena);
-                setSelectedArenaContext(userArena);
-            }
-        } else if (loggedInProfile.role === 'funcionario') {
-            const employeeArena = (currentArenas || []).find(a => a.id === loggedInProfile.arena_id);
-            if (employeeArena) {
-              setArena(null);
-              setSelectedArenaContext(employeeArena);
-            }
-        } else { // cliente
-            const { data: allAlunos } = await localApi.select<Aluno>('alunos', 'all');
-            const myArenaIds = new Set((allAlunos || []).filter(a => a.profile_id === loggedInProfile.id).map(a => a.arena_id));
-            const myArenas = (currentArenas || []).filter(a => myArenaIds.has(a.id));
-            setMemberships(myArenas.map(a => ({ profile_id: loggedInProfile.id, arena_id: a.id })));
-            
-            if (myArenas.length > 0) {
-                setSelectedArenaContext(myArenas[0]);
-            } else if (currentArenas && currentArenas.length > 0) {
-                setSelectedArenaContext(currentArenas[0]);
-            }
-        }
       } catch (error) {
         console.error("Error during session initialization:", error);
         localStorage.removeItem('loggedInUser');
@@ -103,7 +109,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
     initializeSession();
-  }, []);
+  }, [setupUserContext]);
 
   const refreshAlunoProfile = useCallback(async () => {
     if (profile?.role === 'cliente' && selectedArenaContext) {
@@ -185,11 +191,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         let { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
         allProfiles = allProfiles || [];
 
-        // HACK/FIX: Ensure superadmin exists for login, in case seeding failed or was missed.
         if (email.toLowerCase() === 'superadmin@matchplay.com' && !allProfiles.some(p => p.email.toLowerCase() === 'superadmin@matchplay.com')) {
             const superAdminProfile: Profile = { id: 'profile_superadmin_01', name: 'Super Admin', email: 'superadmin@matchplay.com', role: 'super_admin', avatar_url: null, created_at: new Date().toISOString() };
             await localApi.upsert('profiles', [superAdminProfile], 'all');
-            // Re-fetch profiles to include the new one
             const { data: updatedProfiles } = await localApi.select<Profile>('profiles', 'all');
             allProfiles = updatedProfiles || [];
         }
@@ -199,33 +203,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!userProfile) {
             throw new Error("Usuário ou senha inválidos.");
         }
-
-        const { data: arenas } = await localApi.select<Arena>('arenas', 'all');
-        setAllArenas(arenas || []);
-
-        if (userProfile.role === 'super_admin') {
-            setArena(null);
-            setSelectedArenaContext(null);
-        } else if (userProfile.role === 'admin_arena') {
-            const userArena = (arenas || []).find(a => a.owner_id === userProfile.id);
-            setArena(userArena || null);
-            setSelectedArenaContext(userArena || null);
-        } else if (userProfile.role === 'funcionario') {
-            const employeeArena = (arenas || []).find(a => a.id === userProfile.arena_id);
-            setArena(null);
-            setSelectedArenaContext(employeeArena || null);
-        } else { // cliente
-            const { data: allAlunos } = await localApi.select<Aluno>('alunos', 'all');
-            const myArenaIds = new Set((allAlunos || []).filter(a => a.profile_id === userProfile.id).map(a => a.arena_id));
-            const myArenas = (arenas || []).filter(a => myArenaIds.has(a.id));
-            setMemberships(myArenas.map(a => ({ profile_id: userProfile.id, arena_id: a.id })));
-            
-            if (myArenas.length > 0) {
-                setSelectedArenaContext(myArenas[0]);
-            } else if (arenas && arenas.length > 0) {
-                setSelectedArenaContext(arenas[0]);
-            }
-        }
+        
+        await setupUserContext(userProfile);
         
         const loggedInUser: User = { id: userProfile.id, email: userProfile.email, created_at: userProfile.created_at };
         localStorage.setItem('loggedInUser', JSON.stringify(userProfile));
@@ -242,6 +221,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signOut = async () => {
     localStorage.removeItem('loggedInUser');
+    localStorage.removeItem('lastSelectedArenaId');
     setUser(null); setProfile(null); setArena(null); setMemberships([]);
     setSelectedArenaContext(null); setAlunoProfileForSelectedArena(null);
   };
@@ -288,6 +268,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const switchArenaContext = (arena: Arena | null) => {
     setSelectedArenaContext(arena);
+    if (arena) {
+        localStorage.setItem('lastSelectedArenaId', arena.id);
+    } else {
+        localStorage.removeItem('lastSelectedArenaId');
+    }
   };
   
   const authState: AuthState = { user, profile, arena, memberships, selectedArenaContext, isLoading };

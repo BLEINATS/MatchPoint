@@ -120,19 +120,19 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
             </div>
 
             <div className="border-b border-brand-gray-200 dark:border-brand-gray-700">
-              <nav className="-mb-px flex space-x-2 sm:space-x-4 px-2 sm:px-4 overflow-x-auto no-scrollbar">
+              <nav className="-mb-px flex justify-around sm:justify-start sm:space-x-4 sm:px-4">
                 {tabs.map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as 'credits' | 'gamification' | 'payments')}
-                    className={`whitespace-nowrap py-4 px-2 border-b-2 font-medium text-sm flex items-center transition-colors ${
+                    className={`whitespace-nowrap py-4 px-4 sm:px-2 border-b-2 font-medium text-sm flex-grow sm:flex-grow-0 flex items-center justify-center transition-colors ${
                       activeTab === tab.id
                         ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400'
                         : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700 dark:hover:text-brand-gray-300'
                     }`}
                   >
-                    <tab.icon className="mr-2 h-5 w-5" />
-                    {tab.label}
+                    <tab.icon className="h-5 w-5 sm:mr-2" />
+                    <span className="hidden sm:inline">{tab.label}</span>
                   </button>
                 ))}
               </nav>

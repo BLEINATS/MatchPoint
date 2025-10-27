@@ -1,62 +1,76 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Reserva, Aluno, Quadra } from '../../types';
-import { Calendar, Clock, MapPin, Repeat } from 'lucide-react';
-import { format } from 'date-fns';
+import Button from '../Forms/Button';
+import { Edit2, Trash2, MapPin, Calendar, DollarSign } from 'lucide-react';
+import { format, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
+import { formatCurrency } from '../../utils/formatters';
 
 interface MensalistaCardProps {
   reserva: Reserva;
   aluno?: Aluno;
   quadra?: Quadra;
-  onClick: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
   index: number;
   canEdit: boolean;
 }
 
-const MensalistaCard: React.FC<MensalistaCardProps> = ({ reserva, aluno, quadra, onClick, index }) => {
-  const masterDate = parseDateStringAsLocal(reserva.date);
-  const dayOfWeek = format(masterDate, 'EEEE', { locale: ptBR });
+const MensalistaCard: React.FC<MensalistaCardProps> = ({ reserva, aluno, quadra, onEdit, onDelete, index, canEdit }) => {
+  
+  const recurringDayOfWeek = useMemo(() => {
+    if (!reserva.date) return '';
+    const masterDate = parseDateStringAsLocal(reserva.date);
+    return format(masterDate, 'EEEE', { locale: ptBR });
+  }, [reserva.date]);
+
+  const scheduleDetails = (
+    <div className="flex items-center text-brand-gray-700 dark:text-brand-gray-300">
+        <Calendar className="h-4 w-4 mr-2 text-brand-blue-500" />
+        <span className="w-10 font-medium capitalize">{recurringDayOfWeek.substring(0,3)}:</span>
+        <span className="font-semibold">{reserva.start_time.slice(0,5)} - {reserva.end_time.slice(0,5)}</span>
+    </div>
+  );
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      onClick={onClick}
-      className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col justify-between cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all border-l-4 border-slate-500"
+      className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col justify-between border-l-4 border-slate-500"
     >
       <div>
         <div className="flex justify-between items-start mb-4">
           <div>
             <h3 className="font-bold text-lg text-brand-gray-900 dark:text-white">{aluno?.name || reserva.clientName}</h3>
-            <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 capitalize">
-              Toda {dayOfWeek}
-            </p>
+            <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">{reserva.sport_type}</p>
           </div>
-          <div className="flex items-center text-sm font-medium text-brand-blue-500">
-            <Repeat className="h-4 w-4 mr-1" />
-            <span>Mensalista</span>
-          </div>
+          {canEdit && (
+            <div className="flex space-x-1">
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-2"><Edit2 className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 hover:text-red-500"><Trash2 className="h-4 w-4" /></Button>
+            </div>
+          )}
         </div>
 
         <div className="space-y-3 text-sm mb-5">
           <div className="flex items-center text-brand-gray-700 dark:text-brand-gray-300">
-            <Clock className="h-4 w-4 mr-2 text-brand-gray-400" />
-            <span>{reserva.start_time} - {reserva.end_time}</span>
-          </div>
-          <div className="flex items-center text-brand-gray-700 dark:text-brand-gray-300">
-            <MapPin className="h-4 w-4 mr-2 text-brand-gray-400" />
+            <MapPin className="h-4 w-4 mr-2 text-brand-blue-500" />
             <span>{quadra?.name || 'Quadra não encontrada'}</span>
           </div>
-          <div className="flex items-center text-brand-gray-700 dark:text-brand-gray-300">
-            <Calendar className="h-4 w-4 mr-2 text-brand-gray-400" />
-            <span>
-              Início em {format(masterDate, 'dd/MM/yyyy')}
-              {reserva.recurringEndDate ? ` até ${format(parseDateStringAsLocal(reserva.recurringEndDate), 'dd/MM/yyyy')}` : ' (contínuo)'}
-            </span>
+          {scheduleDetails}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300">
+            <DollarSign className="h-4 w-4 mr-2" />
+            Valor por Horário
           </div>
+          <span className="font-bold text-brand-gray-900 dark:text-white">{formatCurrency(reserva.total_price)}</span>
         </div>
       </div>
     </motion.div>

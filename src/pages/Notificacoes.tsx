@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Send, Plus, Loader2, Users, User } from 'lucide-react';
+import { ArrowLeft, Plus, Send, Loader2, User } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -13,7 +13,7 @@ import { ptBR } from 'date-fns/locale';
 import NotificationComposerModal from '../components/Notificacoes/NotificationComposerModal';
 
 const Notificacoes: React.FC = () => {
-  const { selectedArenaContext: arena } = useAuth();
+  const { selectedArenaContext: arena, profile } = useAuth();
   const { addToast } = useToast();
   const [notifications, setNotifications] = useState<Notificacao[]>([]);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
@@ -23,8 +23,13 @@ const Notificacoes: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const canEdit = useMemo(() => profile?.role === 'admin_arena', [profile]);
+
   const loadData = useCallback(async () => {
-    if (!arena) return;
+    if (!arena || !profile) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const [notifRes, alunosRes, profilesRes, profsRes, atletasRes] = await Promise.all([
@@ -34,7 +39,13 @@ const Notificacoes: React.FC = () => {
         localApi.select<Professor>('professores', arena.id),
         localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
       ]);
-      setNotifications((notifRes.data || []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+      
+      let filteredNotifs = notifRes.data || [];
+      if (profile.role !== 'admin_arena') {
+        filteredNotifs = filteredNotifs.filter(n => n.profile_id === profile.id);
+      }
+
+      setNotifications(filteredNotifs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
       setAlunos(alunosRes.data || []);
       setProfiles(profilesRes.data || []);
       setProfessores(profsRes.data || []);
@@ -44,7 +55,7 @@ const Notificacoes: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [arena, addToast]);
+  }, [arena, addToast, profile]);
 
   useEffect(() => {
     loadData();
@@ -72,17 +83,34 @@ const Notificacoes: React.FC = () => {
       return;
     }
 
-    const newNotifications: Omit<Notificacao, 'id' | 'created_at'>[] = uniqueProfileIds.map(pId => ({
-      arena_id: arena.id,
-      profile_id: pId,
-      message,
-      type: 'announcement',
-      read: false,
-    }));
+    const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+    const profilesMap = new Map((allProfiles || []).map(p => [p.id, p]));
+
+    const newNotifications: Omit<Notificacao, 'id' | 'created_at'>[] = uniqueProfileIds
+        .map(pId => {
+            const recipientProfile = profilesMap.get(pId);
+            const wantsNews = recipientProfile?.notification_preferences?.arena_news ?? true;
+            if (wantsNews) {
+                return {
+                    arena_id: arena.id,
+                    profile_id: pId,
+                    message,
+                    type: 'announcement',
+                    read: false,
+                };
+            }
+            return null;
+        })
+        .filter((n): n is NonNullable<typeof n> => n !== null);
+
+    if (newNotifications.length === 0) {
+        addToast({ message: 'Nenhum destinatário com notificações de novidades ativadas foi encontrado.', type: 'info' });
+        return;
+    }
 
     try {
       await localApi.upsert('notificacoes', newNotifications, arena.id);
-      addToast({ message: `Notificação enviada para ${uniqueProfileIds.length} usuário(s)!`, type: 'success' });
+      addToast({ message: `Notificação enviada para ${newNotifications.length} usuário(s)!`, type: 'success' });
       loadData();
       setIsModalOpen(false);
     } catch (error: any) {
@@ -111,10 +139,12 @@ const Notificacoes: React.FC = () => {
               <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Central de Notificações</h1>
               <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Envie comunicados para seus clientes e alunos.</p>
             </div>
-            <Button onClick={() => setIsModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nova Notificação
-            </Button>
+            {canEdit && (
+              <Button onClick={() => setIsModalOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Notificação
+              </Button>
+            )}
           </div>
         </motion.div>
 
@@ -122,7 +152,8 @@ const Notificacoes: React.FC = () => {
           <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-brand-blue-500" /></div>
         ) : (
           <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700">
-            <div className="overflow-x-auto">
+            {/* Desktop Table View */}
+            <div className="overflow-x-auto hidden md:block">
               <table className="min-w-full divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
                 <thead className="bg-brand-gray-50 dark:bg-brand-gray-700/50">
                   <tr>
@@ -146,6 +177,21 @@ const Notificacoes: React.FC = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+            {/* Mobile Card View */}
+            <div className="md:hidden p-4 space-y-4">
+              {notifications.map(notif => (
+                <div key={notif.id} className="bg-brand-gray-50 dark:bg-brand-gray-700/50 p-4 rounded-lg">
+                  <p className="text-sm text-brand-gray-800 dark:text-brand-gray-200 whitespace-pre-wrap">{notif.message}</p>
+                  <div className="mt-2 pt-2 border-t border-brand-gray-200 dark:border-brand-gray-600 text-xs text-brand-gray-500 dark:text-brand-gray-400 flex justify-between items-center">
+                    <span className="flex items-center gap-1"><User className="h-3 w-3"/>{getTargetDescription(notif)}</span>
+                    <span>{format(new Date(notif.created_at), 'dd/MM/yy HH:mm')}</span>
+                  </div>
+                </div>
+              ))}
+              {notifications.length === 0 && (
+                <p className="text-center py-8 text-sm text-brand-gray-500">Nenhuma notificação enviada.</p>
+              )}
             </div>
           </div>
         )}

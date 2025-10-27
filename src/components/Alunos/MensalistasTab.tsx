@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Aluno, Reserva, Quadra } from '../../types';
 import MensalistaCard from './MensalistaCard';
@@ -8,12 +8,16 @@ interface MensalistasTabProps {
   reservas: Reserva[];
   alunos: Aluno[];
   quadras: Quadra[];
-  onSelect: (reserva: Reserva) => void;
+  onEdit: (reserva: Reserva) => void;
+  onDelete: (reserva: Reserva) => void;
   canEdit: boolean;
 }
 
-const MensalistasTab: React.FC<MensalistasTabProps> = ({ reservas, alunos, quadras, onSelect, canEdit }) => {
-  const mensalistas = reservas.filter(r => r.isRecurring && !r.masterId);
+const MensalistasTab: React.FC<MensalistasTabProps> = ({ reservas, alunos, quadras, onEdit, onDelete, canEdit }) => {
+  const mensalistas = useMemo(() => {
+    // Filtra para mostrar apenas reservas recorrentes que não são aulas
+    return reservas.filter(r => r.isRecurring && !r.masterId && r.type !== 'aula');
+  }, [reservas]);
 
   if (mensalistas.length === 0) {
     return (
@@ -34,6 +38,7 @@ const MensalistasTab: React.FC<MensalistasTabProps> = ({ reservas, alunos, quadr
       {mensalistas.map((reserva, index) => {
         const aluno = alunos.find(a => a.id === reserva.aluno_id);
         const quadra = quadras.find(q => q.id === reserva.quadra_id);
+        
         return (
           <MensalistaCard
             key={reserva.id}
@@ -41,7 +46,8 @@ const MensalistasTab: React.FC<MensalistasTabProps> = ({ reservas, alunos, quadr
             reserva={reserva}
             aluno={aluno}
             quadra={quadra}
-            onClick={() => onSelect(reserva)}
+            onEdit={() => onEdit(reserva)}
+            onDelete={() => onDelete(reserva)}
             canEdit={canEdit}
           />
         );

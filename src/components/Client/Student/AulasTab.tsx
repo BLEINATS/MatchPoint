@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Aluno, Turma, Professor, Quadra, PlanoAula } from '../../../types';
 import { Calendar, Clock, GraduationCap, MapPin, Users, RefreshCw, AlertTriangle, Info } from 'lucide-react';
-import { format, isAfter, isSameDay, parse, getDay, isPast, addMinutes, startOfDay, addMonths, addYears, isBefore } from 'date-fns';
+import { format, isAfter, isSameDay, parse, getDay, isPast, addMinutes, startOfDay, addMonths, addYears, isBefore, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DatePickerCalendar from '../DatePickerCalendar';
 import { parseDateStringAsLocal } from '../../../utils/dateUtils';
@@ -34,6 +34,40 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
 
   const currentPlan = useMemo(() => planos.find(p => p.id === aluno.plan_id), [planos, aluno.plan_id]);
   const isUnlimited = useMemo(() => currentPlan?.num_aulas === null, [currentPlan]);
+
+  useEffect(() => {
+    const handleCreditReset = async () => {
+      if (!aluno || !aluno.plan_id || isUnlimited || !aluno.arena_id) return;
+
+      const today = new Date();
+      const startOfCurrentMonth = startOfMonth(today);
+      
+      const lastResetDate = aluno.last_credit_reset_date 
+        ? parseDateStringAsLocal(aluno.last_credit_reset_date)
+        : null;
+
+      if (!lastResetDate || isBefore(lastResetDate, startOfCurrentMonth)) {
+        const plan = planos.find(p => p.id === aluno.plan_id);
+        if (plan && plan.num_aulas !== null) {
+          const updatedAluno: Aluno = {
+            ...aluno,
+            aulas_restantes: plan.num_aulas,
+            last_credit_reset_date: today.toISOString(),
+          };
+          
+          try {
+            await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
+            addToast({ message: 'Seus créditos de aula foram renovados para este mês!', type: 'info' });
+            onDataChange();
+          } catch (e) {
+            addToast({ message: 'Erro ao renovar seus créditos de aula.', type: 'error' });
+          }
+        }
+      }
+    };
+
+    handleCreditReset();
+  }, [aluno, planos, isUnlimited, onDataChange, addToast]);
 
   const { expirationDateObject, isExpired } = useMemo(() => {
     if (!currentPlan || !aluno.join_date || currentPlan.duration_type === 'avulso') {

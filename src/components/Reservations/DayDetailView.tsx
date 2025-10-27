@@ -39,6 +39,7 @@ const DayDetailView: React.FC<DayDetailViewProps> = ({ date, reservas, quadras, 
         return quadraA.localeCompare(quadraB);
       })
       .map(quadraId => ({
+        quadraId: quadraId,
         quadra: quadras.find(q => q.id === quadraId),
         reservas: grouped[quadraId],
       }));
@@ -63,8 +64,8 @@ const DayDetailView: React.FC<DayDetailViewProps> = ({ date, reservas, quadras, 
 
       <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
         {reservationsByCourt.length > 0 ? (
-          reservationsByCourt.map(({ quadra, reservas: courtReservas }) => (
-            <div key={quadra?.id}>
+          reservationsByCourt.map(({ quadraId, quadra, reservas: courtReservas }) => (
+            <div key={quadraId}>
               <h4 className="font-semibold text-brand-blue-600 dark:text-brand-blue-400 mb-2 border-b border-brand-gray-200 dark:border-brand-gray-700 pb-1">
                 {quadra?.name || 'Quadra Desconhecida'}
               </h4>
