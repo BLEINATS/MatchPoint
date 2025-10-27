@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { AuthState, User, Profile, Arena, ArenaMembership, Aluno, Reserva, GamificationSettings, GamificationPointTransaction } from '../types';
+import { AuthState, User, Profile, Arena, ArenaMembership, Aluno, Reserva, GamificationSettings, GamificationPointTransaction, Quadra } from '../types';
 import { useToast } from './ToastContext';
 import { localApi } from '../lib/localApi';
 import { v4 as uuidv4 } from 'uuid';
@@ -11,6 +11,9 @@ import { awardPointsForCompletedReservation } from '../utils/gamificationUtils';
 interface AuthContextType extends AuthState {
   allArenas: Arena[];
   alunoProfileForSelectedArena: Aluno | null;
+  quadraCount: number;
+  teamMemberCount: number;
+  refreshResourceCounts: () => Promise<void>;
   signUp: (email: string, password: string, name?: string, role?: 'cliente' | 'admin_arena') => Promise<void>;
   signIn: (email: string, password: string) => Promise<Profile | null>;
   signOut: () => void;
@@ -41,6 +44,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [selectedArenaContext, setSelectedArenaContext] = useState<Arena | null>(null);
   const [alunoProfileForSelectedArena, setAlunoProfileForSelectedArena] = useState<Aluno | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [quadraCount, setQuadraCount] = useState(0);
+  const [teamMemberCount, setTeamMemberCount] = useState(0);
   const { addToast } = useToast();
 
   const setupUserContext = useCallback(async (profileToSetup: Profile) => {
@@ -77,6 +82,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }
   }, []);
+
+  const refreshResourceCounts = useCallback(async () => {
+    if (selectedArenaContext && (profile?.role === 'admin_arena' || profile?.role === 'funcionario')) {
+        try {
+            const [quadrasRes, profilesRes] = await Promise.all([
+                localApi.select<Quadra>('quadras', selectedArenaContext.id),
+                localApi.select<Profile>('profiles', 'all'),
+            ]);
+            const quadrasCount = quadrasRes.data?.length || 0;
+            const teamMemberCount = profilesRes.data?.filter(p => p.arena_id === selectedArenaContext.id && p.role === 'funcionario').length || 0;
+            setQuadraCount(quadrasCount);
+            setTeamMemberCount(teamMemberCount);
+        } catch (e) {
+            console.error("Failed to refresh resource counts", e);
+            setQuadraCount(0);
+            setTeamMemberCount(0);
+        }
+    } else {
+        setQuadraCount(0);
+        setTeamMemberCount(0);
+    }
+  }, [selectedArenaContext, profile]);
 
   useEffect(() => {
     const initializeSession = async () => {
@@ -121,9 +148,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     if (!isLoading) {
-        refreshAlunoProfile();
+      refreshResourceCounts();
+      refreshAlunoProfile();
     }
-  }, [profile, selectedArenaContext, isLoading, refreshAlunoProfile]);
+  }, [isLoading, refreshResourceCounts, refreshAlunoProfile]);
 
   const processCompletedReservations = useCallback(async () => {
     if (!profile || !selectedArenaContext || profile.role !== 'admin_arena') {
@@ -278,7 +306,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const authState: AuthState = { user, profile, arena, memberships, selectedArenaContext, isLoading };
 
   return (
-    <AuthContext.Provider value={{ ...authState, allArenas, alunoProfileForSelectedArena, signUp, signIn, signOut, updateProfile, updateArena, followArena, unfollowArena, switchArenaContext, refreshAlunoProfile }}>
+    <AuthContext.Provider value={{ ...authState, allArenas, alunoProfileForSelectedArena, quadraCount, teamMemberCount, refreshResourceCounts, signUp, signIn, signOut, updateProfile, updateArena, followArena, unfollowArena, switchArenaContext, refreshAlunoProfile }}>
       {children}
     </AuthContext.Provider>
   );

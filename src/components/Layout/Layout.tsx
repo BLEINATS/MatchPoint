@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import PlanStatusBanner from './PlanStatusBanner';
 import { useSubscriptionStatus } from '../../hooks/useSubscriptionStatus';
 import SubscriptionLockOverlay from './SubscriptionLockOverlay';
+import HelpChatWidget from '../HelpChat/HelpChatWidget';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -24,6 +25,9 @@ const Layout: React.FC<LayoutProps> = ({ children, showHeader = true }) => {
   // The lock overlay is for expired plans, but it should NOT show on the settings page.
   const showLockOverlay = isAdminOrStaff && isExpired && location.pathname !== '/settings';
 
+  // Show chat for admin and staff
+  const showHelpChat = isAdminOrStaff;
+
   return (
     <div className="min-h-screen bg-brand-gray-50 dark:bg-brand-gray-900">
       {showHeader && <Header />}
@@ -32,6 +36,7 @@ const Layout: React.FC<LayoutProps> = ({ children, showHeader = true }) => {
         {showBanner && <PlanStatusBanner arena={selectedArenaContext!} profile={profile!} />}
         {children}
       </main>
+      {showHelpChat && <HelpChatWidget />}
     </div>
   );
 };

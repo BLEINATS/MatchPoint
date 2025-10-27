@@ -4,11 +4,11 @@ import { useToast } from '../../context/ToastContext';
 import { localApi } from '../../lib/localApi';
 import { Profile, PermissionLevel, ProfilePermissions } from '../../types';
 import { Loader2, Plus, Edit, Trash2, Shield, AlertTriangle } from 'lucide-react';
-import Button from '../Forms/Button';
-import ConfirmationModal from '../Shared/ConfirmationModal';
-import TeamMemberModal from '../Settings/TeamMemberModal';
+import Button from '../../components/Forms/Button';
+import ConfirmationModal from '../../components/Shared/ConfirmationModal';
+import TeamMemberModal from '../../components/Settings/TeamMemberModal';
 import { useSubscriptionStatus } from '../../hooks/useSubscriptionStatus';
-import Alert from '../Shared/Alert';
+import Alert from '../../components/Shared/Alert';
 
 export const PERMISSIONS_CONFIG: Record<keyof ProfilePermissions, { label: string; levels: Record<string, string> }> = {
   reservas: { label: 'Reservas', levels: { none: 'Nenhum Acesso', view: 'Visualizar', edit: 'Gerenciar' } },
@@ -22,7 +22,7 @@ export const PERMISSIONS_CONFIG: Record<keyof ProfilePermissions, { label: strin
 };
 
 const TeamSettingsTab: React.FC = () => {
-  const { selectedArenaContext: arena, profile, refreshResourceCounts } = useAuth();
+  const { selectedArenaContext: arena, profile, setTeamMemberCount } = useAuth();
   const { addToast } = useToast();
   const { canAddTeamMember, limits, isExpired, isActive } = useSubscriptionStatus();
   const [teamMembers, setTeamMembers] = useState<Profile[]>([]);
@@ -57,6 +57,7 @@ const TeamSettingsTab: React.FC = () => {
   const handleSaveMember = async (memberData: Omit<Profile, 'id' | 'created_at'> | Profile) => {
     if (!arena) return;
     try {
+      const isEditing = 'id' in memberData && !!memberData.id;
       const payload = { 
         ...memberData, 
         arena_id: arena.id, 
@@ -64,7 +65,9 @@ const TeamSettingsTab: React.FC = () => {
       };
       await localApi.upsert('profiles', [payload], 'all');
       
-      await refreshResourceCounts();
+      if (!isEditing) {
+        setTeamMemberCount(prev => prev + 1);
+      }
 
       addToast({ message: 'Membro da equipe salvo com sucesso!', type: 'success' });
       await loadTeamMembers();
@@ -84,7 +87,7 @@ const TeamSettingsTab: React.FC = () => {
     if (!memberToDelete) return;
     try {
       await localApi.delete('profiles', [memberToDelete.id], 'all');
-      await refreshResourceCounts();
+      setTeamMemberCount(prev => prev - 1);
       addToast({ message: 'Membro da equipe excluído com sucesso.', type: 'success' });
       await loadTeamMembers();
     } catch (error: any) {
@@ -135,7 +138,7 @@ const TeamSettingsTab: React.FC = () => {
           message={`Você atingiu o limite de ${limits.maxTeamMembers} funcionário(s) para o seu plano atual. Para adicionar mais, considere fazer um upgrade.`}
         />
       )}
-      
+
       {isLoading ? (
         <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-brand-blue-500" /></div>
       ) : (

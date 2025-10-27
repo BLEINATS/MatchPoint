@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { 
     DollarSign, Users, Plus, Lock, Send, Calendar, Clock, 
     User, Sparkles, Star, TrendingUp, TrendingDown, Phone, MessageSquare, MessageCircle, Bookmark, Loader2, GraduationCap,
-    CheckCircle, AlertCircle, CreditCard, ClipboardList, XCircle, Repeat, ShoppingBag, PieChart, Trophy, PartyPopper, Edit, Trash2
+    CheckCircle, AlertCircle, CreditCard, ClipboardList, XCircle, Repeat, ShoppingBag, PieChart, Trophy, PartyPopper, Edit, Trash2, BookOpen
 } from 'lucide-react';
 import StatCard from './StatCard';
 import { Quadra, Reserva, Aluno, Torneio, Evento, Professor, AtletaAluguel, Notificacao } from '../../types';
@@ -192,7 +192,11 @@ const TodaysAgenda: React.FC<{ reservations: Reserva[], quadras: Quadra[], allRe
   );
 };
 
-const AnalyticsDashboard: React.FC = () => {
+interface AnalyticsDashboardProps {
+  onReopenOnboarding: () => void;
+}
+
+const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboarding }) => {
   const { selectedArenaContext: arena, profile } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
@@ -628,10 +632,20 @@ const AnalyticsDashboard: React.FC = () => {
   return (
     <div className="space-y-8">
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Action Center</h1>
-        <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">
-          Bom dia, {profile?.name}! Você tem <span className="font-bold text-brand-blue-500">{todaysReservations.length}</span> reservas confirmadas para hoje.
-        </p>
+        <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+            <div>
+                <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Action Center</h1>
+                <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">
+                  Bom dia, {profile?.name}! Você tem <span className="font-bold text-brand-blue-500">{todaysReservations.length}</span> reservas confirmadas para hoje.
+                </p>
+            </div>
+            {profile?.role === 'admin_arena' && (
+              <Button variant="outline" onClick={onReopenOnboarding}>
+                <BookOpen className="h-4 w-4 mr-2" />
+                Ver Tutorial
+              </Button>
+            )}
+        </div>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

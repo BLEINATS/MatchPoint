@@ -1,0 +1,191 @@
+{
+  "start": {
+    "message": "Olá! Sou seu assistente virtual. Como posso ajudar hoje?",
+    "options": [
+      { "text": "Dúvidas sobre Reservas", "next": "start_reservas" },
+      { "text": "Gerenciar minha Arena", "next": "start_alunos" },
+      { "text": "Configurações da Arena", "next": "start_settings" },
+      { "text": "Dúvidas Financeiras", "next": "start_financeiro" }
+    ]
+  },
+  "start_dashboard": {
+    "message": "Estou vendo que você está no Dashboard. Sobre o que você tem dúvida?",
+    "options": [
+      { "text": "O que significa 'Receita do Mês'?", "next": "dashboard_receita" },
+      { "text": "Como funcionam os 'Insights'?", "next": "dashboard_insights" },
+      { "text": "Ver outras opções", "next": "start" }
+    ]
+  },
+  "dashboard_receita": {
+    "message": "A 'Receita do Mês' soma todos os pagamentos confirmados de reservas e mensalidades dentro do mês atual. É uma visão geral do seu faturamento.",
+    "options": [{ "text": "Voltar", "next": "start_dashboard" }]
+  },
+  "dashboard_insights": {
+    "message": "Os 'Insights' são sugestões automáticas baseadas na atividade da sua arena, como identificar seus horários de pico ou clientes mais fiéis, para te ajudar a tomar decisões.",
+    "options": [{ "text": "Voltar", "next": "start_dashboard" }]
+  },
+  "start_reservas": {
+    "message": "Você está no Hub de Reservas. Posso ajudar com algo?",
+    "options": [
+      { "text": "Como criar uma nova reserva?", "next": "reservas_criar" },
+      { "text": "Como bloquear um horário?", "next": "reservas_bloquear" },
+      { "text": "Como cancelar uma reserva?", "next": "reservas_cancelar" },
+      { "text": "Ver outras opções", "next": "start" }
+    ]
+  },
+  "reservas_criar": {
+    "message": "Clique em um horário vago na agenda ou no botão 'Nova Reserva'. Preencha os dados do cliente, quadra e horário. O sistema calculará o preço automaticamente.",
+    "options": [{ "text": "Voltar", "next": "start_reservas" }]
+  },
+  "reservas_bloquear": {
+    "message": "Clique no botão 'Nova Reserva' e selecione o tipo 'Bloqueio'. Defina o período e o motivo (ex: manutenção). O horário ficará indisponível na agenda.",
+    "options": [{ "text": "Voltar", "next": "start_reservas" }]
+  },
+  "reservas_cancelar": {
+    "message": "Clique na reserva que deseja cancelar. Na janela de detalhes, use o botão 'Cancelar Reserva'. O sistema aplicará sua política de cancelamento automaticamente.",
+    "options": [{ "text": "Voltar", "next": "start_reservas" }]
+  },
+  "start_alunos": {
+    "message": "Você está na área de Gerenciamento. O que gostaria de saber?",
+    "options": [
+      { "text": "Qual a diferença entre Cliente e Aluno?", "next": "alunos_diferenca" },
+      { "text": "Como cadastrar um Mensalista?", "next": "alunos_mensalista" },
+      { "text": "Como criar uma Turma de aula?", "next": "alunos_turma" },
+      { "text": "Ver outras opções", "next": "start" }
+    ]
+  },
+  "alunos_diferenca": {
+    "message": "Um 'Cliente' faz reservas avulsas. Um 'Aluno' possui um plano de aulas (ex: 8 aulas/mês) e pode se matricular em turmas.",
+    "options": [{ "text": "Voltar", "next": "start_alunos" }]
+  },
+  "alunos_mensalista": {
+    "message": "Para cadastrar um mensalista, vá ao Hub de Reservas, crie uma 'Nova Reserva', marque a opção 'Reserva Recorrente' e defina a frequência (ex: toda segunda-feira).",
+    "options": [{ "text": "Voltar", "next": "start_alunos" }]
+  },
+  "alunos_turma": {
+    "message": "Na aba 'Turmas', clique em 'Adicionar Turma'. Defina o nome, professor, quadra, dias e horários. Depois, você poderá matricular os alunos na grade de horários da turma.",
+    "options": [{ "text": "Voltar", "next": "start_alunos" }]
+  },
+  "start_quadras": {
+    "message": "Você está na gestão de Quadras. Como posso ajudar?",
+    "options": [
+      { "text": "Como funcionam as Regras de Precificação?", "next": "quadras_precos" },
+      { "text": "Como adicionar fotos em uma quadra?", "next": "quadras_fotos" },
+      { "text": "Ver outras opções", "next": "start" }
+    ]
+  },
+  "quadras_precos": {
+    "message": "Ao editar uma quadra, vá na aba 'Precificação'. Você pode criar regras para horários e dias específicos (ex: preço de fim de semana) e definir uma regra 'Padrão' para os demais horários.",
+    "options": [{ "text": "Voltar", "next": "start_quadras" }]
+  },
+  "quadras_fotos": {
+    "message": "Edite a quadra desejada e vá para a aba 'Fotos'. Clique em 'Adicionar fotos' para fazer o upload. Você também pode definir uma como foto de capa.",
+    "options": [{ "text": "Voltar", "next": "start_quadras" }]
+  },
+  "start_settings": {
+    "message": "Você está nas Configurações. Qual área precisa de ajuda?",
+    "options": [
+      { "text": "Como alterar dados da minha arena?", "next": "settings_perfil" },
+      { "text": "Como gerenciar minha equipe?", "next": "settings_equipe" },
+      { "text": "Onde vejo meu plano de assinatura?", "next": "settings_plano" }
+    ]
+  },
+  "settings_perfil": {
+    "message": "Na aba 'Perfil da Arena', você pode editar o nome, endereço, dados de contato e o 'slug' (link público) da sua arena.",
+    "options": [{ "text": "Voltar", "next": "start_settings" }]
+  },
+  "settings_equipe": {
+    "message": "Na aba 'Equipe', você pode adicionar novos funcionários e definir permissões de acesso específicas para cada um, controlando o que eles podem ver e fazer no sistema.",
+    "options": [{ "text": "Voltar", "next": "start_settings" }]
+  },
+  "settings_plano": {
+    "message": "A aba 'Plano e Assinatura' mostra os detalhes do seu plano atual com o MatchPlay, incluindo recursos e data de vencimento ou próxima cobrança.",
+    "options": [{ "text": "Voltar", "next": "start_settings" }]
+  },
+  "start_perfil": {
+    "message": "Olá! Bem-vindo ao seu painel de cliente. Como posso te ajudar?",
+    "options": [
+      { "text": "Como agendar uma aula?", "next": "perfil_agendar" },
+      { "text": "Como ver meus créditos?", "next": "perfil_creditos" },
+      { "text": "Como cancelar uma reserva?", "next": "perfil_cancelar" }
+    ]
+  },
+  "perfil_agendar": {
+    "message": "Vá para a aba 'Aulas'. Lá você verá os horários disponíveis. Clique em um horário para agendar. Se você já tem uma aula no mesmo dia, o sistema perguntará se deseja trocar.",
+    "options": [{ "text": "Voltar", "next": "start_perfil" }]
+  },
+  "perfil_creditos": {
+    "message": "Seus créditos de aulas e saldo financeiro ficam na aba 'Início' e também na aba 'Perfil'. Você pode usar o saldo para pagar por novas reservas.",
+    "options": [{ "text": "Voltar", "next": "start_perfil" }]
+  },
+  "perfil_cancelar": {
+    "message": "Vá para a aba 'Reservas', encontre a reserva que deseja cancelar e clique nela. Na tela de detalhes, haverá um botão para cancelar. A política de reembolso da arena será aplicada.",
+    "options": [{ "text": "Voltar", "next": "start_perfil" }]
+  },
+  "start_financeiro": {
+    "message": "Você está no painel Financeiro. O que gostaria de saber?",
+    "options": [
+      { "text": "O que é 'Receita do Mês'?", "next": "financeiro_receita" },
+      { "text": "Como lanço uma despesa?", "next": "financeiro_despesa" }
+    ]
+  },
+  "financeiro_receita": {
+    "message": "A 'Receita do Mês' inclui todos os pagamentos de reservas e mensalidades confirmados no mês corrente. As 'Contas a Receber' são valores de reservas pendentes de pagamento.",
+    "options": [{ "text": "Voltar", "next": "start_financeiro" }]
+  },
+  "financeiro_despesa": {
+    "message": "Clique em 'Nova Transação', selecione o tipo 'Despesa', descreva o gasto (ex: 'Conta de luz'), informe o valor e a data. Isso ajudará a calcular seu lucro líquido.",
+    "options": [{ "text": "Voltar", "next": "start_financeiro" }]
+  },
+  "start_torneios": {
+    "message": "Você está na área de Torneios. Como posso ajudar?",
+    "options": [
+      { "text": "Como criar um novo torneio?", "next": "torneios_criar" },
+      { "text": "Como gerar as chaves dos jogos?", "next": "torneios_chaves" }
+    ]
+  },
+  "torneios_criar": {
+    "message": "Clique em 'Criar Novo Torneio' e preencha as informações básicas. Depois, dentro do torneio, você poderá gerenciar inscritos, chaves e resultados.",
+    "options": [{ "text": "Voltar", "next": "start_torneios" }]
+  },
+  "torneios_chaves": {
+    "message": "Dentro de um torneio, vá para a aba 'Inscritos'. Após todos os participantes confirmarem o check-in, o botão 'Gerar Chaves' ficará disponível.",
+    "options": [{ "text": "Voltar", "next": "start_torneios" }]
+  },
+  "start_eventos": {
+    "message": "Você está na área de Eventos Privados. Como posso ajudar?",
+    "options": [
+      { "text": "Qual a finalidade desta área?", "next": "eventos_finalidade" },
+      { "text": "Como funciona o status?", "next": "eventos_status" }
+    ]
+  },
+  "eventos_finalidade": {
+    "message": "Esta área é para gerenciar orçamentos e reservas de eventos maiores, como festas de aniversário ou eventos corporativos, que podem usar múltiplos espaços da sua arena.",
+    "options": [{ "text": "Voltar", "next": "start_eventos" }]
+  },
+  "eventos_status": {
+    "message": "O status ajuda a organizar o fluxo: 'Orçamento' (proposta inicial), 'Pendente' (aguardando cliente), 'Confirmado' (bloqueia a agenda), 'Realizado' e 'Concluído'.",
+    "options": [{ "text": "Voltar", "next": "start_eventos" }]
+  },
+  "start_loja": {
+    "message": "Você está na Loja da Arena. Como posso ajudar?",
+    "options": [
+      { "text": "Como adiciono um novo produto?", "next": "loja_produto" },
+      { "text": "O que são 'variações'?", "next": "loja_variacoes" }
+    ]
+  },
+  "loja_produto": {
+    "message": "Clique em 'Novo Produto'. Preencha o nome, descrição, preço, estoque e adicione fotos. Você pode ativar ou desativar produtos a qualquer momento.",
+    "options": [{ "text": "Voltar", "next": "start_loja" }]
+  },
+  "loja_variacoes": {
+    "message": "'Variações' são usadas para produtos com diferentes opções, como camisetas com tamanhos (P, M, G) ou bolas com cores diferentes. Cada variação pode ter seu próprio controle de estoque.",
+    "options": [{ "text": "Voltar", "next": "start_loja" }]
+  },
+  "end": {
+    "message": "Fico feliz em ajudar! Se precisar de mais alguma coisa, é só chamar.",
+    "options": [
+      { "text": "Voltar ao início", "next": "start" }
+    ]
+  }
+}

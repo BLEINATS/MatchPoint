@@ -1,16 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { localApi } from '../lib/localApi';
-import { Plan, Subscription, Quadra, Profile } from '../types';
+import { Plan, Subscription } from '../types';
 import { isBefore, addDays, add, Duration } from 'date-fns';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
 
 export const useSubscriptionStatus = () => {
-  const { selectedArenaContext: arena, profile } = useAuth();
+  const { selectedArenaContext: arena, profile, quadraCount, teamMemberCount } = useAuth();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [quadraCount, setQuadraCount] = useState(0);
-  const [teamMemberCount, setTeamMemberCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -18,19 +16,15 @@ export const useSubscriptionStatus = () => {
       if (!arena || !profile || (profile.role !== 'admin_arena' && profile.role !== 'funcionario')) {
         setPlan(null);
         setSubscription(null);
-        setQuadraCount(0);
-        setTeamMemberCount(0);
         setIsLoading(false);
         return;
       }
       
       setIsLoading(true);
       try {
-        const [subsRes, plansRes, quadrasRes, profilesRes] = await Promise.all([
+        const [subsRes, plansRes] = await Promise.all([
           localApi.select<Subscription>('subscriptions', 'all'),
           localApi.select<Plan>('plans', 'all'),
-          localApi.select<Quadra>('quadras', arena.id),
-          localApi.select<Profile>('profiles', 'all'),
         ]);
 
         const currentSub = subsRes.data?.find(s => s.arena_id === arena.id);
@@ -42,10 +36,6 @@ export const useSubscriptionStatus = () => {
         } else {
           setPlan(null);
         }
-        
-        setQuadraCount(quadrasRes.data?.length || 0);
-        setTeamMemberCount(profilesRes.data?.filter(p => p.arena_id === arena.id && p.role === 'funcionario').length || 0);
-
       } catch (error) {
         console.error("Failed to fetch subscription status", error);
       } finally {
