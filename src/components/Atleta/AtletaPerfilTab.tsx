@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AtletaAluguel } from '../../types';
 import Input from '../Forms/Input';
 import Button from '../Forms/Button';
-import { Save, DollarSign, Briefcase, FileText } from 'lucide-react';
+import { Save, DollarSign, Briefcase } from 'lucide-react';
 import { ToggleSwitch } from '../Gamification/ToggleSwitch';
 
 interface AtletaPerfilTabProps {

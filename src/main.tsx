@@ -73,10 +73,6 @@ const router = createBrowserRouter([
         element: <ProtectedRoute><AtletaProfilePage /></ProtectedRoute>,
       },
       {
-        path: 'alunos/atletas/:id',
-        element: <ProtectedRoute><AtletaProfilePage /></ProtectedRoute>,
-      },
-      {
         path: 'torneios',
         element: <ProtectedRoute><Torneios /></ProtectedRoute>,
       },

@@ -15,6 +15,7 @@ const getNotificationIcon = (type: string) => {
       return <Calendar className="h-5 w-5 text-blue-500" />;
     case 'cancellation':
       return <XCircle className="h-5 w-5 text-red-500" />;
+    case 'payment_received':
     case 'credito':
       return <DollarSign className="h-5 w-5 text-green-500" />;
     case 'novo_cliente':

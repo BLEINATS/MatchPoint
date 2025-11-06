@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Phone, Mail, MapPin, Star, Briefcase, FileText, Hash, Image as ImageIcon, Loader2, Link as LinkIcon, Percent, DollarSign, Trash2 } from 'lucide-react';
+import { X, Save, User, Phone, Mail, MapPin, Star, Briefcase, FileText, Hash, Image as ImageIcon, Loader2, Link as LinkIcon, Percent, DollarSign, Trash2, Banknote } from 'lucide-react';
 import { AtletaAluguel, Aluno } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
@@ -37,6 +37,7 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
     certificacoes: '',
     palavras_chave: [] as string[],
     status: 'disponivel' as AtletaAluguel['status'],
+    pix_key: '',
   });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -74,13 +75,14 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
         certificacoes: initialData.certificacoes || '',
         palavras_chave: initialData.palavras_chave || [],
         status: initialData.status || 'disponivel',
+        pix_key: initialData.pix_key || '',
       });
     } else {
       setFormData({
         name: '', email: '', phone: '', avatar_url: null, profile_id: null,
         esportes: [], nivel_tecnico: null, experiencia_anos: 0, raio_atuacao: 0,
         taxa_hora: 0, comissao_arena: 10, biografia: '', certificacoes: '',
-        palavras_chave: [], status: 'disponivel',
+        palavras_chave: [], status: 'disponivel', pix_key: '',
       });
     }
     setPhotoFile(null);
@@ -270,6 +272,7 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
                     <Input label="Comissão da Arena (%)" name="comissao_arena" type="number" value={formData.comissao_arena.toString()} onChange={handleChange} icon={<Percent className="h-4 w-4 text-brand-gray-400"/>} />
                     <Input label="Raio de Atuação (KM)" name="raio_atuacao" type="number" value={formData.raio_atuacao.toString()} onChange={handleChange} icon={<MapPin className="h-4 w-4 text-brand-gray-400"/>} />
                 </div>
+                 <Input label="Chave PIX" name="pix_key" value={formData.pix_key || ''} onChange={handleChange} icon={<Banknote className="h-4 w-4 text-brand-gray-400"/>} placeholder="Chave PIX para pagamentos" />
                 <div>
                     <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Biografia</label>
                     <textarea name="biografia" value={formData.biografia} onChange={handleChange} rows={3} className="w-full form-textarea rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600" placeholder="Descreva a experiência e especialidades do jogador..."></textarea>

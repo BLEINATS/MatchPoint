@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Reserva, Quadra } from '../../types';
 import { Calendar, Clock, MapPin, User } from 'lucide-react';
 import { format, isAfter, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
+import { useMemo } from 'react';
 
 interface AtletaAgendaTabProps {
   reservas: Reserva[];

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { AtletaAluguel, Reserva, Aluno, Quadra } from '../types';
-import { Loader2, Calendar, List, DollarSign, Star, User, ArrowLeft, Mail, Phone, Briefcase } from 'lucide-react';
+import { Loader2, Calendar, List, DollarSign, Star, User, ArrowLeft, Mail, Phone, Briefcase, Percent } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { localApi } from '../lib/localApi';
 import SolicitacoesTab from '../components/Atleta/SolicitacoesTab';
@@ -15,54 +15,41 @@ import AtletaAvaliacoesTab from '../components/Atleta/AtletaAvaliacoesTab';
 
 type TabType = 'solicitacoes' | 'agenda' | 'financeiro' | 'avaliacoes' | 'perfil';
 
-const AtletaProfilePage: React.FC = () => {
-  const { id: paramId } = useParams<{ id: string }>();
-  const { profile, selectedArenaContext, currentAtletaId } = useAuth();
-  const { addToast } = useToast();
+interface AtletaProfileContentProps {
+  atletaProfile: AtletaAluguel;
+  isAdminView: boolean;
+}
 
-  const [atletaProfile, setAtletaProfile] = useState<AtletaAluguel | null>(null);
+const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfile: initialProfile, isAdminView }) => {
+  const { selectedArenaContext, profile } = useAuth();
+  const { addToast } = useToast();
+  const [atletaProfile, setAtletaProfile] = useState<AtletaAluguel>(initialProfile);
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [quadras, setQuadras] = useState<Quadra[]>([]);
   const [clientes, setClientes] = useState<Aluno[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('solicitacoes');
 
-  const isAdminView = profile?.role === 'admin_arena' || profile?.role === 'funcionario';
-  const atletaIdToLoad = isAdminView ? paramId : currentAtletaId;
-
   const loadData = useCallback(async () => {
-    if (!selectedArenaContext || !atletaIdToLoad) {
-      setIsLoading(false);
-      return;
-    }
+    if (!selectedArenaContext || !atletaProfile.id) return;
     setIsLoading(true);
     try {
-      const [atletasRes, reservasRes, quadrasRes, clientesRes] = await Promise.all([
-        localApi.select<AtletaAluguel>('atletas_aluguel', selectedArenaContext.id),
+      const [reservasRes, quadrasRes, clientesRes] = await Promise.all([
         localApi.select<Reserva>('reservas', selectedArenaContext.id),
         localApi.select<Quadra>('quadras', selectedArenaContext.id),
         localApi.select<Aluno>('alunos', selectedArenaContext.id),
       ]);
 
-      const foundProfile = (atletasRes.data || []).find(a => a.id === atletaIdToLoad);
-      setAtletaProfile(foundProfile || null);
-
-      if (foundProfile) {
-        const atletaReservas = (reservasRes.data || []).filter(r => r.atleta_aluguel_id === foundProfile.id);
-        setReservas(atletaReservas);
-      } else {
-        setReservas([]);
-      }
-      
+      const atletaReservas = (reservasRes.data || []).filter(r => r.atleta_aluguel_id === atletaProfile.id);
+      setReservas(atletaReservas);
       setQuadras(quadrasRes.data || []);
       setClientes(clientesRes.data || []);
-
     } catch (error: any) {
       addToast({ message: `Erro ao carregar dados: ${error.message}`, type: 'error' });
     } finally {
       setIsLoading(false);
     }
-  }, [selectedArenaContext, addToast, atletaIdToLoad]);
+  }, [selectedArenaContext, addToast, atletaProfile.id]);
 
   useEffect(() => {
     loadData();
@@ -74,15 +61,15 @@ const AtletaProfilePage: React.FC = () => {
       const updatedReserva: Reserva = {
         ...reserva,
         atleta_aceite_status: newStatus,
-        status: newStatus === 'aceito' ? 'aguardando_pagamento_profissional' : 'confirmada',
+        status: newStatus === 'aceito' ? 'confirmada' : 'confirmada', // Status da reserva principal não muda
         atleta_aluguel_id: newStatus === 'recusado' ? null : reserva.atleta_aluguel_id,
-        total_price: newStatus === 'recusado' ? (reserva.total_price || 0) - atletaProfile.taxa_hora : reserva.total_price,
+        atleta_cost: newStatus === 'recusado' ? undefined : reserva.atleta_cost,
       };
 
       await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
 
       const notificationMessage = newStatus === 'aceito'
-        ? `aceitou seu convite para o jogo. Finalize o pagamento para confirmar.`
+        ? `aceitou seu convite para o jogo.`
         : `não está disponível para o seu jogo.`;
       
       if (reserva.profile_id) {
@@ -126,38 +113,21 @@ const AtletaProfilePage: React.FC = () => {
 
   const renderContent = () => {
     if (isLoading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>;
-    if (!atletaProfile) return <div className="text-center p-8">Perfil do atleta não encontrado.</div>;
     
     switch (activeTab) {
       case 'solicitacoes':
         return <SolicitacoesTab reservas={reservas} quadras={quadras} clientes={clientes} onUpdateRequest={handleUpdateRequest} />;
-      case 'agenda': 
+      case 'agenda':
         return <AtletaAgendaTab reservas={reservas} quadras={quadras} />;
-      case 'financeiro': 
+      case 'financeiro':
         return <AtletaFinanceiroTab atleta={atletaProfile} reservas={reservas} />;
-      case 'avaliacoes': 
-        return <AtletaAvaliacoesTab />;
-      case 'perfil': 
+      case 'avaliacoes':
+        return <AtletaAvaliacoesTab atleta={atletaProfile} />;
+      case 'perfil':
         return <AtletaPerfilTab atleta={atletaProfile} onSave={handleProfileSave} />;
       default: return null;
     }
   };
-  
-  if (isLoading && !atletaProfile) {
-    return (
-      <Layout>
-        <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-brand-blue-500" /></div>
-      </Layout>
-    );
-  }
-  
-  if (!atletaProfile) {
-    return (
-      <Layout>
-        <div className="text-center p-8">Perfil do atleta não encontrado.</div>
-      </Layout>
-    );
-  }
 
   const content = (
     <div className="space-y-8">
@@ -221,4 +191,54 @@ const AtletaProfilePage: React.FC = () => {
   return content;
 };
 
-export default AtletaProfilePage;
+const AtletaProfilePageWrapper: React.FC = () => {
+    const { id: paramId } = useParams<{ id: string }>();
+    const { profile, selectedArenaContext, currentAtletaId } = useAuth();
+    const { addToast } = useToast();
+    const [atletaProfile, setAtletaProfile] = useState<AtletaAluguel | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const isAdminView = profile?.role === 'admin_arena' || profile?.role === 'funcionario';
+    const atletaIdToLoad = isAdminView ? paramId : currentAtletaId;
+
+    useEffect(() => {
+        const loadAtletaData = async () => {
+            if (!selectedArenaContext || !atletaIdToLoad) {
+                setIsLoading(false);
+                return;
+            }
+            setIsLoading(true);
+            try {
+                const { data: atletasRes } = await localApi.select<AtletaAluguel>('atletas_aluguel', selectedArenaContext.id);
+                const foundProfile = (atletasRes || []).find(p => p.id === atletaIdToLoad);
+                setAtletaProfile(foundProfile || null);
+            } catch (error: any) {
+                addToast({ message: `Erro ao carregar perfil do atleta: ${error.message}`, type: 'error' });
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadAtletaData();
+    }, [selectedArenaContext, addToast, atletaIdToLoad]);
+
+    if (isLoading) {
+        return (
+            <Layout>
+                <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-brand-blue-500" /></div>
+            </Layout>
+        );
+    }
+    
+    if (!atletaProfile) {
+        return (
+            <Layout>
+                <div className="text-center p-8">Perfil do atleta não encontrado.</div>
+            </Layout>
+        );
+    }
+
+    return <AtletaProfileContent atletaProfile={atletaProfile} isAdminView={isAdminView} />;
+};
+
+export default AtletaProfilePageWrapper;

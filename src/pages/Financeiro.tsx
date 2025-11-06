@@ -1,37 +1,45 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Plus, DollarSign, TrendingUp, TrendingDown, FileText, Loader2, Filter } from 'lucide-react';
+import { ArrowLeft, Plus, DollarSign, TrendingUp, TrendingDown, FileText, Loader2, Filter, BarChart2, List, Handshake } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { localApi } from '../lib/localApi';
-import { Reserva, FinanceTransaction } from '../types';
+import { Reserva, FinanceTransaction, Professor, AtletaAluguel } from '../types';
 import Button from '../components/Forms/Button';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { formatCurrency } from '../utils/formatters';
 import FinancialChart from '../components/Financeiro/FinancialChart';
 import TransactionModal from '../components/Financeiro/TransactionModal';
+import AtletaPaymentsTab from '../components/Financeiro/AtletaPaymentsTab';
 
 const Financeiro: React.FC = () => {
   const { selectedArenaContext: arena } = useAuth();
   const { addToast } = useToast();
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
+  const [professores, setProfessores] = useState<Professor[]>([]);
+  const [atletas, setAtletas] = useState<AtletaAluguel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<FinanceTransaction | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'athlete_payments'>('overview');
 
   const loadData = useCallback(async () => {
     if (!arena) return;
     setIsLoading(true);
     try {
-      const [reservasRes, transactionsRes] = await Promise.all([
+      const [reservasRes, transactionsRes, profsRes, atletasRes] = await Promise.all([
         localApi.select<Reserva>('reservas', arena.id),
         localApi.select<FinanceTransaction>('finance_transactions', arena.id),
+        localApi.select<Professor>('professores', arena.id),
+        localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
       ]);
       setReservas(reservasRes.data || []);
       setTransactions(transactionsRes.data || []);
+      setProfessores(profsRes.data || []);
+      setAtletas(atletasRes.data || []);
     } catch (error: any) {
       addToast({ message: `Erro ao carregar dados financeiros: ${error.message}`, type: 'error' });
     } finally {
@@ -71,7 +79,7 @@ const Financeiro: React.FC = () => {
     const currentMonthStart = startOfMonth(new Date());
     const allTransactions = [
       ...reservas
-        .filter(r => r.status === 'confirmada' || r.status === 'realizada')
+        .filter(r => (r.status === 'confirmada' || r.status === 'realizada') && r.payment_status === 'pago')
         .map(r => ({
           id: `res-${r.id}`,
           date: r.date,
@@ -79,6 +87,7 @@ const Financeiro: React.FC = () => {
           amount: r.total_price || 0,
           type: 'receita' as 'receita',
           category: 'Reservas',
+          created_at: r.created_at,
         })),
       ...transactions,
     ];
@@ -90,7 +99,7 @@ const Financeiro: React.FC = () => {
     
     const receitaTotal = currentMonthTransactions.filter(t => t.type === 'receita').reduce((sum, t) => sum + t.amount, 0);
     const despesasTotais = currentMonthTransactions.filter(t => t.type === 'despesa').reduce((sum, t) => sum + t.amount, 0);
-    const contasAReceber = reservas.filter(r => r.status === 'confirmada' && r.payment_status === 'pendente').reduce((sum, r) => sum + (r.total_price || 0), 0);
+    const contasAReceber = reservas.filter(r => (r.status === 'confirmada' || r.status === 'aguardando_pagamento') && r.payment_status === 'pendente').reduce((sum, r) => sum + (r.total_price || 0), 0);
     
     return {
       receitaTotal,
@@ -100,6 +109,50 @@ const Financeiro: React.FC = () => {
       allTransactions: allTransactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     };
   }, [reservas, transactions]);
+
+  const tabs = [
+    { id: 'overview', label: 'Visão Geral', icon: BarChart2 },
+    { id: 'transactions', label: 'Transações', icon: List },
+    { id: 'athlete_payments', label: 'Pagamentos de Atletas', icon: Handshake },
+  ];
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'overview':
+        return (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <StatCard label="Receita do Mês" value={formatCurrency(financialData.receitaTotal)} icon={TrendingUp} color="text-green-500" />
+              <StatCard label="Despesas do Mês" value={formatCurrency(financialData.despesasTotais)} icon={TrendingDown} color="text-red-500" />
+              <StatCard label="Contas a Receber" value={formatCurrency(financialData.contasAReceber)} icon={DollarSign} color="text-yellow-500" />
+              <StatCard label="Lucro Líquido" value={formatCurrency(financialData.lucroLiquido)} icon={FileText} color="text-blue-500" />
+            </div>
+            <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+              <h3 className="text-xl font-semibold mb-4">Fluxo de Caixa Mensal</h3>
+              <FinancialChart transactions={financialData.allTransactions} />
+            </div>
+          </>
+        );
+      case 'transactions':
+        return (
+          <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+            <h3 className="text-xl font-semibold mb-4">Últimas Transações</h3>
+            <TransactionList 
+              transactions={financialData.allTransactions} 
+              onEdit={(t) => { setEditingTransaction(t); setIsModalOpen(true); }}
+              onDelete={handleDeleteTransaction}
+            />
+          </div>
+        );
+      case 'athlete_payments':
+        return <AtletaPaymentsTab 
+                  reservas={reservas} 
+                  profissionais={[...professores, ...atletas]} 
+                  onDataChange={loadData} 
+                />;
+      default: return null;
+    }
+  };
 
   return (
     <Layout>
@@ -120,32 +173,25 @@ const Financeiro: React.FC = () => {
             </Button>
           </div>
         </motion.div>
+        
+        <div className="border-b border-brand-gray-200 dark:border-brand-gray-700 mb-8">
+          <nav className="-mb-px flex space-x-6 overflow-x-auto" aria-label="Tabs">
+            {tabs.map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${activeTab === tab.id ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400'}`}>
+                <tab.icon className="mr-2 h-5 w-5" />{tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
 
         {isLoading ? (
           <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-brand-blue-500" /></div>
         ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <StatCard label="Receita do Mês" value={formatCurrency(financialData.receitaTotal)} icon={TrendingUp} color="text-green-500" />
-              <StatCard label="Despesas do Mês" value={formatCurrency(financialData.despesasTotais)} icon={TrendingDown} color="text-red-500" />
-              <StatCard label="Contas a Receber" value={formatCurrency(financialData.contasAReceber)} icon={DollarSign} color="text-yellow-500" />
-              <StatCard label="Lucro Líquido" value={formatCurrency(financialData.lucroLiquido)} icon={FileText} color="text-blue-500" />
-            </div>
-
-            <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700 mb-8">
-              <h3 className="text-xl font-semibold mb-4">Fluxo de Caixa Mensal</h3>
-              <FinancialChart transactions={financialData.allTransactions} />
-            </div>
-
-            <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-              <h3 className="text-xl font-semibold mb-4">Últimas Transações</h3>
-              <TransactionList 
-                transactions={financialData.allTransactions.slice(0, 20)} 
-                onEdit={(t) => { setEditingTransaction(t); setIsModalOpen(true); }}
-                onDelete={handleDeleteTransaction}
-              />
-            </div>
-          </>
+          <AnimatePresence mode="wait">
+            <motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+              {renderContent()}
+            </motion.div>
+          </AnimatePresence>
         )}
       </div>
       <TransactionModal 

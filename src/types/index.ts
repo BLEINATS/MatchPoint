@@ -214,6 +214,7 @@ export interface Professor {
   metodologia?: string | null;
   portfolio_url?: string | null;
   comissao?: number;
+  pix_key?: string | null;
   created_at: string;
 }
 
@@ -235,11 +236,20 @@ export interface AtletaAluguel {
   certificacoes?: string | null;
   palavras_chave?: string[];
   status: 'disponivel' | 'indisponivel';
+  pix_key?: string | null;
   created_at: string;
   partidas_jogadas?: number;
   unavailability?: { start: string; end: string }[];
   avg_rating?: number;
-  ratings_count?: number;
+  ratings?: {
+    clientId: string;
+    reservationId: string;
+    clientName: string;
+    rating: number;
+    comment: string;
+    tags: string[];
+    date: string;
+  }[];
 }
 
 export interface PlanoAula {
@@ -326,6 +336,9 @@ export interface Reserva {
   }[] | null;
   atleta_aluguel_id?: string | null;
   atleta_aceite_status?: 'pendente' | 'aceito' | 'recusado' | null;
+  atleta_payment_status?: 'pendente_cliente' | 'pendente_repasse' | 'pago';
+  atleta_paid_at?: string | null;
+  atleta_cost?: number;
   participants?: {
     profile_id: string;
     name: string;
@@ -473,7 +486,7 @@ export interface Notificacao {
   arena_id: string;
   profile_id?: string | null;
   message: string;
-  type: string;
+  type: 'announcement' | 'game_invite' | 'friend_requests' | 'cancellation' | 'gamification_reward' | 'gamification_points' | 'direct_message' | 'game_invite_response' | 'payment_received';
   read: boolean;
   link_to?: string | null;
   created_at: string;

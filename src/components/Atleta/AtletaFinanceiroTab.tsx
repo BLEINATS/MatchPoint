@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { AtletaAluguel, Reserva } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
-import { DollarSign, TrendingUp, TrendingDown, Clock, CheckCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, CheckCircle, Clock } from 'lucide-react';
 import { isBefore } from 'date-fns';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 
@@ -28,7 +28,7 @@ const AtletaFinanceiroTab: React.FC<AtletaFinanceiroTabProps> = ({ atleta, reser
   const financialData = useMemo(() => {
     let aReceber = 0;
     let recebido = 0;
-    const transactions: { id: string, description: string, amount: number, date: string, status: 'recebido' | 'a_receber' }[] = [];
+    const transactions: { id: string, description: string, amount: number, date: string, status: 'pago' | 'pendente_repasse' }[] = [];
 
     reservas.forEach(reserva => {
       if (reserva.atleta_aceite_status === 'aceito' && reserva.status !== 'cancelada') {
@@ -36,15 +36,13 @@ const AtletaFinanceiroTab: React.FC<AtletaFinanceiroTabProps> = ({ atleta, reser
         
         if (isCompleted) {
           const comissao = atleta.taxa_hora * (1 - (atleta.comissao_arena / 100));
-          // Mock payment status
-          const isPaid = Math.random() > 0.3; 
           
-          if (isPaid) {
+          if (reserva.atleta_payment_status === 'pago') {
             recebido += comissao;
-            transactions.push({ id: reserva.id, description: `Jogo com ${reserva.clientName}`, amount: comissao, date: reserva.date, status: 'recebido' });
-          } else {
+            transactions.push({ id: reserva.id, description: `Jogo com ${reserva.clientName}`, amount: comissao, date: reserva.date, status: 'pago' });
+          } else if (reserva.atleta_payment_status === 'pendente_repasse') {
             aReceber += comissao;
-            transactions.push({ id: reserva.id, description: `Jogo com ${reserva.clientName}`, amount: comissao, date: reserva.date, status: 'a_receber' });
+            transactions.push({ id: reserva.id, description: `Jogo com ${reserva.clientName}`, amount: comissao, date: reserva.date, status: 'pendente_repasse' });
           }
         }
       }
@@ -80,9 +78,9 @@ const AtletaFinanceiroTab: React.FC<AtletaFinanceiroTabProps> = ({ atleta, reser
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-gray-900 dark:text-white">{t.description}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-green-600 dark:text-green-400">{formatCurrency(t.amount)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${t.status === 'recebido' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'}`}>
-                      {t.status === 'recebido' ? <CheckCircle className="h-3 w-3 mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
-                      {t.status === 'recebido' ? 'Recebido' : 'A Receber'}
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${t.status === 'pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'}`}>
+                      {t.status === 'pago' ? <CheckCircle className="h-3 w-3 mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
+                      {t.status === 'pago' ? 'Recebido' : 'A Receber'}
                     </span>
                   </td>
                 </tr>

@@ -6,6 +6,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   children: React.ReactNode;
+  asChild?: boolean;
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -15,11 +16,11 @@ const Button: React.FC<ButtonProps> = ({
   className = '',
   children,
   disabled,
+  asChild = false,
   ...props
 }) => {
   const baseClasses = 'inline-flex items-center justify-center font-semibold rounded-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-brand-gray-900';
   
-  // Classes de variantes reforçadas para garantir visibilidade em ambos os temas
   const variantClasses = {
     primary: 'bg-brand-blue-600 text-white hover:bg-brand-blue-700 focus:ring-brand-blue-500 dark:bg-brand-blue-500 dark:hover:bg-brand-blue-600',
     secondary: 'bg-brand-gray-700 text-white hover:bg-brand-gray-800 focus:ring-brand-gray-500 dark:bg-brand-gray-200 dark:text-brand-gray-900 dark:hover:bg-white',
@@ -36,6 +37,26 @@ const Button: React.FC<ButtonProps> = ({
   const classes = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${
     disabled || isLoading ? 'opacity-60 cursor-not-allowed' : ''
   } ${className}`;
+
+  if (asChild) {
+    const child = React.Children.only(children);
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, {
+        ...props,
+        className: `${classes} ${child.props.className || ''}`,
+        'aria-disabled': disabled || isLoading,
+        onClick: (e: React.MouseEvent) => {
+          if (disabled || isLoading) {
+            e.preventDefault();
+            return;
+          }
+          if (child.props.onClick) {
+            child.props.onClick(e);
+          }
+        },
+      });
+    }
+  }
 
   return (
     <motion.button

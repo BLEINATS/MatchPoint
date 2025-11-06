@@ -1,9 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Reserva, Quadra, Profile } from '../../types';
-import { format, isBefore } from 'date-fns';
+import { Reserva, Quadra, Profile, AtletaAluguel } from '../../types';
+import { format, isBefore, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Clock, MapPin, X, ShoppingBag, CreditCard, DollarSign, CheckCircle, AlertTriangle, User, Info, Users, UserPlus, Trash2, Lock, Unlock } from 'lucide-react';
+import { Calendar, Clock, MapPin, X, ShoppingBag, CreditCard, DollarSign, CheckCircle, AlertTriangle, User, Info, Users, UserPlus, Trash2, Lock, Unlock, MessageSquare, Star as StarIcon, Edit } from 'lucide-react';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import Button from '../Forms/Button';
 import { formatCurrency } from '../../utils/formatters';
@@ -11,21 +11,28 @@ import { useAuth } from '../../context/AuthContext';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import Alert from '../Shared/Alert';
 import Timer from '../Shared/Timer';
+import { Link } from 'react-router-dom';
 
 interface ReservationDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   reserva: Reserva | null;
   quadra: Quadra | null;
+  atleta: AtletaAluguel | null;
   arenaName?: string;
   onCancel: (reserva: Reserva) => void;
   onUpdateParticipantStatus: (reservaId: string, profileId: string, status: 'accepted' | 'declined') => void;
   onUpdateReservation: (reserva: Reserva) => void;
   friends: Profile[];
   onPay: (reserva: Reserva, amount: number, isPartial: boolean) => void;
+  onAvaliarAtleta: (reserva: Reserva) => void;
+  onContactAtleta: (atleta: AtletaAluguel) => void;
+  onTrocarAtleta: (reserva: Reserva) => void;
+  onCancelarAtleta: () => void;
+  onPayAtleta: (reserva: Reserva, atleta: AtletaAluguel) => void;
 }
 
-const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen, onClose, reserva: initialReserva, quadra, arenaName, onCancel, onUpdateParticipantStatus, onUpdateReservation, friends, onPay }) => {
+const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen, onClose, reserva: initialReserva, quadra, atleta, arenaName, onCancel, onUpdateParticipantStatus, onUpdateReservation, friends, onPay, onAvaliarAtleta, onContactAtleta, onTrocarAtleta, onCancelarAtleta, onPayAtleta }) => {
   const { profile } = useAuth();
   const [reserva, setReserva] = useState(initialReserva);
   const [isAddingFriends, setIsAddingFriends] = useState(false);
@@ -43,6 +50,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
   const isAwaitingPayment = reserva.status === 'aguardando_pagamento';
   const isPaymentOverdue = isAwaitingPayment && reserva.payment_deadline && isBefore(new Date(reserva.payment_deadline), new Date());
   const isLocked = reserva.invites_closed === true;
+  const isPastReservation = isPast(parseDateStringAsLocal(`${reserva.date}T${reserva.end_time}`));
+  const isGroupBooking = useMemo(() => (reserva.participants?.length || 0) > 1, [reserva.participants]);
 
   const handleCancelClick = () => {
     onClose();
@@ -101,7 +110,7 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
   }, [reserva.payment_status]);
 
   const rentalItemsTotal = useMemo(() => reserva.rented_items?.reduce((acc, item) => acc + item.price * item.quantity, 0) || 0, [reserva.rented_items]);
-  const reservationValue = (reserva.total_price || 0) - rentalItemsTotal;
+  const reservationValue = (reserva.total_price || 0) - rentalItemsTotal - (reserva.atleta_cost || 0);
   const currentUserParticipant = reserva.participants?.find(p => p.profile_id === profile?.id);
   const confirmedParticipants = useMemo(() => reserva.participants?.filter(p => p.status === 'accepted') || [], [reserva.participants]);
   const numConfirmed = confirmedParticipants.length;
@@ -119,6 +128,39 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
     const participantIds = new Set(reserva.participants.map(p => p.profile_id));
     return friends.filter(f => !participantIds.has(f.id));
   }, [friends, reserva.participants]);
+
+  const atletaJaAvaliado = useMemo(() => {
+    if (!atleta || !profile) return false;
+    return atleta.ratings?.some(r => r.reservationId === reserva.id && r.clientId === profile.id);
+  }, [atleta, reserva.id, profile]);
+
+  const getAtletaPaymentStatus = () => {
+    switch (reserva.atleta_payment_status) {
+        case 'pendente_cliente':
+            return {
+                label: 'Aguardando Pagamento',
+                color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
+                icon: Clock,
+                action: isOrganizer ? () => atleta && onPayAtleta(reserva, atleta) : undefined,
+            };
+        case 'pendente_repasse':
+            return {
+                label: 'Aguardando Repasse da Arena',
+                color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
+                icon: Clock,
+            };
+        case 'pago':
+            return {
+                label: 'Pago',
+                color: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+                icon: CheckCircle,
+            };
+        default:
+            return null;
+    }
+  };
+
+  const atletaPaymentDisplay = getAtletaPaymentStatus();
 
   return (
     <>
@@ -139,19 +181,10 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
 
               <div className="p-4 sm:p-6 space-y-6 overflow-y-auto">
                 {isAwaitingPayment && !isPaymentOverdue && (
-                  <Alert
-                    type="warning"
-                    title="Pagamento Pendente"
-                    message={
-                      <span>
-                        Esta reserva expira em <Timer deadline={reserva.payment_deadline!} onExpire={onClose} />. Finalize o pagamento para confirmar.
-                      </span>
-                    }
-                  />
+                  <Alert type="warning" title="Pagamento Pendente" message={<span>Esta reserva expira em <Timer deadline={reserva.payment_deadline!} onExpire={onClose} />. Finalize o pagamento para confirmar.</span>} />
                 )}
-                {isPaymentOverdue && (
-                  <Alert type="error" title="Reserva Expirada" message="O tempo para pagamento desta reserva expirou. Ela foi cancelada." />
-                )}
+                {isPaymentOverdue && (<Alert type="error" title="Reserva Expirada" message="O tempo para pagamento desta reserva expirou. Ela foi cancelada." />)}
+                
                 <div className="space-y-3">
                   <InfoItem icon={MapPin} label="Local" value={`${quadra.name} • ${arenaName}`} />
                   <InfoItem icon={Calendar} label="Data" value={format(parseDateStringAsLocal(reserva.date), "EEEE, dd 'de' MMMM", { locale: ptBR })} />
@@ -192,11 +225,63 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                   </div>
                 )}
 
+                {atleta && (
+                  <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
+                    <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><StarIcon className="h-5 w-5 mr-2 text-yellow-500" /> Atleta Contratado</h4>
+                    <div className="p-3 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Link to={`/atleta/${atleta.id}`} className="flex items-center gap-3 group" onClick={onClose}>
+                          <img src={atleta.avatar_url || `https://avatar.vercel.sh/${atleta.id}.svg`} alt={atleta.name} className="w-10 h-10 rounded-full object-cover" />
+                          <div>
+                            <p className="font-bold group-hover:underline">{atleta.name}</p>
+                            <p className="text-xs text-brand-gray-500">{atleta.nivel_tecnico}</p>
+                          </div>
+                        </Link>
+                        {isOrganizer && !isPastReservation && (
+                            <div className="flex items-center gap-1">
+                                <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onTrocarAtleta(reserva); }}><Edit className="h-4 w-4"/></Button>
+                                <Button size="sm" variant="ghost" className="text-red-500 hover:bg-red-100" onClick={(e) => { e.stopPropagation(); onCancelarAtleta(); }}><Trash2 className="h-4 w-4"/></Button>
+                            </div>
+                        )}
+                        {isOrganizer && isPastReservation && !atletaJaAvaliado && (
+                          <Button size="sm" onClick={() => onAvaliarAtleta(reserva)}><StarIcon className="h-4 w-4 mr-1.5"/>Avaliar</Button>
+                        )}
+                      </div>
+                      {reserva.atleta_aceite_status === 'aceito' && (
+                        <>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-brand-gray-600 dark:text-brand-gray-400">Valor do Atleta:</span>
+                            <span className="font-medium text-brand-gray-800 dark:text-white">{formatCurrency(reserva.atleta_cost)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-brand-gray-600 dark:text-brand-gray-400">Pagamento:</span>
+                            {atletaPaymentDisplay ? (
+                                <button
+                                    onClick={atletaPaymentDisplay.action}
+                                    disabled={!atletaPaymentDisplay.action}
+                                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${atletaPaymentDisplay.color} ${atletaPaymentDisplay.action ? 'hover:brightness-90' : 'cursor-default'}`}
+                                >
+                                    <atletaPaymentDisplay.icon className="h-3 w-3 mr-1.5" />
+                                    {atletaPaymentDisplay.label}
+                                </button>
+                            ) : null}
+                          </div>
+                          <div className="flex gap-2 pt-2 border-t border-brand-gray-200 dark:border-brand-gray-700">
+                            <Button size="sm" variant="outline" className="w-full" onClick={() => onContactAtleta(atleta)}>
+                                <MessageSquare className="h-4 w-4 mr-2"/> Contato
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4 space-y-2">
-                  <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-2 flex items-center"><DollarSign className="h-4 w-4 mr-2 text-brand-blue-500" /> Pagamento</h4>
+                  <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-2 flex items-center"><DollarSign className="h-4 w-4 mr-2 text-brand-blue-500" /> Pagamento da Reserva</h4>
                   <div className="flex justify-between text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Valor da Reserva</span><span className="font-medium">{formatCurrency(reservationValue)}</span></div>
                   {rentalItemsTotal > 0 && (<div className="flex justify-between text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Itens Alugados</span><span className="font-medium">+ {formatCurrency(rentalItemsTotal)}</span></div>)}
-                  <div className="flex justify-between text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Valor por Jogador</span><div><span className="font-medium">{formatCurrency(valorPorJogador)}</span><span className="text-xs text-brand-gray-500"> ({numConfirmed}/{totalInvited} confirmados)</span></div></div>
+                  {isGroupBooking && <div className="flex justify-between text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Valor por Jogador</span><div><span className="font-medium">{formatCurrency(valorPorJogador)}</span><span className="text-xs text-brand-gray-500"> ({numConfirmed}/{totalInvited} confirmados)</span></div></div>}
                   {(reserva.credit_used || 0) > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-blue-600 dark:text-blue-400">Crédito Utilizado</span><span className="font-medium text-blue-600 dark:text-blue-400">- {formatCurrency(reserva.credit_used)}</span></div>)}
                   <div className="flex justify-between text-lg font-bold border-t-2 border-brand-gray-300 dark:border-brand-gray-600 pt-2 mt-2"><span className="text-brand-gray-800 dark:text-white">Total</span><span className="text-brand-blue-600 dark:text-brand-blue-300">{formatCurrency(reserva.total_price)}</span></div>
                   

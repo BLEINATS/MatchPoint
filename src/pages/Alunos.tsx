@@ -25,6 +25,7 @@ import { syncTurmaReservations } from '../utils/bookingSyncUtils';
 import { awardPointsForCompletedReservation } from '../utils/gamificationUtils';
 import MensalistasTab from '../components/Alunos/MensalistasTab';
 import MensalistaDetailModal from '../components/Reservations/MensalistaDetailModal';
+import AtletaPublicProfileModal from '../components/Client/AtletaPublicProfileModal';
 
 type TabType = 'clientes' | 'alunos' | 'mensalistas' | 'professores' | 'atletas' | 'turmas';
 type ProfessoresViewMode = 'list' | 'agenda';
@@ -64,6 +65,8 @@ const Alunos: React.FC = () => {
   
   const [isMensalistaModalOpen, setIsMensalistaModalOpen] = useState(false);
   const [selectedMensalista, setSelectedMensalista] = useState<Reserva | null>(null);
+
+  const [viewingAtletaProfile, setViewingAtletaProfile] = useState<AtletaAluguel | null>(null);
 
   const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.gerenciamento_arena === 'edit', [profile]);
 
@@ -393,7 +396,7 @@ const Alunos: React.FC = () => {
             )}
           </div>
         );
-      case 'atletas': return <AtletasAluguelList atletas={filteredAtletasAluguel} onEdit={setEditingAtletaAluguel} onDelete={(id, name) => handleDeleteRequest(id, name, 'atleta')} canEdit={canEdit} />;
+      case 'atletas': return <AtletasAluguelList atletas={filteredAtletasAluguel} onEdit={setEditingAtletaAluguel} onDelete={(id, name) => handleDeleteRequest(id, name, 'atleta')} canEdit={canEdit} onViewProfile={setViewingAtletaProfile} />;
       case 'turmas': return <TurmasList turmas={filteredTurmas} professores={professores} quadras={quadras} onEdit={setEditingTurma} onDelete={(id, name) => handleDeleteRequest(id, name, 'turma')} canEdit={canEdit} />;
       default: return null;
     }
@@ -477,6 +480,7 @@ const Alunos: React.FC = () => {
         )}
       </AnimatePresence>
       <ConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleConfirmDelete} title="Confirmar Exclusão" message={<><p>Tem certeza que deseja excluir <strong>{itemToDelete?.name}</strong>?</p><p className="mt-2 text-xs text-red-500 dark:text-red-400">Esta ação é irreversível.</p></>} confirmText="Sim, Excluir" />
+      <AtletaPublicProfileModal isOpen={!!viewingAtletaProfile} onClose={() => setViewingAtletaProfile(null)} atleta={viewingAtletaProfile} />
     </Layout>
   );
 };
@@ -602,8 +606,7 @@ const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Profe
   );
 };
 
-const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: AtletaAluguel) => void, onDelete: (id: string, name: string) => void, canEdit: boolean }> = ({ atletas, onEdit, onDelete, canEdit }) => {
-  const navigate = useNavigate();
+const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: AtletaAluguel) => void, onDelete: (id: string, name: string) => void, canEdit: boolean, onViewProfile: (atleta: AtletaAluguel) => void }> = ({ atletas, onEdit, onDelete, canEdit, onViewProfile }) => {
   if (atletas.length === 0) return <PlaceholderTab title="Nenhum atleta encontrado" description="Cadastre jogadores que podem ser contratados por seus clientes." />;
   
   const getStatusProps = (status: AtletaAluguel['status']) => ({
@@ -618,9 +621,7 @@ const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: At
         const specialtiesString = atleta.esportes.map(e => e.position ? `${e.sport} (${e.position})` : e.sport).join(', ');
         
         const handleCardClick = () => {
-          if (atleta.profile_id) {
-            navigate(`/alunos/atletas/${atleta.id}`);
-          }
+          onViewProfile(atleta);
         };
 
         return (
@@ -630,7 +631,7 @@ const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: At
             animate={{ opacity: 1, y: 0 }} 
             transition={{ delay: index * 0.05 }} 
             onClick={handleCardClick}
-            className={`bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-indigo-500 ${atleta.profile_id ? 'cursor-pointer hover:shadow-xl dark:hover:shadow-brand-blue-500/10 transition-shadow' : ''}`}
+            className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-indigo-500 cursor-pointer hover:shadow-xl dark:hover:shadow-brand-blue-500/10 transition-shadow"
           >
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-4">
@@ -638,9 +639,7 @@ const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: At
                   {atleta.avatar_url ? (
                     <img src={atleta.avatar_url} alt={atleta.name} className="w-16 h-16 rounded-full object-cover border-2 border-brand-gray-200 dark:border-brand-gray-600" />
                   ) : (
-                    <div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600">
-                      <span className="text-2xl text-brand-gray-500 font-bold">{atleta.name ? atleta.name.charAt(0).toUpperCase() : '?'}</span>
-                    </div>
+                    <div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600"><span className="text-2xl text-brand-gray-500 font-bold">{atleta.name ? atleta.name.charAt(0).toUpperCase() : '?'}</span></div>
                   )}
                 </div>
                 <div>

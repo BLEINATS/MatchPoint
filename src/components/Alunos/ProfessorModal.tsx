@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Mail, Phone, Sparkles, Trash2, Link as LinkIcon, Briefcase, FileText, Percent, Image as ImageIcon, Loader2, DollarSign } from 'lucide-react';
+import { X, Save, User, Mail, Phone, Sparkles, Trash2, Link as LinkIcon, Briefcase, FileText, Percent, Image as ImageIcon, Loader2, DollarSign, Banknote } from 'lucide-react';
 import { Professor, Aluno } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
@@ -8,13 +8,20 @@ import { maskPhone } from '../../utils/masks';
 import { ToggleSwitch } from '../Gamification/ToggleSwitch';
 import { useToast } from '../../context/ToastContext';
 
+const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+    <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-6">
+      <h4 className="text-lg font-semibold text-brand-gray-900 dark:text-white mb-4">{title}</h4>
+      <div className="space-y-4">{children}</div>
+    </div>
+);
+
 interface ProfessorModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (professor: Omit<Professor, 'id' | 'arena_id' | 'created_at'> | Professor, photoFile?: File | null) => void;
   onDelete: (id: string) => void;
   initialData: Professor | null;
-  alunos: { profile_id: string; name: string; }[];
+  alunos: Aluno[];
 }
 
 const ALL_SPORTS = ['Tênis', 'Futsal', 'Vôlei', 'Futvolei', 'Basquete', 'Beach Tennis', 'Padel', 'Squash', 'Badminton', 'Ping Pong', 'Multiuso'];
@@ -24,7 +31,8 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
   const [formData, setFormData] = useState({
     name: '', email: '', phone: '', specialties: [] as string[], profile_id: null as string | null,
     avatar_url: null as string | null, status: 'ativo' as 'ativo' | 'inativo',
-    nivel_experiencia: null as Professor['nivel_experiencia'], valor_hora_aula: 0, metodologia: '', portfolio_url: ''
+    nivel_experiencia: null as Professor['nivel_experiencia'], valor_hora_aula: 0, metodologia: '', portfolio_url: '',
+    pix_key: '',
   });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -42,12 +50,13 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
         specialties: initialData.specialties || [], profile_id: initialData.profile_id || null,
         avatar_url: initialData.avatar_url || null, status: initialData.status || 'ativo',
         nivel_experiencia: initialData.nivel_experiencia || null, valor_hora_aula: initialData.valor_hora_aula || 0,
-        metodologia: initialData.metodologia || '', portfolio_url: initialData.portfolio_url || ''
+        metodologia: initialData.metodologia || '', portfolio_url: initialData.portfolio_url || '',
+        pix_key: initialData.pix_key || '',
       });
     } else {
       setFormData({
         name: '', email: '', phone: '', specialties: [], profile_id: null, avatar_url: null, status: 'ativo',
-        nivel_experiencia: null, valor_hora_aula: 0, metodologia: '', portfolio_url: ''
+        nivel_experiencia: null, valor_hora_aula: 0, metodologia: '', portfolio_url: '', pix_key: '',
       });
     }
     setPhotoFile(null);
@@ -88,9 +97,9 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
       ...prev,
       profile_id: selectedProfileId,
       name: selectedAluno ? selectedAluno.name : prev.name,
-      email: selectedAluno ? (selectedAluno as any).email || '' : prev.email,
-      phone: selectedAluno ? (selectedAluno as any).phone || '' : prev.phone,
-      avatar_url: selectedAluno ? (selectedAluno as any).avatar_url || null : prev.avatar_url,
+      email: selectedAluno ? selectedAluno.email || '' : prev.email,
+      phone: selectedAluno ? selectedAluno.phone || '' : prev.phone,
+      avatar_url: selectedAluno ? selectedAluno.avatar_url || null : prev.avatar_url,
     }));
   };
 
@@ -180,6 +189,7 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
                     </div>
                     <Input label="Valor por Hora/Aula (R$)" name="valor_hora_aula" type="number" value={formData.valor_hora_aula.toString()} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} />
                 </div>
+                <Input label="Chave PIX" name="pix_key" value={formData.pix_key || ''} onChange={handleChange} icon={<Banknote className="h-4 w-4 text-brand-gray-400"/>} placeholder="Chave PIX para pagamentos" />
                 <div>
                     <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-2">Especialidades</label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
@@ -215,12 +225,5 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
     </AnimatePresence>
   );
 };
-
-const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-    <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-6">
-      <h4 className="text-lg font-semibold text-brand-gray-900 dark:text-white mb-4">{title}</h4>
-      <div className="space-y-4">{children}</div>
-    </div>
-);
 
 export default ProfessorModal;
