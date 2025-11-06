@@ -1,7 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import App, { ProtectedRoute } from './App.tsx';
+import App from './App.tsx';
+import ProtectedRoute from './components/Auth/ProtectedRoute.tsx';
 import './index.css';
 
 import Home from './pages/Home';
@@ -26,6 +27,7 @@ import ProfessorProfilePage from './pages/ProfessorProfilePage.tsx';
 import SuperAdminPage from './pages/SuperAdmin.tsx';
 import Notificacoes from './pages/Notificacoes.tsx';
 import Loja from './pages/Loja.tsx';
+import AtletaProfilePage from './pages/AtletaProfilePage.tsx';
 
 import React from 'react';
 
@@ -65,6 +67,14 @@ const router = createBrowserRouter([
       {
         path: 'professores/:id',
         element: <ProtectedRoute><ProfessorProfilePage /></ProtectedRoute>,
+      },
+      {
+        path: 'atleta-perfil',
+        element: <ProtectedRoute><AtletaProfilePage /></ProtectedRoute>,
+      },
+      {
+        path: 'alunos/atletas/:id',
+        element: <ProtectedRoute><AtletaProfilePage /></ProtectedRoute>,
       },
       {
         path: 'torneios',

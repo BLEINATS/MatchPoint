@@ -214,7 +214,7 @@ const Reservations: React.FC = () => {
   const activeFilterCount = Object.values(filters).filter(value => value !== 'all' && value !== '').length;
   const handleClearFilters = () => { setFilters({ status: 'all', type: 'all', clientName: '', quadraId: 'all', startDate: '', endDate: '' }); setIsFilterPanelOpen(false); };
 
-  const handleSaveReservation = async (reservaData: Omit<Reserva, 'id' | 'created_at'> | Reserva) => {
+  const handleSaveReservation = async (reservaData: (Omit<Reserva, 'id' | 'created_at'> | Reserva) & { originalCreditUsed?: number }) => {
     if (!selectedArenaContext || !profile) return;
     const isEditing = !!(reservaData as Reserva).id;
     
@@ -222,17 +222,15 @@ const Reservations: React.FC = () => {
       const { clientName, clientPhone } = reservaData;
       let alunoForReservation: Aluno | null = null;
   
-      // If we are editing and the reservaData already has an aluno_id, trust it first.
       if (isEditing && (reservaData as Reserva).aluno_id) {
           alunoForReservation = alunos.find(a => a.id === (reservaData as Reserva).aluno_id) || null;
       }
       
-      // If we couldn't find an aluno by ID, or if it's a new reservation, try by name.
       if (!alunoForReservation && clientName) {
         const existingAluno = alunos.find(a => a.name.toLowerCase() === clientName.toLowerCase());
         if (existingAluno) {
           alunoForReservation = existingAluno;
-        } else if (!isEditing) { // Only create new alunos for new reservations
+        } else if (!isEditing) {
           const { data: newAlunos } = await localApi.upsert('alunos', [{ arena_id: selectedArenaContext.id, name: clientName, phone: clientPhone || null, status: 'ativo', plan_name: 'Avulso', join_date: format(new Date(), 'yyyy-MM-dd') }], selectedArenaContext.id);
           if (newAlunos && newAlunos[0]) {
             alunoForReservation = newAlunos[0];
@@ -274,8 +272,33 @@ const Reservations: React.FC = () => {
         dataToUpsert.recurringEndDate = null;
       }
     
-      await localApi.upsert('reservas', [dataToUpsert], selectedArenaContext.id);
+      const { data: savedReservas } = await localApi.upsert('reservas', [dataToUpsert], selectedArenaContext.id);
+      const savedReserva = savedReservas[0];
   
+      if (savedReserva && alunoForReservation) {
+        const originalCreditUsed = reservaData.originalCreditUsed || 0;
+        const newlyAppliedCredit = (savedReserva.credit_used || 0) - originalCreditUsed;
+    
+        if (newlyAppliedCredit !== 0) {
+            const updatedBalance = (alunoForReservation.credit_balance || 0) - newlyAppliedCredit;
+            await localApi.upsert('alunos', [{ ...alunoForReservation, credit_balance: updatedBalance }], selectedArenaContext.id);
+    
+            if (newlyAppliedCredit > 0) {
+                const quadraName = quadras.find(q => q.id === savedReserva.quadra_id)?.name || 'Quadra';
+                const reservaDetails = `${quadraName} em ${format(parseDateStringAsLocal(savedReserva.date), 'dd/MM/yy')} às ${savedReserva.start_time.slice(0,5)}`;
+                const newDescription = `Pagamento da reserva: ${reservaDetails}`;
+                await localApi.upsert('credit_transactions', [{ 
+                    aluno_id: alunoForReservation.id, 
+                    arena_id: selectedArenaContext.id, 
+                    amount: -newlyAppliedCredit, 
+                    type: 'reservation_payment', 
+                    description: newDescription,
+                    related_reservation_id: savedReserva.id 
+                }], selectedArenaContext.id);
+            }
+        }
+      }
+
       addToast({ message: `Reserva salva com sucesso!`, type: 'success' });
       closeModal();
     } catch (error: any) { addToast({ message: `Erro ao salvar reserva: ${error.message}`, type: 'error' }); }

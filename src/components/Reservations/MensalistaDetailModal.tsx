@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Aluno, Reserva } from '../../types';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isPast, isToday, addMonths, subMonths, isBefore, isAfter, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { X, Calendar, DollarSign, UserCheck, UserX, ChevronLeft, ChevronRight, Save, Hash, BookOpen, Edit, Trash2, XCircle, AlertTriangle, CheckCircle } from 'lucide-react';
+import { X, Calendar, DollarSign, UserCheck, UserX, ChevronLeft, ChevronRight, Save, Hash, BookOpen, Edit, Trash2, XCircle, AlertTriangle, CheckCircle, CreditCard, Banknote } from 'lucide-react';
 import Button from '../Forms/Button';
 import { formatCurrency } from '../../utils/formatters';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
+import MonthlyPaymentConfirmationModal from './MonthlyPaymentConfirmationModal';
 
 interface MensalistaDetailModalProps {
   isOpen: boolean;
@@ -18,10 +19,31 @@ interface MensalistaDetailModalProps {
   onDelete: () => void;
 }
 
+const getPaymentMethodIcon = (method?: 'pix' | 'cartao' | 'dinheiro' | 'local' | 'sistema' | null) => {
+    switch (method) {
+        case 'pix': return DollarSign;
+        case 'cartao': return CreditCard;
+        case 'dinheiro': return Banknote;
+        default: return CheckCircle;
+    }
+};
+
+const getPaymentMethodLabel = (method?: 'pix' | 'cartao' | 'dinheiro' | 'local' | 'sistema' | null) => {
+    switch (method) {
+        case 'pix': return 'Pago (PIX)';
+        case 'cartao': return 'Pago (Cartão)';
+        case 'dinheiro': return 'Pago (Dinheiro)';
+        case 'local': return 'Pago (Local)';
+        case 'sistema': return 'Pago (Sistema)';
+        default: return 'Pago';
+    }
+};
+
 const MensalistaDetailModal: React.FC<MensalistaDetailModalProps> = ({ isOpen, onClose, reserva, aluno, onSave, onEdit, onDelete }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [localAttendance, setLocalAttendance] = useState(reserva.attendance || {});
   const [localMonthlyPayments, setLocalMonthlyPayments] = useState(reserva.monthly_payments || {});
+  const [isPaymentConfirmOpen, setIsPaymentConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -84,7 +106,9 @@ const MensalistaDetailModal: React.FC<MensalistaDetailModalProps> = ({ isOpen, o
   }, [reserva.total_price, stats.totalAulasMes]);
 
   const monthKey = format(currentMonth, 'yyyy-MM');
-  const paymentStatusForMonth = localMonthlyPayments[monthKey]?.status || 'pendente';
+  const paymentInfo = localMonthlyPayments[monthKey];
+  const paymentStatusForMonth = paymentInfo?.status || 'pendente';
+  const PaymentIcon = paymentInfo?.method ? getPaymentMethodIcon(paymentInfo.method) : CheckCircle;
 
   const handleAttendanceChange = (date: Date, status: 'presente' | 'falta') => {
     const dateString = format(date, 'yyyy-MM-dd');
@@ -104,15 +128,16 @@ const MensalistaDetailModal: React.FC<MensalistaDetailModalProps> = ({ isOpen, o
     setLocalAttendance(prev => ({ ...prev, [dateString]: 'cancelada' }));
   };
   
-  const handleMarkAsPaid = () => {
+  const handleConfirmPayment = (method: 'pix' | 'cartao' | 'dinheiro') => {
     setLocalMonthlyPayments(prev => ({
         ...prev,
         [monthKey]: {
             status: 'pago',
-            method: 'local',
+            method: method,
             paid_at: new Date().toISOString(),
         }
     }));
+    setIsPaymentConfirmOpen(false);
   };
 
   const handleSaveChanges = () => {
@@ -170,104 +195,121 @@ const MensalistaDetailModal: React.FC<MensalistaDetailModalProps> = ({ isOpen, o
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[60]" onClick={onClose}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-brand-gray-800 text-white rounded-lg w-full max-w-4xl shadow-xl flex flex-col max-h-[90vh]"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center p-6 border-b border-brand-gray-700">
-              <div>
-                <h3 className="text-xl font-bold">Detalhes do Mensalista</h3>
-                <p className="text-sm text-brand-gray-400 capitalize">
-                  {aluno?.name || reserva.clientName} - Toda {recurringDayOfWeek} às {reserva.start_time.slice(0,5)}
-                </p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={onClose}><X className="h-5 w-5" /></Button>
-            </div>
-            <div className="p-6 space-y-6 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard label="Valor Mensal" value={formatCurrency(valorMensal)} icon={DollarSign} />
-                <StatCard label="Aulas no Mês" value={`${stats.aulasDadas}/${stats.totalAulasMes}`} icon={BookOpen} />
-                <StatCard label="Aulas Restantes no Mês" value={stats.aulasRestantesMes} icon={Hash} />
-              </div>
-
-              <div className="mt-4 p-4 bg-brand-gray-900 rounded-lg flex justify-between items-center">
+    <>
+      <AnimatePresence>
+        {isOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-[60]" onClick={onClose}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-brand-gray-800 text-white rounded-lg w-full max-w-4xl shadow-xl flex flex-col max-h-[90vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center p-6 border-b border-brand-gray-700">
                 <div>
-                    <p className="text-sm text-brand-gray-400">Pagamento ({format(currentMonth, 'MMMM', { locale: ptBR })})</p>
-                    <p className={`text-lg font-bold ${paymentStatusForMonth === 'pago' ? 'text-green-400' : 'text-yellow-400'}`}>
-                        {paymentStatusForMonth === 'pago' ? 'Recebido' : 'Pendente'}
-                    </p>
-                    {paymentStatusForMonth === 'pago' && localMonthlyPayments[monthKey]?.method === 'local' && (
-                        <p className="text-xs text-brand-gray-500">Recebido localmente em {format(new Date(localMonthlyPayments[monthKey]!.paid_at!), 'dd/MM/yy')}</p>
-                    )}
+                  <h3 className="text-xl font-bold">Detalhes do Mensalista</h3>
+                  <p className="text-sm text-brand-gray-400 capitalize">
+                    {aluno?.name || reserva.clientName} - Toda {recurringDayOfWeek} às {reserva.start_time.slice(0,5)}
+                  </p>
                 </div>
-                {paymentStatusForMonth === 'pendente' && (
-                    <Button onClick={handleMarkAsPaid} size="sm" className="bg-green-600 hover:bg-green-700">
-                        Marcar como Pago
-                    </Button>
-                )}
+                <Button variant="ghost" size="sm" onClick={onClose}><X className="h-5 w-5" /></Button>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {renderCalendar()}
-                <div>
-                  <h4 className="font-semibold mb-4 text-center">Frequência do Mês</h4>
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                    {monthlyOccurrences.map(occ => {
-                      const isPastDay = isPast(occ.date) && !isToday(occ.date);
-                      const isFutureDay = isAfter(occ.date, new Date());
-                      return (
-                        <div key={occ.date.toString()} className="flex items-center justify-between p-3 bg-brand-gray-700/50 rounded-md">
-                          <div>
-                            <p className="font-medium capitalize text-sm">{format(occ.date, "EEEE, dd/MM", { locale: ptBR })}</p>
-                            <div className="flex items-baseline gap-2">
-                                <p className={`text-xs font-bold ${occ.status === 'presente' ? 'text-green-400' : occ.status === 'falta' ? 'text-red-400' : occ.status === 'cancelada' ? 'text-gray-400' : 'text-brand-gray-400'}`}>
-                                  {occ.status === 'presente' ? 'Presença' : occ.status === 'falta' ? 'Falta' : occ.status === 'cancelada' ? 'Cancelada' : isPastDay ? 'Pendente' : 'Próxima'}
-                                </p>
-                                {occ.isPayable && (
-                                    <span className="text-xs font-semibold text-green-400/80">
-                                        ({formatCurrency(reserva.total_price || 0)})
-                                    </span>
-                                )}
+              <div className="p-6 space-y-6 overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <StatCard label="Valor Mensal" value={formatCurrency(valorMensal)} icon={DollarSign} />
+                  <StatCard label="Aulas no Mês" value={`${stats.aulasDadas}/${stats.totalAulasMes}`} icon={BookOpen} />
+                  <StatCard label="Aulas Restantes no Mês" value={stats.aulasRestantesMes} icon={Hash} />
+                </div>
+
+                <div className="mt-4 p-4 bg-brand-gray-900 rounded-lg flex justify-between items-center">
+                  <div>
+                      <p className="text-sm text-brand-gray-400">Pagamento ({format(currentMonth, 'MMMM', { locale: ptBR })})</p>
+                      {paymentStatusForMonth === 'pago' && paymentInfo ? (
+                          <div className="flex flex-col items-start">
+                              <p className="text-lg font-bold text-green-400 flex items-center">
+                                  <PaymentIcon className="h-5 w-5 mr-2" />
+                                  {getPaymentMethodLabel(paymentInfo.method)}
+                              </p>
+                              {paymentInfo.paid_at && (
+                                  <p className="text-xs text-brand-gray-500">em {format(new Date(paymentInfo.paid_at), 'dd/MM/yy')}</p>
+                              )}
+                          </div>
+                      ) : (
+                          <p className="text-lg font-bold text-red-400">Aguardando Pagamento</p>
+                      )}
+                  </div>
+                  {paymentStatusForMonth === 'pendente' && (
+                      <Button onClick={() => setIsPaymentConfirmOpen(true)} size="sm">
+                          Marcar como Pago
+                      </Button>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {renderCalendar()}
+                  <div>
+                    <h4 className="font-semibold mb-4 text-center">Frequência do Mês</h4>
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                      {monthlyOccurrences.map(occ => {
+                        const isPastDay = isPast(occ.date) && !isToday(occ.date);
+                        const isFutureDay = isAfter(occ.date, new Date());
+                        return (
+                          <div key={occ.date.toString()} className="flex items-center justify-between p-3 bg-brand-gray-700/50 rounded-md">
+                            <div>
+                              <p className="font-medium capitalize text-sm">{format(occ.date, "EEEE, dd/MM", { locale: ptBR })}</p>
+                              <div className="flex items-baseline gap-2">
+                                  <p className={`text-xs font-bold ${occ.status === 'presente' ? 'text-green-400' : occ.status === 'falta' ? 'text-red-400' : occ.status === 'cancelada' ? 'text-gray-400' : 'text-brand-gray-400'}`}>
+                                    {occ.status === 'presente' ? 'Presença' : occ.status === 'falta' ? 'Falta' : occ.status === 'cancelada' ? 'Cancelada' : isPastDay ? 'Pendente' : 'Próxima'}
+                                  </p>
+                                  {occ.isPayable && (
+                                      <span className="text-xs font-semibold text-green-400/80">
+                                          ({formatCurrency(reserva.total_price || 0)})
+                                      </span>
+                                  )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              {(isPastDay || isToday(occ.date)) && occ.status !== 'cancelada' && (
+                                <>
+                                  <Button size="sm" variant={occ.status === 'presente' ? 'primary' : 'ghost'} onClick={() => handleAttendanceChange(occ.date, 'presente')} className={occ.status === 'presente' ? 'bg-green-500 hover:bg-green-600' : ''}><UserCheck className="h-4 w-4" /></Button>
+                                  <Button size="sm" variant={occ.status === 'falta' ? 'danger' : 'ghost'} onClick={() => handleAttendanceChange(occ.date, 'falta')} className={occ.status === 'falta' ? 'bg-red-500 hover:bg-red-600' : ''}><UserX className="h-4 w-4" /></Button>
+                                </>
+                              )}
+                              {isFutureDay && occ.status !== 'cancelada' && (
+                                 <Button size="sm" variant="ghost" onClick={() => handleCancelOccurrence(occ.date)} className="text-red-400 hover:bg-red-500/20" title="Cancelar esta aula"><XCircle className="h-4 w-4" /></Button>
+                              )}
                             </div>
                           </div>
-                          <div className="flex gap-2">
-                            {(isPastDay || isToday(occ.date)) && occ.status !== 'cancelada' && (
-                              <>
-                                <Button size="sm" variant={occ.status === 'presente' ? 'primary' : 'ghost'} onClick={() => handleAttendanceChange(occ.date, 'presente')} className={occ.status === 'presente' ? 'bg-green-500 hover:bg-green-600' : ''}><UserCheck className="h-4 w-4" /></Button>
-                                <Button size="sm" variant={occ.status === 'falta' ? 'danger' : 'ghost'} onClick={() => handleAttendanceChange(occ.date, 'falta')} className={occ.status === 'falta' ? 'bg-red-500 hover:bg-red-600' : ''}><UserX className="h-4 w-4" /></Button>
-                              </>
-                            )}
-                            {isFutureDay && occ.status !== 'cancelada' && (
-                               <Button size="sm" variant="ghost" onClick={() => handleCancelOccurrence(occ.date)} className="text-red-400 hover:bg-red-500/20" title="Cancelar esta aula"><XCircle className="h-4 w-4" /></Button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="p-6 mt-auto border-t border-brand-gray-700 flex justify-between items-center">
-              <div>
-                <Button variant="danger" onClick={onDelete}><Trash2 className="h-4 w-4 mr-2"/> Excluir Plano</Button>
+              <div className="p-6 mt-auto border-t border-brand-gray-700 flex justify-between items-center">
+                <div>
+                  <Button variant="danger" onClick={onDelete}><Trash2 className="h-4 w-4 mr-2"/> Excluir Plano</Button>
+                </div>
+                <div className="flex gap-3">
+                  <Button variant="outline" onClick={onClose}>Fechar</Button>
+                  <Button onClick={onEdit}><Edit className="h-4 w-4 mr-2"/> Editar Plano</Button>
+                  <Button onClick={handleSaveChanges}><Save className="h-4 w-4 mr-2"/> Salvar Frequência</Button>
+                </div>
               </div>
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={onClose}>Fechar</Button>
-                <Button onClick={onEdit}><Edit className="h-4 w-4 mr-2"/> Editar Plano</Button>
-                <Button onClick={handleSaveChanges}><Save className="h-4 w-4 mr-2"/> Salvar Frequência</Button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <MonthlyPaymentConfirmationModal
+        isOpen={isPaymentConfirmOpen}
+        onClose={() => setIsPaymentConfirmOpen(false)}
+        onConfirm={handleConfirmPayment}
+        clientName={aluno?.name || reserva.clientName}
+        month={format(currentMonth, 'MMMM', { locale: ptBR })}
+        amount={valorMensal}
+      />
+    </>
   );
 };
 

@@ -14,6 +14,7 @@ import { eachDayOfInterval, format } from 'date-fns';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
 import { localApi } from '../lib/localApi';
 import { useToast } from '../context/ToastContext';
+import ConfirmationModal from '../components/Shared/ConfirmationModal';
 
 type TabType = 'overview' | 'checklist' | 'financial';
 
@@ -31,6 +32,7 @@ const EventoDetail: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.eventos === 'edit', [profile]);
 
@@ -125,19 +127,21 @@ const EventoDetail: React.FC = () => {
   }
   
   const handleDelete = async () => {
-    if (!arena || !evento || !window.confirm("Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita.")) return;
+    if (!arena || !evento) return;
     
     try {
+      const { data: currentReservas } = await localApi.select<Reserva>('reservas', arena.id);
+      const finalReservas = currentReservas.filter(r => r.evento_id !== evento.id);
+      await localApi.upsert('reservas', finalReservas, arena.id, true);
+      
       await localApi.delete('eventos', [evento.id], arena.id);
       
-      const { data: currentReservas } = await localApi.select<Reserva>('reservas', arena.id);
-      const updatedReservas = currentReservas.filter(r => r.evento_id !== evento.id);
-      await localApi.upsert('reservas', updatedReservas, arena.id, true);
-      
-      addToast({ message: 'Evento excluído com sucesso.', type: 'success' });
+      addToast({ message: 'Evento e bloqueios associados removidos com sucesso.', type: 'success' });
       navigate('/eventos');
     } catch (error: any) {
       addToast({ message: `Erro ao excluir evento: ${error.message}`, type: 'error' });
+    } finally {
+      setIsDeleteModalOpen(false);
     }
   };
 
@@ -180,6 +184,10 @@ const EventoDetail: React.FC = () => {
                       <Edit className="h-4 w-4 mr-2" />
                       Editar
                   </Button>
+                  <Button variant="outline" onClick={() => setIsDeleteModalOpen(true)} className="text-red-500 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir
+                  </Button>
                   <Button onClick={handleSaveFromButton} isLoading={isSaving} disabled={isSaving}>
                     <AnimatePresence mode="wait" initial={false}>
                       <motion.span key={showSuccess ? 'success' : 'save'} initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="flex items-center">
@@ -217,6 +225,14 @@ const EventoDetail: React.FC = () => {
         initialData={evento}
         quadras={quadras}
         reservas={reservas}
+      />
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title="Confirmar Exclusão do Evento"
+        message={<p>Tem certeza que deseja excluir o evento <strong>"{evento.name}"</strong>? Todos os bloqueios de horário associados serão removidos permanentemente.</p>}
+        confirmText="Sim, Excluir"
       />
     </Layout>
   );

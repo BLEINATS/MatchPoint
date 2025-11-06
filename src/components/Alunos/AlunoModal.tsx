@@ -5,6 +5,7 @@ import { Aluno, PlanoAula, Profile } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { format, endOfMonth, differenceInDays, getDaysInMonth } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { maskPhone, maskCPFOrCNPJ } from '../../utils/masks';
 import { useToast } from '../../context/ToastContext';
 import GamificationTab from './GamificationTab';
@@ -14,6 +15,7 @@ import { formatCurrency } from '../../utils/formatters';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import { useAuth } from '../../context/AuthContext';
 import ActivityTab from './ActivityTab';
+import { parseDateStringAsLocal } from '../../utils/dateUtils';
 
 interface AlunoModalProps {
   isOpen: boolean;
@@ -379,6 +381,11 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                                     <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Este cliente ainda não tem um acesso à plataforma.</p>
                                 </div>
                             )
+                        )}
+                        {isEditing && formData.join_date && (
+                          <div className="text-sm text-center text-brand-gray-500 dark:text-brand-gray-400 mb-4">
+                              Membro desde {format(parseDateStringAsLocal(formData.join_date), "MMMM 'de' yyyy", { locale: ptBR })}
+                          </div>
                         )}
                         <div className="space-y-4">
                             <Input label="Nome Completo" name="name" value={formData.name} onChange={handleChange} icon={<User className="h-4 w-4 text-brand-gray-400"/>} required />

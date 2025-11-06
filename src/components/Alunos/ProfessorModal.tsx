@@ -14,7 +14,7 @@ interface ProfessorModalProps {
   onSave: (professor: Omit<Professor, 'id' | 'arena_id' | 'created_at'> | Professor, photoFile?: File | null) => void;
   onDelete: (id: string) => void;
   initialData: Professor | null;
-  alunos: Aluno[];
+  alunos: { profile_id: string; name: string; }[];
 }
 
 const ALL_SPORTS = ['Tênis', 'Futsal', 'Vôlei', 'Futvolei', 'Basquete', 'Beach Tennis', 'Padel', 'Squash', 'Badminton', 'Ping Pong', 'Multiuso'];
@@ -88,9 +88,9 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
       ...prev,
       profile_id: selectedProfileId,
       name: selectedAluno ? selectedAluno.name : prev.name,
-      email: selectedAluno ? selectedAluno.email || '' : prev.email,
-      phone: selectedAluno ? selectedAluno.phone || '' : prev.phone,
-      avatar_url: selectedAluno ? selectedAluno.avatar_url || null : prev.avatar_url,
+      email: selectedAluno ? (selectedAluno as any).email || '' : prev.email,
+      phone: selectedAluno ? (selectedAluno as any).phone || '' : prev.phone,
+      avatar_url: selectedAluno ? (selectedAluno as any).avatar_url || null : prev.avatar_url,
     }));
   };
 
@@ -144,7 +144,7 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
                   </label>
                   <select name="profile_id" value={formData.profile_id || ''} onChange={handleProfileLinkChange} className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600">
                     <option value="">Nenhum (Cadastro Manual)</option>
-                    {alunos.map(aluno => (<option key={aluno.id} value={aluno.profile_id!}>{aluno.name} ({aluno.email})</option>))}
+                    {alunos.map(aluno => (<option key={aluno.profile_id} value={aluno.profile_id!}>{aluno.name}</option>))}
                   </select>
                 </div>
               </Section>

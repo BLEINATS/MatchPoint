@@ -30,7 +30,7 @@ import { useAuth } from '../../context/AuthContext';
 interface ReservationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (reservation: Omit<Reserva, 'id' | 'created_at' | 'arena_id'> | Reserva) => void;
+  onSave: (reservation: (Omit<Reserva, 'id' | 'created_at' | 'arena_id'> | Reserva) & { originalCreditUsed?: number }) => void;
   onCancelReservation: (reservation: Reserva) => void;
   reservation?: Reserva | null;
   newReservationSlot?: { quadraId: string, time: string, type?: ReservationType } | null;
@@ -73,7 +73,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   const [priceBreakdown, setPriceBreakdown] = useState<{ description: string; subtotal: number }[]>([]);
   const [activeRule, setActiveRule] = useState<PricingRule | null>(null);
   const [useCredit, setUseCredit] = useState(false);
-  const [newlyAppliedCredit, setNewlyAppliedCredit] = useState(0);
   const [originalCreditUsed, setOriginalCreditUsed] = useState(0);
   const [selectedItems, setSelectedItems] = useState<Record<string, number>>({});
   const [operatingHoursWarning, setOperatingHoursWarning] = useState<string | null>(null);
@@ -229,12 +228,12 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     return alunos.find(a => a.name === formData.clientName);
   }, [formData.clientName, alunos, isClientBooking, clientProfile]);
 
-  const selectedClientId = useMemo(() => {
-    return selectedClient ? selectedClient.id : null;
-  }, [selectedClient]);
-
   const availableCredit = useMemo(() => {
     return selectedClient?.credit_balance || 0;
+  }, [selectedClient]);
+
+  const selectedClientId = useMemo(() => {
+    return selectedClient ? selectedClient.id : null;
   }, [selectedClient]);
 
   const availableProfessionals = useMemo(() => {
@@ -536,7 +535,6 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
           creditToApplyNow = Math.min(remainingCost, availableCredit);
         }
       }
-      setNewlyAppliedCredit(creditToApplyNow);
 
       const totalCreditOnReservation = originalCreditUsed + creditToApplyNow;
       
@@ -692,7 +690,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         });
     }
 
-    let dataToSave: Partial<Reserva> = { ...formData, participants, originalCreditUsed: originalCreditUsed, aluno_id: finalAlunoId };
+    let dataToSave: Partial<Reserva> & { originalCreditUsed?: number } = { ...formData, participants, originalCreditUsed: originalCreditUsed, aluno_id: finalAlunoId };
     
     if (!isEditing) {
       dataToSave.created_by_name = userProfile?.name;
@@ -921,6 +919,25 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                         {(formData.credit_used || 0) > 0 && (<div className="flex justify-between items-center text-sm"><span className="text-blue-600 dark:text-blue-400">Crédito Utilizado</span><span className="font-medium text-blue-600 dark:text-blue-400">- {formatCurrency(formData.credit_used)}</span></div>)}
                         <div className="flex justify-between text-lg font-bold border-t-2 border-brand-gray-300 dark:border-brand-gray-600 pt-2 mt-2"><span className="text-brand-gray-800 dark:text-white">Valor a Pagar</span><span className="text-brand-blue-600 dark:text-brand-blue-300">{formatCurrency(valorAPagar)}</span></div>
                         
+                        {availableCredit > 0 && !isBlockMode && (
+                          <div className="mt-4 pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700">
+                            <label htmlFor="use-credit" className="flex items-center justify-between cursor-pointer">
+                              <span className="font-semibold text-green-700 dark:text-green-300 flex items-center">
+                                <CreditCard className="h-5 w-5 mr-2" />
+                                Usar saldo de crédito ({formatCurrency(availableCredit)})
+                              </span>
+                              <input
+                                id="use-credit"
+                                type="checkbox"
+                                checked={useCredit}
+                                onChange={(e) => !isReadOnly && setUseCredit(e.target.checked)}
+                                className="form-checkbox h-5 w-5 rounded text-brand-blue-600 focus:ring-brand-blue-500"
+                                disabled={isReadOnly || valorAPagar <= 0}
+                              />
+                            </label>
+                          </div>
+                        )}
+
                         {!isClientBooking && !isBlockMode && !isReadOnly && (
                           <div className="mt-4 pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700">
                             <label htmlFor="manual-payment" className="flex items-center justify-between cursor-pointer">

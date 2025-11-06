@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isSameDay, addMinutes, parse } from 'date-fns';
+import { format, addMinutes, parse, getDay, isAfter, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, GraduationCap, MapPin, Clock } from 'lucide-react';
+import { GraduationCap, MapPin, Users } from 'lucide-react';
 import { Professor, Turma, Quadra } from '../../types';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
+import DatePickerCalendar from '../Client/DatePickerCalendar';
 
 interface ProfessorAgendaViewProps {
   professores: Professor[];
@@ -13,7 +14,7 @@ interface ProfessorAgendaViewProps {
 }
 
 const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, turmas, quadras, isGeneralView = false }) => {
-  const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()));
+  const [selectedDate, setSelectedDate] = useState(startOfDay(new Date()));
   const [selectedProfessorId, setSelectedProfessorId] = useState<'all' | string>('all');
 
   useEffect(() => {
@@ -22,10 +23,6 @@ const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, 
     }
   }, [isGeneralView, professores]);
 
-  const handleMonthChange = (direction: 'next' | 'prev') => {
-    setCurrentMonth(current => direction === 'next' ? addMonths(current, 1) : subMonths(current, 1));
-  };
-
   const filteredTurmas = useMemo(() => {
     if (selectedProfessorId === 'all') {
       return turmas;
@@ -33,19 +30,53 @@ const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, 
     return turmas.filter(turma => turma.professor_id === selectedProfessorId);
   }, [turmas, selectedProfessorId]);
 
+  const aulasDoDia = useMemo(() => {
+    const dayOfWeek = getDay(selectedDate);
+    
+    return filteredTurmas
+      .flatMap(turma => {
+        const scheduleForDay = turma.schedule?.find(s => s.day === dayOfWeek);
+        if (!scheduleForDay) return [];
+
+        const startDate = parseDateStringAsLocal(turma.start_date);
+        if (isAfter(startDate, selectedDate)) return [];
+        if (turma.end_date) {
+          const endDate = parseDateStringAsLocal(turma.end_date);
+          if (isAfter(selectedDate, endDate)) return [];
+        }
+        
+        const slots = [];
+        try {
+          const startTime = parse(scheduleForDay.start_time, 'HH:mm', new Date());
+          const endTime = parse(scheduleForDay.end_time, 'HH:mm', new Date());
+          let currentTime = startTime;
+          while (currentTime < endTime) {
+            const slotStartTime = format(currentTime, 'HH:mm');
+            const slotEndTime = format(addMinutes(currentTime, 60), 'HH:mm');
+            
+            const matricula = turma.matriculas?.find(m => m.dayOfWeek === dayOfWeek && m.time === slotStartTime);
+            const enrolledCount = matricula?.student_ids.length || 0;
+
+            slots.push({
+              turma,
+              start_time: slotStartTime,
+              end_time: slotEndTime,
+              unique_key: `${turma.id}-${format(selectedDate, 'yyyyMMdd')}-${slotStartTime}`,
+              professor: professores.find(p => p.id === turma.professor_id),
+              quadra: quadras.find(q => q.id === turma.quadra_id),
+              enrolledCount,
+              capacity: turma.alunos_por_horario,
+            });
+            currentTime = addMinutes(currentTime, 60);
+          }
+        } catch(e) { console.error("Error parsing time in ProfessorAgendaView", e)}
+        return slots;
+      })
+      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  }, [selectedDate, filteredTurmas, professores, quadras]);
+
   const renderHeader = () => (
     <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
-      <div className="flex items-center">
-        <button onClick={() => handleMonthChange('prev')} className="p-2 rounded-md hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <h3 className="w-40 text-center text-lg font-semibold capitalize text-brand-gray-900 dark:text-white">
-          {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
-        </h3>
-        <button onClick={() => handleMonthChange('next')} className="p-2 rounded-md hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
-          <ChevronRight className="h-5 w-5" />
-        </button>
-      </div>
       {isGeneralView && (
         <div>
           <label htmlFor="professor-filter" className="sr-only">Filtrar por professor</label>
@@ -65,88 +96,40 @@ const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, 
     </div>
   );
 
-  const renderDaysOfWeek = () => {
-    const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-    return (
-      <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-brand-gray-500 dark:text-brand-gray-400 mb-2">
-        {days.map(day => <div key={day} className="py-2">{day}</div>)}
-      </div>
-    );
-  };
-
-  const renderCells = () => {
-    const monthStart = currentMonth;
-    const monthEnd = endOfMonth(monthStart);
-    const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
-    const prefixDaysCount = getDay(monthStart);
-
-    return (
-      <div className="grid grid-cols-7 gap-1">
-        {Array.from({ length: prefixDaysCount }).map((_, i) => <div key={`empty-pre-${i}`} className="border border-transparent"></div>)}
-        {daysInMonth.map((day) => {
-          const dayOfWeek = getDay(day);
-          const aulasDoDia = filteredTurmas
-            .flatMap(turma => {
-              const scheduleForDay = turma.schedule?.find(s => s.day === dayOfWeek);
-              if (!scheduleForDay) return [];
-
-              const startDate = parseDateStringAsLocal(turma.start_date);
-              if (day < startDate) return [];
-              if (turma.end_date) {
-                const endDate = parseDateStringAsLocal(turma.end_date);
-                if (day > endDate) return [];
-              }
-              
-              const slots = [];
-              try {
-                const startTime = parse(scheduleForDay.start_time, 'HH:mm', new Date());
-                const endTime = parse(scheduleForDay.end_time, 'HH:mm', new Date());
-                let currentTime = startTime;
-                while (currentTime < endTime) {
-                  slots.push({
-                    ...turma,
-                    start_time: format(currentTime, 'HH:mm'),
-                    end_time: format(addMinutes(currentTime, 60), 'HH:mm'),
-                    unique_key: `${turma.id}-${format(currentTime, 'HHmmss')}`
-                  });
-                  currentTime = addMinutes(currentTime, 60);
-                }
-              } catch(e) { console.error("Error parsing time in ProfessorAgendaView", e)}
-              return slots;
-            })
-            .sort((a, b) => a.start_time.localeCompare(b.start_time));
-
-          return (
-            <div key={day.toString()} className={`p-2 border rounded-lg min-h-[120px] flex flex-col ${isSameMonth(day, monthStart) ? 'bg-white dark:bg-brand-gray-800 border-brand-gray-200 dark:border-brand-gray-700' : 'bg-brand-gray-50 dark:bg-brand-gray-800/50 border-transparent'}`}>
-              <span className={`font-semibold text-sm ${isSameDay(day, new Date()) ? 'text-brand-blue-500' : ''}`}>{format(day, 'd')}</span>
-              <div className="mt-1 space-y-1 flex-1 overflow-y-auto">
-                {aulasDoDia.map(aula => {
-                  const professor = professores.find(p => p.id === aula.professor_id);
-                  const quadra = quadras.find(q => q.id === aula.quadra_id);
-                  return (
-                    <div key={aula.unique_key} className="text-xs p-1.5 rounded bg-purple-50 dark:bg-purple-900/30 border-l-2 border-purple-500">
-                      <p className="font-bold text-purple-800 dark:text-purple-300 truncate">{aula.name}</p>
-                      <div className="text-purple-700 dark:text-purple-400 mt-1 space-y-0.5">
-                        <p className="flex items-center"><Clock className="h-3 w-3 mr-1" />{aula.start_time.slice(0,5)} - {aula.end_time.slice(0,5)}</p>
-                        {selectedProfessorId === 'all' && professor && <p className="flex items-center"><GraduationCap className="h-3 w-3 mr-1" />{professor.name}</p>}
-                        {quadra && <p className="flex items-center"><MapPin className="h-3 w-3 mr-1" />{quadra.name}</p>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
   return (
-    <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-      {renderHeader()}
-      {renderDaysOfWeek()}
-      {renderCells()}
+    <div className="space-y-6">
+      {isGeneralView && renderHeader()}
+      <DatePickerCalendar selectedDate={selectedDate} onDateChange={setSelectedDate} />
+      
+      <div className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+        <h3 className="font-bold text-lg text-brand-gray-900 dark:text-white mb-4 capitalize">
+          Aulas de {format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+        </h3>
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+          {aulasDoDia.length > 0 ? (
+            aulasDoDia.map(aula => (
+              <div key={aula.unique_key} className="p-4 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg border-l-4 border-purple-500">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-semibold text-brand-gray-900 dark:text-white">{aula.turma.name}</p>
+                    <p className="text-sm text-purple-600 dark:text-purple-400 font-medium">{aula.start_time} - {aula.end_time}</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300">
+                    <Users className="h-4 w-4"/>
+                    <span>{aula.enrolledCount} / {aula.capacity}</span>
+                  </div>
+                </div>
+                <div className="mt-2 pt-2 border-t border-brand-gray-200 dark:border-brand-gray-600 text-xs text-brand-gray-500 dark:text-brand-gray-400 space-y-1">
+                  {isGeneralView && aula.professor && <p className="flex items-center"><GraduationCap className="h-3 w-3 mr-2"/>{aula.professor.name}</p>}
+                  {aula.quadra && <p className="flex items-center"><MapPin className="h-3 w-3 mr-2"/>{aula.quadra.name}</p>}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-brand-gray-500 py-8">Nenhuma aula agendada para este dia.</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

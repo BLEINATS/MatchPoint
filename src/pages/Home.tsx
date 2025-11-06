@@ -1,12 +1,45 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, MapPin, Clock, Shield, Zap, Users } from 'lucide-react';
+import { Calendar, DollarSign, Trophy, Users, Shield, Handshake } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout/Layout';
 import Button from '../components/Forms/Button';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
+
+  const features = [
+    { 
+        icon: Calendar, 
+        title: 'Agenda Inteligente e Gestão de Aulas', 
+        description: 'Gerencie reservas, aulas e mensalistas em um calendário unificado, evitando conflitos de horário e automatizando a gestão de turmas.' 
+    },
+    { 
+        icon: DollarSign, 
+        title: 'Pagamentos Online e Financeiro', 
+        description: 'Receba pagamentos via Pix e Cartão, controle o fluxo de caixa, despesas e tenha uma visão clara da saúde financeira do seu negócio.' 
+    },
+    { 
+        icon: Trophy, 
+        title: 'Torneios e Eventos', 
+        description: 'Organize torneios completos com gestão de chaves e gerencie orçamentos para festas e eventos corporativos com facilidade.' 
+    },
+    { 
+        icon: Users, 
+        title: 'Jogos em Grupo e Notificações', 
+        description: 'Permita que seus clientes criem jogos, convidem amigos e interajam através de um sistema de notificações integrado.' 
+    },
+    { 
+        icon: Shield, 
+        title: 'Equipe com Permissões', 
+        description: 'Adicione funcionários e defina permissões de acesso detalhadas para cada um, controlando o que eles podem ver e fazer no sistema.' 
+    },
+    { 
+        icon: Handshake, 
+        title: 'Atletas de Aluguel', 
+        description: 'Crie um marketplace de atletas de aluguel, gerando uma nova fonte de receita para sua arena e para os jogadores.' 
+    },
+  ];
 
   return (
     <Layout showHeader={false}>
@@ -23,10 +56,10 @@ const Home: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-16 sm:pt-20 sm:pb-24">
           <div className="text-center">
             <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl text-brand-gray-900 dark:text-white mb-6">
-              Gerencie sua arena<br /><span className="text-brand-blue-500">com simplicidade</span>
+              Sua Arena, <span className="text-brand-blue-500">Totalmente Automatizada</span>
             </motion.h1>
             <motion.p initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-lg sm:text-xl text-brand-gray-600 dark:text-brand-gray-400 mb-8 max-w-3xl mx-auto">
-              A plataforma completa para donos de arenas gerenciarem quadras e receberem reservas online. Seus clientes reservam, você lucra.
+              Do agendamento de quadras à gestão financeira e engajamento de clientes. O MatchPlay é o sistema completo para levar sua arena ao próximo nível.
             </motion.p>
             <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="flex justify-center">
               <div className="inline-flex flex-col sm:flex-row gap-4">
@@ -41,18 +74,11 @@ const Home: React.FC = () => {
       <div className="py-16 sm:py-24 bg-brand-gray-50 dark:bg-brand-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-brand-gray-900 dark:text-white mb-4">Tudo que você precisa para gerenciar sua arena</h2>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-brand-gray-900 dark:text-white mb-4">Funcionalidades Pensadas para o Sucesso da sua Arena</h2>
             <p className="text-lg sm:text-xl text-brand-gray-600 dark:text-brand-gray-400 max-w-2xl mx-auto">Uma solução completa que automatiza reservas e facilita o dia a dia do seu negócio.</p>
           </motion.div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              { icon: Calendar, title: 'Reservas Online', description: 'Seus clientes fazem reservas 24/7 através de uma interface simples e intuitiva.' },
-              { icon: MapPin, title: 'Gestão de Quadras', description: 'Cadastre e gerencie todas as suas quadras em um só lugar com facilidade.' },
-              { icon: Clock, title: 'Controle de Horários', description: 'Visualize disponibilidade em tempo real e evite conflitos de agendamento.' },
-              { icon: Shield, title: 'Segurança Total', description: 'Seus dados e dos seus clientes protegidos com a máxima segurança.' },
-              { icon: Zap, title: 'Setup Rápido', description: 'Sua arena online em minutos. Sem complicações, sem burocracia.' },
-              { icon: Users, title: 'Multi-usuário', description: 'Gerencie funcionários e permissões de acesso de forma organizada.' },
-            ].map((feature, index) => (
+            {features.map((feature, index) => (
               <motion.div key={index} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.1 }} className="text-center p-6">
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-brand-blue-500/10 rounded-full mb-4">
                   <feature.icon className="h-8 w-8 text-brand-blue-500" />

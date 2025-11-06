@@ -6,7 +6,7 @@ import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { localApi } from '../lib/localApi';
-import { Aluno, Professor, Quadra, Turma, Reserva, AtletaAluguel, PlanoAula, GamificationPointTransaction } from '../types';
+import { Aluno, Professor, Quadra, Turma, Reserva, AtletaAluguel, PlanoAula, GamificationPointTransaction, Profile } from '../types';
 import Button from '../components/Forms/Button';
 import Input from '../components/Forms/Input';
 import AlunoModal from '../components/Alunos/AlunoModal';
@@ -15,6 +15,7 @@ import TurmaModal from '../components/Alunos/TurmaModal';
 import TurmaCard from '../components/Alunos/TurmaCard';
 import ConfirmationModal from '../components/Shared/ConfirmationModal';
 import { format, isBefore } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
 import { formatCurrency } from '../utils/formatters';
 import AtletaAluguelModal from '../components/Alunos/AtletaAluguelModal';
@@ -128,14 +129,22 @@ const Alunos: React.FC = () => {
       loadData();
     }
   }, [isAuthLoading, loadData]);
-  
+
   const handleDataChange = useCallback(() => {
     loadData();
   }, [loadData]);
   
   useEffect(() => {
+    let stateHandled = false;
     if (location.state?.openModal) {
       setIsAlunoModalOpen(true);
+      stateHandled = true;
+    }
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+      stateHandled = true;
+    }
+    if (stateHandled) {
       navigate(location.pathname, { replace: true });
     }
   }, [location.state, navigate]);
@@ -198,12 +207,6 @@ const Alunos: React.FC = () => {
             finalAvatarUrl = publicUrl;
         }
         await localApi.upsert('professores', [{ ...professorData, arena_id: arena.id, avatar_url: finalAvatarUrl }], arena.id);
-        if (professorData.profile_id) {
-          const alunoToRemove = alunos.find(a => a.profile_id === professorData.profile_id);
-          if (alunoToRemove) {
-            await localApi.delete('alunos', [alunoToRemove.id], arena.id);
-          }
-        }
         addToast({ message: `Professor salvo com sucesso!`, type: 'success' });
         await loadData();
         setIsProfessorModalOpen(false);
@@ -222,12 +225,6 @@ const Alunos: React.FC = () => {
             finalAvatarUrl = publicUrl;
         }
         await localApi.upsert('atletas_aluguel', [{ ...atletaData, arena_id: arena.id, avatar_url: finalAvatarUrl }], arena.id);
-        if (atletaData.profile_id) {
-          const alunoToRemove = alunos.find(a => a.profile_id === atletaData.profile_id);
-          if (alunoToRemove) {
-            await localApi.delete('alunos', [alunoToRemove.id], arena.id);
-          }
-        }
         addToast({ message: `Atleta salvo com sucesso!`, type: 'success' });
         await loadData();
         setIsAtletaAluguelModalOpen(false);
@@ -273,24 +270,14 @@ const Alunos: React.FC = () => {
 
   const isAluno = (aluno: Aluno): boolean => !!(aluno.plan_name && aluno.plan_name.trim() !== '' && aluno.plan_name.toLowerCase() !== 'avulso');
 
-  const linkedProfileIds = useMemo(() => {
-    const profProfileIds = professores.map(p => p.profile_id).filter(Boolean);
-    const atletaAluguelProfileIds = atletasAluguel.map(p => p.profile_id).filter(Boolean);
-    return new Set([...profProfileIds, ...atletaAluguelProfileIds]);
-  }, [professores, atletasAluguel]);
-
-  const unlinkedAlunos = useMemo(() => {
-    return alunos.filter(a => !linkedProfileIds.has(a.profile_id));
-  }, [alunos, linkedProfileIds]);
-
   const filteredClientes = useMemo(() => 
-    unlinkedAlunos.filter(a => !isAluno(a) && a.name.toLowerCase().includes(searchTerm.toLowerCase())), 
-    [unlinkedAlunos, searchTerm, isAluno]
+    alunos.filter(a => !isAluno(a) && a.name.toLowerCase().includes(searchTerm.toLowerCase())), 
+    [alunos, searchTerm, isAluno]
   );
   
   const filteredAlunos = useMemo(() => 
-    unlinkedAlunos.filter(a => isAluno(a) && a.name.toLowerCase().includes(searchTerm.toLowerCase())), 
-    [unlinkedAlunos, searchTerm, isAluno]
+    alunos.filter(a => isAluno(a) && a.name.toLowerCase().includes(searchTerm.toLowerCase())), 
+    [alunos, searchTerm, isAluno]
   );
 
   const filteredProfessores = useMemo(() => professores.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())), [professores, searchTerm]);
@@ -299,16 +286,23 @@ const Alunos: React.FC = () => {
   
   const availableSports = useMemo(() => [...new Set(quadras.flatMap(q => q.sports || []).filter(Boolean))], [quadras]);
   
-  const linkableAlunosForModal = useMemo(() => {
-    const currentEditingProfessorId = editingProfessor?.profile_id;
-    const currentEditingAtletaId = editingAtletaAluguel?.profile_id;
-    
+  const linkableAlunosForProfessorModal = useMemo(() => {
+    const professorProfileIds = new Set(professores.map(p => p.profile_id));
     return alunos.filter(a => {
-      if (!a.profile_id) return false;
-      if (a.profile_id === currentEditingProfessorId || a.profile_id === currentEditingAtletaId) return true;
-      return !linkedProfileIds.has(a.profile_id);
+        if (!a.profile_id) return false;
+        if (editingProfessor?.profile_id === a.profile_id) return true;
+        return !professorProfileIds.has(a.profile_id);
     });
-  }, [alunos, linkedProfileIds, editingProfessor, editingAtletaAluguel]);
+  }, [alunos, professores, editingProfessor]);
+
+  const linkableAlunosForAtletaModal = useMemo(() => {
+    const atletaProfileIds = new Set(atletasAluguel.map(p => p.profile_id));
+    return alunos.filter(a => {
+        if (!a.profile_id) return false;
+        if (editingAtletaAluguel?.profile_id === a.profile_id) return true;
+        return !atletaProfileIds.has(a.profile_id);
+    });
+  }, [alunos, atletasAluguel, editingAtletaAluguel]);
 
   const handlePromoteToProfessor = (aluno: Aluno) => {
     const newProfessorData: Partial<Professor> = {
@@ -382,8 +376,8 @@ const Alunos: React.FC = () => {
   const renderContent = () => {
     if (isLoading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>;
     switch (activeTab) {
-      case 'clientes': return <AlunosList alunos={filteredClientes} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} canEdit={canEdit} />;
-      case 'alunos': return <AlunosList alunos={filteredAlunos} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} canEdit={canEdit} />;
+      case 'clientes': return <AlunosList alunos={filteredClientes} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} canEdit={canEdit} professores={professores} atletasAluguel={atletasAluguel} />;
+      case 'alunos': return <AlunosList alunos={filteredAlunos} onEdit={setEditingAluno} onPromoteToProfessor={handlePromoteToProfessor} onPromoteToAtleta={handlePromoteToAtleta} canEdit={canEdit} professores={professores} atletasAluguel={atletasAluguel} />;
       case 'mensalistas': return <MensalistasTab reservas={reservas} alunos={alunos} quadras={quadras} onEdit={handleOpenMensalistaModal} onDelete={(reserva) => handleDeleteRequest(reserva.id, reserva.clientName, 'reserva')} canEdit={canEdit} />;
       case 'professores':
         return (
@@ -460,9 +454,9 @@ const Alunos: React.FC = () => {
         <AnimatePresence mode="wait"><motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>{renderContent()}</motion.div></AnimatePresence>
       </div>
       <AlunoModal isOpen={isAlunoModalOpen} onClose={() => setIsAlunoModalOpen(false)} onSave={handleSaveAluno} onDelete={(id) => handleDeleteRequest(id, editingAluno?.name || '', 'aluno')} initialData={editingAluno} availableSports={availableSports} planos={planos} modalType={activeTab === 'clientes' ? 'Cliente' : 'Aluno'} allAlunos={alunos} onDataChange={handleDataChange} />
-      <ProfessorModal isOpen={isProfessorModalOpen} onClose={() => setIsProfessorModalOpen(false)} onSave={handleSaveProfessor} onDelete={(id) => handleDeleteRequest(id, editingProfessor?.name || '', 'professor')} initialData={editingProfessor} alunos={linkableAlunosForModal} />
-      <AtletaAluguelModal isOpen={isAtletaAluguelModalOpen} onClose={() => setIsAtletaAluguelModalOpen(false)} onSave={handleSaveAtletaAluguel} onDelete={(id) => handleDeleteRequest(id, editingAtletaAluguel?.name || '', 'atleta')} initialData={editingAtletaAluguel} alunos={linkableAlunosForModal} />
-      <TurmaModal isOpen={isTurmaModalOpen} onClose={() => setIsTurmaModalOpen(false)} onSave={handleSaveTurma} initialData={editingTurma} professores={professores} quadras={quadras} alunos={unlinkedAlunos} planos={planos} onDataChange={handleDataChange} />
+      <ProfessorModal isOpen={isProfessorModalOpen} onClose={() => setIsProfessorModalOpen(false)} onSave={handleSaveProfessor} onDelete={(id) => handleDeleteRequest(id, editingProfessor?.name || '', 'professor')} initialData={editingProfessor} alunos={linkableAlunosForProfessorModal} />
+      <AtletaAluguelModal isOpen={isAtletaAluguelModalOpen} onClose={() => setIsAtletaAluguelModalOpen(false)} onSave={handleSaveAtletaAluguel} onDelete={(id) => handleDeleteRequest(id, editingAtletaAluguel?.name || '', 'atleta')} initialData={editingAtletaAluguel} alunos={linkableAlunosForAtletaModal} />
+      <TurmaModal isOpen={isTurmaModalOpen} onClose={() => setIsTurmaModalOpen(false)} onSave={handleSaveTurma} initialData={editingTurma} professores={professores} quadras={quadras} alunos={alunos} planos={planos} onDataChange={handleDataChange} />
       <AnimatePresence>
         {isMensalistaModalOpen && selectedMensalista && (
           <MensalistaDetailModal
@@ -487,8 +481,7 @@ const Alunos: React.FC = () => {
   );
 };
 
-// ... (rest of the components remain the same)
-const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, onPromoteToProfessor: (aluno: Aluno) => void, onPromoteToAtleta: (aluno: Aluno) => void, canEdit: boolean }> = ({ alunos, onEdit, onPromoteToProfessor, onPromoteToAtleta, canEdit }) => {
+const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, onPromoteToProfessor: (aluno: Aluno) => void, onPromoteToAtleta: (aluno: Aluno) => void, canEdit: boolean, professores: Professor[], atletasAluguel: AtletaAluguel[] }> = ({ alunos, onEdit, onPromoteToProfessor, onPromoteToAtleta, canEdit, professores, atletasAluguel }) => {
   if (alunos.length === 0) return <PlaceholderTab title="Nenhum cliente/aluno encontrado" description="Cadastre novos clientes ou alunos para vê-los aqui." />;
   
   const getStatusProps = (status: Aluno['status']) => ({
@@ -521,6 +514,8 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, on
             {alunos.map((aluno, index) => {
               const statusProps = getStatusProps(aluno.status);
               const levelName = (aluno.gamification_levels as { name: string } | null)?.name || 'Iniciante';
+              const isProfessor = professores.some(p => p.profile_id === aluno.profile_id);
+              const isAtleta = atletasAluguel.some(a => a.profile_id === aluno.profile_id);
               return (
                 <motion.tr key={aluno.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05 }} onClick={() => canEdit && onEdit(aluno)} className="hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer">
                   <td className="px-6 py-4 whitespace-nowrap"><div className="flex items-center"><div className="flex-shrink-0 h-10 w-10">{aluno.avatar_url ? (<img className="h-10 w-10 rounded-full object-cover" src={aluno.avatar_url} alt={aluno.name} />) : (<div className="h-10 w-10 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center text-brand-gray-500 font-bold">{aluno.name ? aluno.name.charAt(0).toUpperCase() : '?'}</div>)}</div><div className="ml-4"><div className="text-sm font-medium text-brand-gray-900 dark:text-white">{aluno.name}</div><div className="text-sm text-brand-gray-500 dark:text-brand-gray-400">{aluno.email}</div></div></div></td>
@@ -541,7 +536,7 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, on
                   <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-brand-gray-900 dark:text-white">{aluno.plan_name}</div></td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {aluno.profile_id && canEdit ? (
-                      <ActionMenu aluno={aluno} onPromoteToProfessor={() => onPromoteToProfessor(aluno)} onPromoteToAtleta={() => onPromoteToAtleta(aluno)} />
+                      <ActionMenu aluno={aluno} onPromoteToProfessor={() => onPromoteToProfessor(aluno)} onPromoteToAtleta={() => onPromoteToAtleta(aluno)} isProfessor={isProfessor} isAtleta={isAtleta} />
                     ) : !aluno.profile_id && aluno.phone && canEdit ? (
                       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleInvite(aluno.phone!, aluno.name); }} title="Convidar cliente via WhatsApp" className="text-green-500 hover:bg-green-100 dark:hover:bg-green-900/50 p-2">
                         <MessageSquare className="h-5 w-5" />
@@ -561,11 +556,19 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, on
 };
 
 const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Professor) => void, onDelete: (id: string, name: string) => void, canEdit: boolean }> = ({ professores, onEdit, onDelete, canEdit }) => {
+  const navigate = useNavigate();
   if (professores.length === 0) return <PlaceholderTab title="Nenhum professor encontrado" description="Cadastre os professores que dão aulas na sua arena." />;
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {professores.map((prof, index) => (
-        <motion.div key={prof.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-purple-500">
+        <motion.div 
+          key={prof.id} 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ delay: index * 0.05 }} 
+          onClick={() => prof.profile_id && navigate(`/professores/${prof.id}`)}
+          className={`bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-purple-500 ${prof.profile_id ? 'cursor-pointer hover:shadow-xl dark:hover:shadow-brand-blue-500/10 transition-shadow' : ''}`}
+        >
           <div>
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-4">
@@ -582,33 +585,16 @@ const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Profe
               </div>
               {canEdit && (
                 <div className="flex space-x-1">
-                  <Button variant="ghost" size="sm" onClick={() => onEdit(prof)} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => onDelete(prof.id, prof.name)} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(prof); }} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(prof.id, prof.name); }} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               )}
             </div>
             <div className="space-y-3 text-sm mb-4 border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
-              {prof.email && <div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><Mail className="h-4 w-4 mr-2 text-brand-gray-400" /><span>{prof.email}</span></div>}
-              {prof.phone && <div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><Phone className="h-4 w-4 mr-2 text-brand-gray-400" /><span>{prof.phone}</span></div>}
-              <div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><Briefcase className="h-4 w-4 mr-2 text-brand-gray-400" /><span>{prof.nivel_experiencia || 'Nível não informado'}</span></div>
+              <div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><Mail className="h-4 w-4 mr-2 text-brand-gray-400" /><span>{prof.email}</span></div>
+              <div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><Phone className="h-4 w-4 mr-2 text-brand-gray-400" /><span>{prof.phone}</span></div>
               <div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><DollarSign className="h-4 w-4 mr-2 text-brand-gray-400" /><span>{formatCurrency(prof.valor_hora_aula)} / hora</span></div>
-              {prof.metodologia && <div className="flex items-start text-brand-gray-600 dark:text-brand-gray-400"><FileText className="h-4 w-4 mr-2 mt-0.5 text-brand-gray-400 flex-shrink-0" /><p className="italic line-clamp-2">"{prof.metodologia}"</p></div>}
             </div>
-          </div>
-          <div className="space-y-2">
-            <h4 className="text-xs font-medium text-brand-gray-500 dark:text-brand-gray-400">Especialidades:</h4>
-            <div className="flex flex-wrap gap-2">
-              {prof.specialties.map(spec => (
-                <span key={spec} className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{spec}</span>
-              ))}
-            </div>
-          </div>
-          <div className="mt-4 pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700">
-            <Link to={`/professores/${prof.id}`} className="w-full block">
-              <Button variant="secondary" className="w-full">
-                Ver Perfil
-              </Button>
-            </Link>
           </div>
         </motion.div>
       ))}
@@ -617,6 +603,7 @@ const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Profe
 };
 
 const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: AtletaAluguel) => void, onDelete: (id: string, name: string) => void, canEdit: boolean }> = ({ atletas, onEdit, onDelete, canEdit }) => {
+  const navigate = useNavigate();
   if (atletas.length === 0) return <PlaceholderTab title="Nenhum atleta encontrado" description="Cadastre jogadores que podem ser contratados por seus clientes." />;
   
   const getStatusProps = (status: AtletaAluguel['status']) => ({
@@ -629,43 +616,64 @@ const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: At
       {atletas.map((atleta, index) => {
         const statusProps = getStatusProps(atleta.status);
         const specialtiesString = atleta.esportes.map(e => e.position ? `${e.sport} (${e.position})` : e.sport).join(', ');
+        
+        const handleCardClick = () => {
+          if (atleta.profile_id) {
+            navigate(`/alunos/atletas/${atleta.id}`);
+          }
+        };
+
         return (
-          <motion.div key={atleta.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-indigo-500">
+          <motion.div 
+            key={atleta.id} 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ delay: index * 0.05 }} 
+            onClick={handleCardClick}
+            className={`bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-indigo-500 ${atleta.profile_id ? 'cursor-pointer hover:shadow-xl dark:hover:shadow-brand-blue-500/10 transition-shadow' : ''}`}
+          >
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-4">
                 <div className="flex-shrink-0 h-16 w-16">
                   {atleta.avatar_url ? (
                     <img src={atleta.avatar_url} alt={atleta.name} className="w-16 h-16 rounded-full object-cover border-2 border-brand-gray-200 dark:border-brand-gray-600" />
                   ) : (
-                    <div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600"><span className="text-2xl text-brand-gray-500 font-bold">{atleta.name ? atleta.name.charAt(0).toUpperCase() : '?'}</span></div>
+                    <div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600">
+                      <span className="text-2xl text-brand-gray-500 font-bold">{atleta.name ? atleta.name.charAt(0).toUpperCase() : '?'}</span>
+                    </div>
                   )}
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-brand-gray-900 dark:text-white">{atleta.name}</h3>
                   <p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{atleta.phone}</p>
+                  <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400 mt-1">Membro desde {format(new Date(atleta.created_at), "MMMM 'de' yyyy", { locale: ptBR })}</p>
                 </div>
               </div>
               {canEdit && (
                 <div className="flex space-x-1">
-                  <Button variant="ghost" size="sm" onClick={() => onEdit(atleta)} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => onDelete(atleta.id, atleta.name)} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(atleta); }} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(atleta.id, atleta.name); }} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               )}
             </div>
-            <div className="mb-4">
+            
+            <div className="mb-4 flex-grow">
               <h4 className="text-xs font-medium text-brand-gray-500 dark:text-brand-gray-400 mb-1">Especialidades</h4>
-              <p className="text-sm text-brand-gray-800 dark:text-brand-gray-200 truncate">{specialtiesString}</p>
+              <p className="text-sm text-brand-gray-800 dark:text-brand-gray-200">{specialtiesString}</p>
             </div>
-            <div className="mt-auto pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Valor/Partida</p>
-                <p className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(atleta.taxa_hora)}</p>
+
+            <div className="mt-auto pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Valor/Partida</p>
+                  <p className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(atleta.taxa_hora)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Comissão Arena</p>
+                  <p className="font-semibold text-brand-gray-800 dark:text-white">{atleta.comissao_arena}%</p>
+                </div>
               </div>
               <div>
-                <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Comissão Arena</p>
-                <p className="font-semibold text-brand-gray-800 dark:text-white">{atleta.comissao_arena}%</p>
-              </div>
-              <div className="col-span-2">
                 <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Status</p>
                 <p className={`font-semibold text-sm flex items-center ${statusProps.color}`}><statusProps.icon className="h-4 w-4 mr-1.5" />{statusProps.label}</p>
               </div>
@@ -684,7 +692,7 @@ const TurmasList: React.FC<{ turmas: Turma[], professores: Professor[], quadras:
 
 const PlaceholderTab: React.FC<{ title: string, description: string }> = ({ title, description }) => (<div className="text-center py-16"><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="max-w-md mx-auto"><div className="flex justify-center items-center w-16 h-16 bg-brand-gray-100 dark:bg-brand-gray-800 rounded-full mx-auto mb-6"><Users className="h-8 w-8 text-brand-gray-400" /></div><h3 className="text-xl font-bold text-brand-gray-900 dark:text-white mb-2">{title}</h3><p className="text-brand-gray-600 dark:text-brand-gray-400">{description}</p></motion.div></div>);
 
-const ActionMenu: React.FC<{ aluno: Aluno, onPromoteToProfessor: () => void, onPromoteToAtleta: () => void }> = ({ aluno, onPromoteToProfessor, onPromoteToAtleta }) => {
+const ActionMenu: React.FC<{ aluno: Aluno, onPromoteToProfessor: () => void, onPromoteToAtleta: () => void, isProfessor: boolean, isAtleta: boolean }> = ({ aluno, onPromoteToProfessor, onPromoteToAtleta, isProfessor, isAtleta }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -707,11 +715,11 @@ const ActionMenu: React.FC<{ aluno: Aluno, onPromoteToProfessor: () => void, onP
         {isOpen && (
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="absolute right-0 mt-1 w-48 bg-white dark:bg-brand-gray-900 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-10">
             <div className="py-1">
-              <button onClick={(e) => { e.stopPropagation(); onPromoteToProfessor(); setIsOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800">
-                <Briefcase className="h-4 w-4 mr-3" /> Tornar Professor
+              <button onClick={(e) => { e.stopPropagation(); onPromoteToProfessor(); setIsOpen(false); }} disabled={isProfessor} className="w-full text-left flex items-center px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800 disabled:opacity-50 disabled:cursor-not-allowed">
+                <Briefcase className="h-4 w-4 mr-3" /> {isProfessor ? 'Já é Professor' : 'Tornar Professor'}
               </button>
-              <button onClick={(e) => { e.stopPropagation(); onPromoteToAtleta(); setIsOpen(false); }} className="w-full text-left flex items-center px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800">
-                <Handshake className="h-4 w-4 mr-3" /> Tornar Atleta
+              <button onClick={(e) => { e.stopPropagation(); onPromoteToAtleta(); setIsOpen(false); }} disabled={isAtleta} className="w-full text-left flex items-center px-4 py-2 text-sm text-brand-gray-700 dark:text-brand-gray-200 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800 disabled:opacity-50 disabled:cursor-not-allowed">
+                <Handshake className="h-4 w-4 mr-3" /> {isAtleta ? 'Já é Atleta' : 'Tornar Atleta'}
               </button>
             </div>
           </motion.div>

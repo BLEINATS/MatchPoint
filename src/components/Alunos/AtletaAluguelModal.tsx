@@ -14,7 +14,7 @@ interface AtletaAluguelModalProps {
   onSave: (atleta: Omit<AtletaAluguel, 'id' | 'arena_id' | 'created_at'> | AtletaAluguel, photoFile?: File | null) => void;
   onDelete: (id: string) => void;
   initialData: AtletaAluguel | null;
-  alunos: Aluno[];
+  alunos: { profile_id: string; name: string; email?: string | null; phone?: string | null; avatar_url?: string | null; }[];
 }
 
 const ALL_SPORTS = ['Futevôlei', 'Beach Tennis', 'Futebol', 'Futsal', 'Futsal Society', 'Vôlei', 'Basquete', 'Squash', 'Badminton', 'Ping Pong', 'Padel', 'Multiuso'];
@@ -198,8 +198,8 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
                     className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600"
                   >
                     <option value="">Nenhum (Cadastro Manual)</option>
-                    {alunos.filter(a => a.profile_id).map(aluno => (
-                      <option key={aluno.id} value={aluno.profile_id!}>{aluno.name} ({aluno.email})</option>
+                    {alunos.map(aluno => (
+                      <option key={aluno.profile_id} value={aluno.profile_id!}>{aluno.name}</option>
                     ))}
                   </select>
                 </div>

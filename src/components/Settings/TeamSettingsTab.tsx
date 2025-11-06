@@ -4,22 +4,12 @@ import { useToast } from '../../context/ToastContext';
 import { localApi } from '../../lib/localApi';
 import { Profile, PermissionLevel, ProfilePermissions } from '../../types';
 import { Loader2, Plus, Edit, Trash2, Shield, AlertTriangle } from 'lucide-react';
-import Button from '../Forms/Button';
-import ConfirmationModal from '../Shared/ConfirmationModal';
+import Button from '../../components/Forms/Button';
+import ConfirmationModal from '../../components/Shared/ConfirmationModal';
 import TeamMemberModal from '../Settings/TeamMemberModal';
 import { useSubscriptionStatus } from '../../hooks/useSubscriptionStatus';
-import Alert from '../Shared/Alert';
-
-export const PERMISSIONS_CONFIG: Record<keyof ProfilePermissions, { label: string; levels: Record<string, string> }> = {
-  reservas: { label: 'Reservas', levels: { none: 'Nenhum Acesso', view: 'Visualizar', edit: 'Gerenciar' } },
-  quadras: { label: 'Quadras', levels: { none: 'Nenhum Acesso', view: 'Visualizar', edit: 'Gerenciar' } },
-  gerenciamento_arena: { label: 'Gerenciamento Arena', levels: { none: 'Nenhum Acesso', view: 'Visualizar', edit: 'Gerenciar' } },
-  torneios: { label: 'Torneios', levels: { none: 'Nenhum Acesso', view: 'Visualizar', edit: 'Gerenciar' } },
-  eventos: { label: 'Eventos Privados', levels: { none: 'Nenhum Acesso', view: 'Visualizar', edit: 'Gerenciar' } },
-  financeiro: { label: 'Financeiro', levels: { none: 'Nenhum Acesso', view: 'Visualizar', edit: 'Gerenciar' } },
-  gamification: { label: 'Gamificação', levels: { none: 'Nenhum Acesso', edit: 'Gerenciar' } },
-  planos_aulas: { label: 'Planos de Aulas', levels: { none: 'Nenhum Acesso', edit: 'Gerenciar' } },
-};
+import Alert from '../../components/Shared/Alert';
+import { PERMISSIONS_CONFIG } from '../../config/permissions';
 
 const TeamSettingsTab: React.FC = () => {
   const { selectedArenaContext: arena, profile, refreshResourceCounts } = useAuth();

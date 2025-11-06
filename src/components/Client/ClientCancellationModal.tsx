@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { X, AlertTriangle, ShieldCheck, Info, Calendar } from 'lucide-react';
 import { Reserva } from '../../types';
 import Button from '../Forms/Button';
-import { format, differenceInHours } from 'date-fns';
+import { format, differenceInHours, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatters';
@@ -14,9 +14,10 @@ interface ClientCancellationModalProps {
   onConfirm: (reservaId: string) => void;
   reserva: Reserva;
   policyText?: string | null;
+  creditExpirationDays?: number | null;
 }
 
-const ClientCancellationModal: React.FC<ClientCancellationModalProps> = ({ isOpen, onClose, onConfirm, reserva, policyText }) => {
+const ClientCancellationModal: React.FC<ClientCancellationModalProps> = ({ isOpen, onClose, onConfirm, reserva, policyText, creditExpirationDays }) => {
 
   const cancellationInfo = useMemo(() => {
     const reservaDate = parseDateStringAsLocal(reserva.date);
@@ -27,6 +28,11 @@ const ClientCancellationModal: React.FC<ClientCancellationModalProps> = ({ isOpe
     const hoursUntilReservation = differenceInHours(reservaStartDateTime, new Date());
     const originalPrice = reserva.total_price || 0;
 
+    let expirationDate: Date | null = null;
+    if (creditExpirationDays && creditExpirationDays > 0) {
+        expirationDate = addDays(new Date(), creditExpirationDays);
+    }
+
     if (hoursUntilReservation >= 24) {
       return {
         policy: 'Cancelamento com +24h',
@@ -34,6 +40,7 @@ const ClientCancellationModal: React.FC<ClientCancellationModalProps> = ({ isOpe
         creditAmount: originalPrice,
         message: 'Você receberá 100% do valor pago como crédito.',
         color: 'text-green-500',
+        expirationDate,
       };
     }
     
@@ -44,6 +51,7 @@ const ClientCancellationModal: React.FC<ClientCancellationModalProps> = ({ isOpe
         creditAmount: originalPrice * 0.5,
         message: 'Você receberá 50% do valor pago como crédito.',
         color: 'text-yellow-500',
+        expirationDate,
       };
     }
 
@@ -53,8 +61,9 @@ const ClientCancellationModal: React.FC<ClientCancellationModalProps> = ({ isOpe
       creditAmount: 0,
       message: 'Nenhum crédito será concedido para cancelamentos com menos de 12 horas de antecedência.',
       color: 'text-red-500',
+      expirationDate: null,
     };
-  }, [reserva]);
+  }, [reserva, creditExpirationDays]);
 
   const handleConfirm = () => {
     onConfirm(reserva.id);
@@ -96,7 +105,22 @@ const ClientCancellationModal: React.FC<ClientCancellationModalProps> = ({ isOpe
                 <p className="text-3xl font-bold text-green-600 dark:text-green-400">
                   {formatCurrency(cancellationInfo.creditAmount)}
                 </p>
+                {cancellationInfo.creditAmount > 0 && cancellationInfo.expirationDate && (
+                    <div className="mt-2 text-sm font-semibold text-yellow-600 dark:text-yellow-400 flex items-center justify-center gap-1.5">
+                        <Calendar className="h-4 w-4" />
+                        <span>Este crédito expira em {format(cancellationInfo.expirationDate, 'dd/MM/yyyy')}.</span>
+                    </div>
+                )}
               </div>
+
+              {cancellationInfo.creditAmount > 0 && (
+                <div className="p-3 rounded-md bg-blue-50 dark:bg-blue-900/50 flex items-start gap-3 border border-blue-200 dark:border-blue-800">
+                    <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                        Este crédito é para uso exclusivo em novas reservas na plataforma e não pode ser sacado ou utilizado para outros fins.
+                    </p>
+                </div>
+              )}
 
               {policyText && (
                 <div className="p-4 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-800 border border-brand-gray-200 dark:border-brand-gray-700">

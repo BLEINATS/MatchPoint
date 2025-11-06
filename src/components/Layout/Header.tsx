@@ -15,8 +15,12 @@ import NotificationsPanel from './NotificationsPanel';
 import { useToast } from '../../context/ToastContext';
 import { format } from 'date-fns';
 
-const Header: React.FC = () => {
-  const { user, arena, profile, signOut, isLoading, selectedArenaContext } = useAuth();
+interface HeaderProps {
+  onInicioClick?: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onInicioClick }) => {
+  const { user, profile, signOut, isLoading, selectedArenaContext } = useAuth();
   const { addToast } = useToast();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -31,6 +35,7 @@ const Header: React.FC = () => {
 
   const isAdminView = profile?.role === 'admin_arena';
   const isStaffView = profile?.role === 'funcionario';
+  const isClientView = profile?.role === 'cliente';
 
   const dashboardPath = useMemo(() => {
     switch (profile?.role) {
@@ -170,6 +175,14 @@ const Header: React.FC = () => {
                 MatchPlay
               </span>
             </Link>
+            {isClientView && onInicioClick && (
+              <div className="hidden md:ml-6 md:block">
+                <Button variant="ghost" onClick={onInicioClick}>
+                  <LayoutDashboard className="h-5 w-5 mr-2" />
+                  Início
+                </Button>
+              </div>
+            )}
             {(isAdminView || isStaffView) && selectedArenaContext && (
               <div className="ml-4 pl-4 border-l border-brand-gray-300 dark:border-brand-gray-600 hidden sm:flex items-center gap-3">
                 {selectedArenaContext.logo_url ? (

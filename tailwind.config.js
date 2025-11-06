@@ -31,6 +31,6 @@ module.exports = {
   },
   plugins: [
     require('@tailwindcss/forms'),
-    require('@tailwindcss/line-clamp'),
+    // O plugin line-clamp foi removido pois já é nativo do Tailwind
   ],
 };

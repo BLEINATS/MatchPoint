@@ -9,6 +9,8 @@ import { maskPhone } from '../../utils/masks';
 import { expandRecurringReservations } from '../../utils/reservationUtils';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { Link } from 'react-router-dom';
+import { formatCurrency } from '../../utils/formatters';
+import { ToggleSwitch } from '../Gamification/ToggleSwitch';
 
 interface EventoModalProps {
   isOpen: boolean;
@@ -76,6 +78,8 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
     courtStartTime: '19:00',
     courtEndTime: '20:00',
     expectedGuests: 50,
+    chargePerGuest: false,
+    pricePerGuest: '0,00',
     quadras_ids: [] as string[],
     additionalSpaces: [] as string[],
     services: [] as { name: string; price: string; included: boolean }[],
@@ -121,14 +125,29 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
     return totalCost;
   }, [formData.quadras_ids, formData.startDate, formData.endDate, formData.courtStartTime, formData.courtEndTime, quadras]);
 
-  const totalValue = useMemo(() => {
-    const servicesCost = formData.services.reduce((sum, service) => {
-      const price = parseFloat(service.price.replace(',', '.')) || 0;
-      return sum + (service.included ? 0 : price);
+  const servicesCost = useMemo(() => {
+    return formData.services.reduce((sum, service) => {
+        const price = parseFloat(String(service.price).replace(',', '.')) || 0;
+        return sum + (service.included ? price : 0);
     }, 0);
-    const discount = parseFloat(formData.discount.replace(',', '.')) || 0;
-    return servicesCost + courtCost - discount;
-  }, [formData.services, courtCost, formData.discount]);
+  }, [formData.services]);
+
+  const guestCost = useMemo(() => {
+    if (!formData.chargePerGuest) return 0;
+    const pricePerGuest = parseFloat(String(formData.pricePerGuest).replace(',', '.')) || 0;
+    return (formData.expectedGuests || 0) * pricePerGuest;
+  }, [formData.chargePerGuest, formData.pricePerGuest, formData.expectedGuests]);
+
+  const subtotal = useMemo(() => {
+      return courtCost + servicesCost + guestCost;
+  }, [courtCost, servicesCost, guestCost]);
+
+  const depositAmount = useMemo(() => parseFloat(String(formData.depositValue).replace(',', '.')) || 0, [formData.depositValue]);
+
+  const balanceDue = useMemo(() => {
+    const discount = parseFloat(String(formData.discount).replace(',', '.')) || 0;
+    return subtotal - discount - depositAmount;
+  }, [subtotal, formData.discount, depositAmount]);
 
   useEffect(() => {
     if (!isOpen || !formData.quadras_ids.length || !formData.startDate || !formData.endDate || !formData.startTime || !formData.endTime) {
@@ -196,6 +215,8 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
         courtStartTime: initialData.courtStartTime || initialData.startTime,
         courtEndTime: initialData.courtEndTime || initialData.endTime,
         expectedGuests: initialData.expectedGuests,
+        chargePerGuest: initialData.chargePerGuest || false,
+        pricePerGuest: String(initialData.pricePerGuest || '0').replace('.', ','),
         quadras_ids: initialData.quadras_ids,
         additionalSpaces: initialData.additionalSpaces || [],
         services: initialData.services.map(s => ({ ...s, price: String(s.price).replace('.', ',') })),
@@ -213,6 +234,8 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
         startTime: '18:00', endTime: '23:00',
         courtStartTime: '19:00', courtEndTime: '20:00',
         expectedGuests: 50,
+        chargePerGuest: false,
+        pricePerGuest: '0,00',
         quadras_ids: [], additionalSpaces: [],
         services: [
             { name: 'Limpeza Básica', price: '150,00', included: true },
@@ -256,7 +279,8 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
     
     const dataToSave = { 
       ...formData, 
-      totalValue,
+      totalValue: subtotal,
+      pricePerGuest: parseFloat(formData.pricePerGuest.replace(',', '.')) || 0,
       services: formData.services.map(s => ({
           ...s,
           price: parseFloat(s.price.replace(',', '.')) || 0,
@@ -425,6 +449,19 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
 
               {/* Seção Orçamento */}
               <Section title="Orçamento e Serviços">
+                <div className="flex items-center justify-between p-3 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg">
+                  <div className="flex items-center">
+                    <Users className="h-4 w-4 mr-2 text-brand-gray-500" />
+                    <label htmlFor="charge-per-guest" className="text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300">Cobrar por convidado?</label>
+                  </div>
+                  <ToggleSwitch enabled={formData.chargePerGuest} setEnabled={(val) => setFormData(p => ({ ...p, chargePerGuest: val }))} />
+                </div>
+                {formData.chargePerGuest && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                    <Input label="Valor por Convidado (R$)" name="pricePerGuest" type="text" inputMode="decimal" value={formData.pricePerGuest} onChange={handleChange} />
+                  </motion.div>
+                )}
+
                 <div className="space-y-2">
                   {formData.services.map((service, index) => (
                     <div key={index} className="grid grid-cols-12 gap-2 items-center">
@@ -432,7 +469,7 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
                         <Input placeholder="Nome do serviço" value={service.name} onChange={(e) => handleServiceChange(index, 'name', e.target.value)} />
                       </div>
                       <div className="col-span-3">
-                        <Input type="text" inputMode="decimal" placeholder="Preço" value={service.price} onChange={(e) => handleServiceChange(index, 'price', e.target.value)} disabled={service.included} />
+                        <Input type="text" inputMode="decimal" placeholder="Preço" value={service.price} onChange={(e) => handleServiceChange(index, 'price', e.target.value)} />
                       </div>
                       <div className="col-span-2 flex items-center justify-center">
                         <input type="checkbox" title="Serviço incluso no pacote?" checked={service.included} onChange={(e) => handleServiceChange(index, 'included', e.target.checked)} className="form-checkbox h-5 w-5 rounded text-brand-blue-600" />
@@ -445,24 +482,13 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
                 </div>
                 <Button variant="outline" size="sm" onClick={addService}><Plus className="h-4 w-4 mr-2" /> Adicionar Serviço</Button>
                 
-                <div className="p-4 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-800 space-y-2 border border-brand-gray-200 dark:border-brand-gray-700">
-                    {courtCost > 0 && (
-                        <div className="flex justify-between items-center text-sm font-medium">
-                            <span className="text-brand-gray-600 dark:text-brand-gray-400">Custo das Quadras</span>
-                            <span className="text-brand-gray-800 dark:text-white">{courtCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                        </div>
-                    )}
-                    <div className="flex justify-between items-center text-sm font-medium">
-                        <span className="text-brand-gray-600 dark:text-brand-gray-400">Custo dos Serviços</span>
-                        <span className="text-brand-gray-800 dark:text-white">
-                          {formData.services.reduce((sum, s) => sum + (s.included ? 0 : parseFloat(s.price.replace(',', '.')) || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </span>
-                    </div>
-                    <Input label="Desconto (R$)" name="discount" type="text" inputMode="decimal" value={formData.discount} onChange={handleChange} />
-                    <div className="flex justify-between font-bold text-xl text-brand-gray-800 dark:text-white pt-2 border-t border-brand-gray-200 dark:border-brand-gray-700">
-                        <span>Valor Total:</span>
-                        <span>{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                    </div>
+                <div className="p-4 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-800 space-y-3 border border-brand-gray-200 dark:border-brand-gray-700">
+                    <div className="flex justify-between items-center text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Custo das Quadras</span><span className="font-medium text-brand-gray-800 dark:text-white">{formatCurrency(courtCost)}</span></div>
+                    {guestCost > 0 && <div className="flex justify-between items-center text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Custo por Convidados</span><span className="font-medium text-brand-gray-800 dark:text-white">{formatCurrency(guestCost)}</span></div>}
+                    <div className="flex justify-between items-center text-sm"><span className="text-brand-gray-600 dark:text-brand-gray-400">Custo dos Serviços</span><span className="font-medium text-brand-gray-800 dark:text-white">{formatCurrency(servicesCost)}</span></div>
+                    <div className="flex justify-between items-center text-sm font-semibold pt-2 border-t border-brand-gray-200 dark:border-brand-gray-700"><span className="text-brand-gray-700 dark:text-brand-gray-300">Subtotal</span><span className="text-brand-gray-900 dark:text-white">{formatCurrency(subtotal)}</span></div>
+                    <div className="flex justify-between items-center text-sm"><label htmlFor="discount" className="text-brand-gray-600 dark:text-brand-gray-400">Desconto (R$)</label><Input id="discount" name="discount" type="text" inputMode="decimal" value={formData.discount} onChange={handleChange} className="!w-28 !text-right !py-1" placeholder="0,00" /></div>
+                    <div className="flex justify-between font-bold text-xl text-brand-gray-800 dark:text-white pt-3 border-t-2 border-brand-gray-300 dark:border-brand-gray-600"><span className="text-brand-gray-800 dark:text-white">Saldo Devedor:</span><span className="text-brand-blue-600 dark:text-brand-blue-300">{formatCurrency(balanceDue)}</span></div>
                 </div>
               </Section>
               

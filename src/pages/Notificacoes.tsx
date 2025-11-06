@@ -62,7 +62,7 @@ const Notificacoes: React.FC = () => {
   }, [loadData]);
 
   const handleSendNotification = async (target: 'all' | 'students' | 'clients' | 'individual', message: string, profileId?: string) => {
-    if (!arena) return;
+    if (!arena || !profile) return;
 
     let targetProfileIds: string[] = [];
 
@@ -97,6 +97,9 @@ const Notificacoes: React.FC = () => {
                     message,
                     type: 'announcement',
                     read: false,
+                    sender_id: profile.id,
+                    sender_name: profile.name,
+                    sender_avatar_url: profile.avatar_url,
                 };
             }
             return null;

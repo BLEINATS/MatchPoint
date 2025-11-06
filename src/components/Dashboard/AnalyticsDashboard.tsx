@@ -294,7 +294,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
     const now = startOfDay(new Date());
 
     const futureTorneios = (torneios || [])
-      .filter(t => !isBefore(parseDateStringAsLocal(t.start_date), now))
+      .filter(t => !isBefore(parseDateStringAsLocal(t.start_date), now) && t.status !== 'cancelado')
       .map(t => ({
         id: t.id,
         name: t.name,
@@ -304,7 +304,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
       }));
     
     const futureEventos = (eventos || [])
-      .filter(e => !isBefore(parseDateStringAsLocal(e.startDate), now))
+      .filter(e => !isBefore(parseDateStringAsLocal(e.startDate), now) && e.status !== 'cancelado')
       .map(e => ({
         id: e.id,
         name: e.name,

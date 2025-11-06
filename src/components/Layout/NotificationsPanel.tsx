@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Notificacao } from '../../types';
-import { Bell, Info, User, DollarSign, Calendar, Gift, Trophy, XCircle, Send } from 'lucide-react';
+import { Bell, Info, User as UserIcon, DollarSign, Calendar, Gift, Trophy, XCircle, Send } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Button from '../Forms/Button';
@@ -13,13 +13,13 @@ const getNotificationIcon = (type: string) => {
     case 'game_invite':
     case 'game_invite_response':
       return <Calendar className="h-5 w-5 text-blue-500" />;
-    case 'cancelamento':
+    case 'cancellation':
       return <XCircle className="h-5 w-5 text-red-500" />;
     case 'credito':
       return <DollarSign className="h-5 w-5 text-green-500" />;
     case 'novo_cliente':
     case 'friend_requests':
-      return <User className="h-5 w-5 text-purple-500" />;
+      return <UserIcon className="h-5 w-5 text-purple-500" />;
     case 'gamification_points':
       return <Gift className="h-5 w-5 text-yellow-500" />;
     case 'gamification_reward':
@@ -58,9 +58,26 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onClo
         !notification.read ? 'bg-blue-50 dark:bg-brand-blue-500/10' : 'hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50'
       }`}
     >
-      <div className="flex-shrink-0 mt-1">{getNotificationIcon(notification.type)}</div>
+      <div className="flex-shrink-0 mt-1">
+        {notification.sender_avatar_url ? (
+          <img src={notification.sender_avatar_url} alt={notification.sender_name || 'Sender'} className="h-8 w-8 rounded-full object-cover" />
+        ) : (
+          <div className="h-8 w-8 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center">
+            {getNotificationIcon(notification.type)}
+          </div>
+        )}
+      </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-brand-gray-800 dark:text-brand-gray-200 whitespace-pre-wrap break-words">{notification.message}</p>
+        <p className="text-sm text-brand-gray-800 dark:text-brand-gray-200 whitespace-pre-wrap break-words">
+          {notification.sender_name ? (
+            <>
+              <strong className="font-semibold">{notification.sender_name}</strong>
+              <span className="text-brand-gray-600 dark:text-brand-gray-400"> {notification.message}</span>
+            </>
+          ) : (
+            notification.message
+          )}
+        </p>
         <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400 mt-1">
           {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true, locale: ptBR })}
         </p>

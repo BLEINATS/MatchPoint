@@ -5,8 +5,10 @@ import { useToast } from '../../context/ToastContext';
 import Input from '../Forms/Input';
 import Button from '../Forms/Button';
 import { User, Mail, Loader2, Image as ImageIcon, Trash2, Phone, Hash, Calendar } from 'lucide-react';
-import { supabase } from '../../lib/supabaseClient';
+import { localApi, localUploadPhoto, localDeletePhoto } from '../../lib/localApi';
 import { maskPhone, maskCPFOrCNPJ } from '../../utils/masks';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface ClientProfileSettingsTabProps {
   formData: Partial<Profile>;
@@ -38,22 +40,11 @@ const ClientProfileSettingsTab: React.FC<ClientProfileSettingsTabProps> = ({ for
     setIsUploading(true);
     try {
       if (formData.avatar_url) {
-        const oldAvatarPath = formData.avatar_url.split('/avatars/')[1];
-        if (oldAvatarPath) {
-          await supabase.storage.from('avatars').remove([oldAvatarPath]);
-        }
+        await localDeletePhoto(formData.avatar_url);
       }
-
-      const filePath = `${profile.id}/${Date.now()}-${file.name}`;
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file);
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      if (!publicUrlData.publicUrl) throw new Error("Não foi possível obter a URL pública do avatar.");
-
-      const newAvatarUrl = publicUrlData.publicUrl;
-      await updateProfile({ avatar_url: newAvatarUrl });
-      setFormData(prev => ({ ...prev, avatar_url: newAvatarUrl }));
+      const { publicUrl } = await localUploadPhoto(file);
+      await updateProfile({ avatar_url: publicUrl });
+      setFormData(prev => ({ ...prev, avatar_url: publicUrl }));
       addToast({ message: "Avatar atualizado com sucesso!", type: 'success' });
 
     } catch (error: any) {
@@ -68,10 +59,7 @@ const ClientProfileSettingsTab: React.FC<ClientProfileSettingsTabProps> = ({ for
     
     setIsUploading(true);
     try {
-      const oldAvatarPath = formData.avatar_url.split('/avatars/')[1];
-      if (oldAvatarPath) {
-        await supabase.storage.from('avatars').remove([oldAvatarPath]);
-      }
+      await localDeletePhoto(formData.avatar_url);
       await updateProfile({ avatar_url: null });
       setFormData(prev => ({ ...prev, avatar_url: null }));
       addToast({ message: "Avatar removido.", type: 'info' });
@@ -111,6 +99,11 @@ const ClientProfileSettingsTab: React.FC<ClientProfileSettingsTabProps> = ({ for
         <div className="flex-1 w-full text-center sm:text-left">
           <h2 className="text-2xl font-bold text-brand-gray-900 dark:text-white">{formData.name}</h2>
           <p className="text-brand-gray-500 dark:text-brand-gray-400">{formData.email}</p>
+          {formData.created_at && (
+            <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 mt-1">
+              Membro desde {format(new Date(formData.created_at), "MMMM 'de' yyyy", { locale: ptBR })}
+            </p>
+          )}
         </div>
       </div>
       

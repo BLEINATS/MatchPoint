@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Evento, EventoStatus, EventoTipoPrivado, Quadra } from '../../types';
-import { Calendar, Clock, Users, DollarSign, PartyPopper, User, Phone, Mail, Home, Percent } from 'lucide-react';
+import { Calendar, Clock, Users, DollarSign, PartyPopper, User, Phone, Mail, Home, Percent, TrendingUp, TrendingDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatters';
@@ -67,15 +67,36 @@ const VisaoGeralTab: React.FC<VisaoGeralTabProps> = ({ evento, quadras }) => {
     ...(evento.additionalSpaces || [])
   ].join(', ');
 
+  const subtotal = evento.totalValue || 0;
+  const discount = evento.discount || 0;
+  
+  const totalPaid = useMemo(() => 
+    (evento.payments || []).reduce((sum, p) => sum + p.amount, 0),
+    [evento.payments]
+  );
+  
+  const balanceDue = subtotal - discount - totalPaid;
+
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard icon={PartyPopper} label="Status" value={statusProps.label} color={statusProps.color} />
         <StatCard icon={Users} label="Convidados" value={evento.expectedGuests} color="text-blue-500" />
-        <StatCard icon={DollarSign} label="Valor Total" value={formatCurrency(evento.totalValue)} color="text-green-500" />
-        {evento.discount && evento.discount > 0 && (
-          <StatCard icon={Percent} label="Desconto Aplicado" value={formatCurrency(evento.discount)} color="text-yellow-500" />
+        {evento.chargePerGuest && evento.pricePerGuest && evento.pricePerGuest > 0 && (
+          <StatCard icon={DollarSign} label="Valor por Convidado" value={formatCurrency(evento.pricePerGuest)} color="text-indigo-500" />
         )}
+      </div>
+
+      <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+        <h3 className="text-xl font-semibold mb-4">Resumo Financeiro</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard label="Valor Total do Evento" value={formatCurrency(subtotal)} icon={DollarSign} color="text-blue-500" />
+          {discount > 0 && (
+            <StatCard label="Desconto Aplicado" value={formatCurrency(discount)} icon={Percent} color="text-yellow-500" />
+          )}
+          <StatCard label="Total Pago" value={formatCurrency(totalPaid)} icon={TrendingUp} color="text-green-500" />
+          <StatCard label="Saldo Devedor" value={formatCurrency(balanceDue)} icon={TrendingDown} color={balanceDue > 0 ? "text-red-500" : "text-green-500"} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

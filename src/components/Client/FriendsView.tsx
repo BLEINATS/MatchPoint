@@ -5,8 +5,9 @@ import { Profile, Friendship, Aluno } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import Input from '../Forms/Input';
 import Button from '../Forms/Button';
-import { Search, UserPlus, UserCheck, UserX, Loader2, Users, Check, Clock } from 'lucide-react';
+import { Search, UserPlus, UserCheck, UserX, Loader2, Users, Check, Clock, MessageSquare } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import SendMessageModal from './SendMessageModal';
 
 const FriendsView: React.FC = () => {
   const { profile, selectedArenaContext } = useAuth();
@@ -15,6 +16,9 @@ const FriendsView: React.FC = () => {
   const [allArenaUsers, setAllArenaUsers] = useState<Profile[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [friendToMessage, setFriendToMessage] = useState<Profile | null>(null);
 
   const loadData = useCallback(async () => {
     if (!profile || !selectedArenaContext) {
@@ -121,9 +125,12 @@ const FriendsView: React.FC = () => {
                 await localApi.upsert('notificacoes', [{
                     profile_id: originalRequesterId,
                     arena_id: selectedArenaContext.id,
-                    message: `${profile.name} aceitou sua solicitação de amizade.`,
+                    message: `aceitou sua solicitação de amizade.`,
                     type: 'friend_requests',
                     link_to: '/perfil',
+                    sender_id: profile.id,
+                    sender_name: profile.name,
+                    sender_avatar_url: profile.avatar_url,
                 }], selectedArenaContext.id);
             }
         }
@@ -152,9 +159,12 @@ const FriendsView: React.FC = () => {
             await localApi.upsert('notificacoes', [{
                 profile_id: targetUserId,
                 arena_id: selectedArenaContext.id,
-                message: `${profile.name} enviou uma solicitação de amizade.`,
+                message: `enviou uma solicitação de amizade.`,
                 type: 'friend_requests',
                 link_to: '/perfil',
+                sender_id: profile.id,
+                sender_name: profile.name,
+                sender_avatar_url: profile.avatar_url,
             }], selectedArenaContext.id);
         }
     }
@@ -177,88 +187,150 @@ const FriendsView: React.FC = () => {
     }
   };
 
+  const handleSendMessage = async (message: string) => {
+    if (!friendToMessage || !profile || !selectedArenaContext) {
+      addToast({ message: 'Erro ao enviar mensagem.', type: 'error' });
+      return;
+    }
+
+    try {
+      await localApi.upsert('notificacoes', [{
+        profile_id: friendToMessage.id,
+        arena_id: selectedArenaContext.id,
+        message: message,
+        type: 'direct_message',
+        link_to: '/perfil?tab=amigos',
+        sender_id: profile.id,
+        sender_name: profile.name,
+        sender_avatar_url: profile.avatar_url,
+      }], selectedArenaContext.id);
+
+      addToast({ message: `Mensagem enviada para ${friendToMessage.name}!`, type: 'success' });
+      setIsMessageModalOpen(false);
+      setFriendToMessage(null);
+    } catch (error: any) {
+      addToast({ message: `Erro: ${error.message}`, type: 'error' });
+    }
+  };
+
+  const openMessageModal = (friend: Profile) => {
+    setFriendToMessage(friend);
+    setIsMessageModalOpen(true);
+  };
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>;
   }
 
   return (
-    <div className="space-y-8">
-      <h2 className="text-2xl font-bold text-brand-gray-800 dark:text-white">Amigos na Arena</h2>
-      
-      <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-        <h3 className="text-xl font-semibold mb-4">Encontrar Jogadores</h3>
-        <Input
-          placeholder="Buscar por nome..."
-          icon={<Search className="h-4 w-4 text-brand-gray-400" />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        {searchTerm && (
-          <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
-            {searchResults.map(user => {
-              const { status, request } = getFriendshipStatus(user.id);
-              return (
-                <div key={user.id} className="flex items-center justify-between p-2 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-md">
-                  <div className="flex items-center gap-3">
-                    <img src={user.avatar_url || `https://avatar.vercel.sh/${user.id}.svg`} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
-                    <span>{user.name}</span>
+    <>
+      <div className="space-y-8">
+        <h2 className="text-2xl font-bold text-brand-gray-800 dark:text-white">Amigos na Arena</h2>
+        
+        <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+          <h3 className="text-xl font-semibold mb-4">Encontrar Jogadores</h3>
+          <Input
+            placeholder="Buscar por nome..."
+            icon={<Search className="h-4 w-4 text-brand-gray-400" />}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          {searchTerm && (
+            <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
+              {searchResults.map(user => {
+                const { status, request } = getFriendshipStatus(user.id);
+                return (
+                  <div key={user.id} className="flex items-center justify-between p-2 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-md">
+                    <div className="flex items-center gap-3">
+                      <img src={user.avatar_url || `https://avatar.vercel.sh/${user.id}.svg`} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
+                      <span>{user.name}</span>
+                    </div>
+                    <div>
+                      {status === 'friends' && <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300"><UserCheck className="h-3 w-3" /> Amigo</span>}
+                      {status === 'outgoing' && <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300"><Clock className="h-3 w-3" /> Enviado</span>}
+                      {status === 'incoming' && request && (
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => handleFriendAction(request, 'accepted')}><UserCheck className="h-4 w-4" /></Button>
+                          <Button size="sm" variant="outline" onClick={() => handleFriendAction(request, 'declined')}><UserX className="h-4 w-4" /></Button>
+                        </div>
+                      )}
+                      {status === 'none' && <Button size="sm" onClick={() => handleSendRequest(user.id)}><UserPlus className="h-4 w-4 mr-2" /> Adicionar</Button>}
+                    </div>
                   </div>
-                  <div>
-                    {status === 'friends' && <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300"><UserCheck className="h-3 w-3" /> Amigo</span>}
-                    {status === 'outgoing' && <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300"><Clock className="h-3 w-3" /> Enviado</span>}
-                    {status === 'incoming' && request && (
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={() => handleFriendAction(request, 'accepted')}><UserCheck className="h-4 w-4" /></Button>
-                        <Button size="sm" variant="outline" onClick={() => handleFriendAction(request, 'declined')}><UserX className="h-4 w-4" /></Button>
-                      </div>
-                    )}
-                    {status === 'none' && <Button size="sm" onClick={() => handleSendRequest(user.id)}><UserPlus className="h-4 w-4 mr-2" /> Adicionar</Button>}
+                );
+              })}
+              {searchResults.length === 0 && <p className="text-sm text-center text-brand-gray-500 py-4">Nenhum jogador encontrado com este nome.</p>}
+            </div>
+          )}
+        </div>
+
+        {incomingRequests.length > 0 && (
+          <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+            <h3 className="text-xl font-semibold mb-4">Solicitações Pendentes</h3>
+            <div className="space-y-3">
+              {incomingRequests.map(({ request, user }) => (
+                <div key={request.id} className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                      <img src={user.avatar_url || `https://avatar.vercel.sh/${user.id}.svg`} alt={user.name} className="w-10 h-10 rounded-full object-cover" />
+                      <span className="font-medium">{user.name}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => handleFriendAction(request, 'accepted')}><UserCheck className="h-4 w-4 mr-1" /> Aceitar</Button>
+                    <Button size="sm" variant="outline" onClick={() => handleFriendAction(request, 'declined')}><UserX className="h-4 w-4" /></Button>
                   </div>
                 </div>
-              );
-            })}
-            {searchResults.length === 0 && <p className="text-sm text-center text-brand-gray-500 py-4">Nenhum jogador encontrado com este nome.</p>}
+              ))}
+            </div>
           </div>
         )}
-      </div>
 
-      {incomingRequests.length > 0 && (
         <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-          <h3 className="text-xl font-semibold mb-4">Solicitações Pendentes</h3>
-          <div className="space-y-3">
-            {incomingRequests.map(({ request, user }) => (
-              <div key={request.id} className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/50 rounded-lg">
-                <div className="flex items-center gap-3">
-                    <img src={user.avatar_url || `https://avatar.vercel.sh/${user.id}.svg`} alt={user.name} className="w-10 h-10 rounded-full object-cover" />
-                    <span className="font-medium">{user.name}</span>
+          <h3 className="text-xl font-semibold mb-4 flex items-center"><Users className="h-5 w-5 mr-2" />Meus Amigos ({friends.length})</h3>
+          {friends.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {friends.map(friend => (
+                <div
+                  key={friend.id}
+                  className="w-full text-left flex items-center justify-between p-3 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg transition-colors hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700"
+                >
+                  <div 
+                    className="flex items-center gap-3 flex-grow cursor-pointer"
+                    onClick={() => openMessageModal(friend)}
+                  >
+                      <img src={friend.avatar_url || `https://avatar.vercel.sh/${friend.id}.svg`} alt={friend.name} className="w-10 h-10 rounded-full object-cover" />
+                      <span className="font-medium">{friend.name}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <button 
+                      className="p-2 text-brand-blue-500" 
+                      title={`Enviar mensagem para ${friend.name}`}
+                      onClick={() => openMessageModal(friend)}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => handleRemoveFriend(friend.id)} 
+                      className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50" 
+                      title="Remover amizade. Esta ação é irreversível."
+                    >
+                      <UserX className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => handleFriendAction(request, 'accepted')}><UserCheck className="h-4 w-4 mr-1" /> Aceitar</Button>
-                  <Button size="sm" variant="outline" onClick={() => handleFriendAction(request, 'declined')}><UserX className="h-4 w-4" /></Button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : <p className="text-sm text-center text-brand-gray-500 py-8">Você ainda não adicionou nenhum amigo.</p>}
         </div>
-      )}
-
-      <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-        <h3 className="text-xl font-semibold mb-4 flex items-center"><Users className="h-5 w-5 mr-2" />Meus Amigos ({friends.length})</h3>
-        {friends.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {friends.map(friend => (
-              <div key={friend.id} className="flex items-center justify-between p-3 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg">
-                <div className="flex items-center gap-3">
-                    <img src={friend.avatar_url || `https://avatar.vercel.sh/${friend.id}.svg`} alt={friend.name} className="w-10 h-10 rounded-full object-cover" />
-                    <span className="font-medium">{friend.name}</span>
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => handleRemoveFriend(friend.id)} className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50"><UserX className="h-4 w-4" /></Button>
-              </div>
-            ))}
-          </div>
-        ) : <p className="text-sm text-center text-brand-gray-500 py-8">Você ainda não adicionou nenhum amigo.</p>}
       </div>
-    </div>
+      <SendMessageModal
+        isOpen={isMessageModalOpen}
+        onClose={() => setIsMessageModalOpen(false)}
+        onConfirm={handleSendMessage}
+        friend={friendToMessage}
+      />
+    </>
   );
 };
 

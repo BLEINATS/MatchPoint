@@ -1,6 +1,6 @@
 import React from 'react';
 import { Arena } from '../../types';
-import { BarChart2, Info, AlertTriangle, Bell, Clock } from 'lucide-react';
+import { BarChart2, Info, AlertTriangle, Bell, Clock, BadgePercent } from 'lucide-react';
 import Input from '../Forms/Input';
 import { ToggleSwitch } from '../Gamification/ToggleSwitch';
 
@@ -73,6 +73,21 @@ const FaturamentoTab: React.FC<FaturamentoTabProps> = ({ formData, setFormData }
           value={formData.single_booking_payment_window_minutes || 30}
           onChange={handlePaymentWindowChange}
           placeholder="Ex: 30"
+        />
+      </Section>
+
+      <Section title="Gestão de Créditos" icon={BadgePercent}>
+        <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 -mt-2">
+          Defina um prazo de validade para os créditos que seus clientes recebem (ex: por cancelamento de reserva). Após este período, o crédito expira e não pode mais ser usado.
+        </p>
+        <Input
+          label="Validade dos Créditos (dias)"
+          name="credit_expiration_days"
+          type="number"
+          min="0"
+          value={formData.credit_expiration_days || ''}
+          onChange={(e) => setFormData(prev => ({ ...prev, credit_expiration_days: e.target.value === '' ? null : parseInt(e.target.value, 10) }))}
+          placeholder="Deixe em branco para não expirar"
         />
       </Section>
 

@@ -31,7 +31,7 @@ const Dashboard: React.FC = () => {
         setShowOnboarding(true);
     };
 
-    if (isLoading || !profile) {
+    if (isLoading) {
         return (
             <Layout>
                 <div className="flex justify-center items-center h-screen">
@@ -40,24 +40,40 @@ const Dashboard: React.FC = () => {
             </Layout>
         );
     }
-
-    if (profile.role === 'cliente') {
-        return <ClientDashboard />;
+    
+    if (profile?.role === 'cliente' || profile?.role === 'atleta' || profile?.role === 'professor' || profile?.role === 'funcionario') {
+        return (
+            <Layout>
+                <ClientDashboard />
+            </Layout>
+        );
     }
 
+    if (profile?.role === 'admin_arena') {
+        return (
+            <Layout>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <AnalyticsDashboard onReopenOnboarding={handleReopenOnboarding} />
+                </div>
+                <AnimatePresence>
+                    {showOnboarding && (
+                        <OnboardingModal
+                            isOpen={showOnboarding}
+                            onClose={handleOnboardingComplete}
+                        />
+                    )}
+                </AnimatePresence>
+            </Layout>
+        );
+    }
+
+    // Fallback or other roles can be handled here
     return (
         <Layout>
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <AnalyticsDashboard onReopenOnboarding={handleReopenOnboarding} />
+            <div className="p-8 text-center">
+                <h1 className="text-2xl font-bold">Bem-vindo!</h1>
+                <p>Seu painel está sendo preparado.</p>
             </div>
-            <AnimatePresence>
-                {showOnboarding && (
-                    <OnboardingModal
-                        isOpen={showOnboarding}
-                        onClose={handleOnboardingComplete}
-                    />
-                )}
-            </AnimatePresence>
         </Layout>
     );
 };

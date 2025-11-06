@@ -99,6 +99,7 @@ export interface Arena {
   google_maps_link?: string;
   cancellation_policy?: string;
   terms_of_use?: string;
+  privacy_policy?: string | null;
   created_at: string;
   asaas_api_key?: string;
   status?: 'active' | 'suspended';
@@ -110,6 +111,11 @@ export interface Arena {
   billing_warning_2_enabled?: boolean;
   billing_warning_3_enabled?: boolean;
   single_booking_payment_window_minutes?: number;
+  credit_expiration_days?: number | null;
+  class_cancellation_deadline_value?: number | null;
+  class_cancellation_deadline_unit?: 'hours' | 'minutes';
+  class_booking_deadline_value?: number | null;
+  class_booking_deadline_unit?: 'hours' | 'minutes';
 }
 
 export interface ArenaMembership {
@@ -231,6 +237,9 @@ export interface AtletaAluguel {
   status: 'disponivel' | 'indisponivel';
   created_at: string;
   partidas_jogadas?: number;
+  unavailability?: { start: string; end: string }[];
+  avg_rating?: number;
+  ratings_count?: number;
 }
 
 export interface PlanoAula {
@@ -293,7 +302,7 @@ export interface Reserva {
   date: string;
   start_time: string;
   end_time: string;
-  status: 'confirmada' | 'pendente' | 'cancelada' | 'realizada' | 'aguardando_aceite_profissional' | 'aguardando_pagamento';
+  status: 'confirmada' | 'pendente' | 'cancelada' | 'realizada' | 'aguardando_aceite_profissional' | 'aguardando_pagamento_profissional' | 'aguardando_pagamento';
   type: ReservationType;
   total_price?: number;
   credit_used?: number;
@@ -326,7 +335,7 @@ export interface Reserva {
   }[] | null;
   invites_closed?: boolean;
   attendance?: Record<string, 'presente' | 'falta' | 'pendente' | 'cancelada'>;
-  monthly_payments?: Record<string, { status: 'pago' | 'pendente'; method?: 'local' | 'sistema'; paid_at?: string }>;
+  monthly_payments?: Record<string, { status: 'pago' | 'pendente'; method?: 'local' | 'sistema' | 'pix' | 'cartao' | 'dinheiro'; paid_at?: string }>;
 }
 
 // Alias para compatibilidade
@@ -341,6 +350,7 @@ export interface CreditTransaction {
   description?: string;
   related_reservation_id?: string;
   created_at?: string;
+  expires_at?: string | null;
 }
 
 export interface RentalItem {
@@ -412,6 +422,8 @@ export interface Evento {
   courtStartTime?: string;
   courtEndTime?: string;
   expectedGuests: number;
+  chargePerGuest?: boolean;
+  pricePerGuest?: number;
   quadras_ids: string[];
   additionalSpaces: string[];
   services: { name: string; price: number; included: boolean }[];
@@ -465,6 +477,9 @@ export interface Notificacao {
   read: boolean;
   link_to?: string | null;
   created_at: string;
+  sender_id?: string | null;
+  sender_name?: string | null;
+  sender_avatar_url?: string | null;
 }
 
 // Gamification Types

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Aluno, Turma, Professor, Quadra, PlanoAula } from '../../../types';
 import { Calendar, Clock, GraduationCap, MapPin, Users, RefreshCw, AlertTriangle, Info } from 'lucide-react';
-import { format, isAfter, isSameDay, parse, getDay, isPast, addMinutes, startOfDay, addMonths, addYears, isBefore, startOfMonth } from 'date-fns';
+import { format, isAfter, isSameDay, parse, getDay, isPast, addMinutes, startOfDay, addMonths, addYears, isBefore, sub, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DatePickerCalendar from '../DatePickerCalendar';
 import { parseDateStringAsLocal } from '../../../utils/dateUtils';
@@ -13,6 +13,7 @@ import ConfirmationModal from '../../Shared/ConfirmationModal';
 import { useToast } from '../../../context/ToastContext';
 import { localApi } from '../../../lib/localApi';
 import Alert from '../../Shared/Alert';
+import { useAuth } from '../../../context/AuthContext';
 
 interface AulasTabProps {
   aluno: Aluno;
@@ -31,6 +32,7 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
   const [selectedClass, setSelectedClass] = useState<any | null>(null);
   const [isCancelPlanConfirmOpen, setIsCancelPlanConfirmOpen] = useState(false);
   const { addToast } = useToast();
+  const { selectedArenaContext: arena } = useAuth();
 
   const currentPlan = useMemo(() => planos.find(p => p.id === aluno.plan_id), [planos, aluno.plan_id]);
   const isUnlimited = useMemo(() => currentPlan?.num_aulas === null, [currentPlan]);
@@ -97,6 +99,27 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
 
   const expirationDateString = expirationDateObject ? format(expirationDateObject, "dd/MM/yyyy") : null;
   
+  const policyMessage = useMemo(() => {
+    if (!arena) return null;
+
+    const bookingValue = arena.class_booking_deadline_value;
+    const bookingUnit = arena.class_booking_deadline_unit === 'minutes' ? 'minutos' : 'horas';
+    const cancelValue = arena.class_cancellation_deadline_value;
+    const cancelUnit = arena.class_cancellation_deadline_unit === 'minutes' ? 'minutos' : 'horas';
+
+    const bookingText = bookingValue && bookingValue > 0 ? `Agendamentos devem ser feitos com no mínimo ${bookingValue} ${bookingUnit} de antecedência.` : '';
+    const cancelText = cancelValue && cancelValue > 0 ? `Cancelamentos são permitidos até ${cancelValue} ${cancelUnit} antes do início da aula.` : '';
+
+    if (!bookingText && !cancelText) return null;
+
+    return (
+      <ul className="list-disc pl-5 space-y-1">
+        {bookingText && <li>{bookingText}</li>}
+        {cancelText && <li>{cancelText}</li>}
+      </ul>
+    );
+  }, [arena]);
+
   const { scheduledClasses, availableSlots } = useMemo(() => {
     const now = new Date();
     const scheduled = (aluno.aulas_agendadas || [])
@@ -155,6 +178,18 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
                 const slotDateTime = parse(slotTime, 'HH:mm', day);
                 const isSlotPast = isPast(slotDateTime);
 
+                let bookingDisabledByDeadline = false;
+                let deadlineMessage = '';
+                if (arena?.class_booking_deadline_value && arena?.class_booking_deadline_unit) {
+                    const deadlineValue = arena.class_booking_deadline_value;
+                    const deadlineUnit = arena.class_booking_deadline_unit;
+                    const bookingDeadline = sub(slotDateTime, { [deadlineUnit]: deadlineValue });
+                    if (isBefore(bookingDeadline, new Date())) {
+                        bookingDisabledByDeadline = true;
+                        deadlineMessage = `Agendamento encerra ${deadlineValue} ${deadlineUnit === 'hours' ? 'hora(s)' : 'minuto(s)'} antes.`;
+                    }
+                }
+
                 const isEnrolled = (aluno.aulas_agendadas || []).some(a => 
                     a.turma_id === turma.id && 
                     a.date === format(day, 'yyyy-MM-dd') && 
@@ -184,6 +219,8 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
                     enrolledCount,
                     capacity: turma.alunos_por_horario,
                     isPast: isSlotPast,
+                    bookingDisabledByDeadline,
+                    deadlineMessage,
                 });
                 
                 currentTime = addMinutes(currentTime, 60);
@@ -195,7 +232,7 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
 
     available.sort((a, b) => a.time.localeCompare(b.time));
     return { scheduledClasses: scheduled, availableSlots: available };
-  }, [selectedDate, turmas, aluno, professores, quadras, allAlunos]);
+  }, [selectedDate, turmas, aluno, professores, quadras, allAlunos, arena]);
 
   const handleOpenModal = (classData: any) => {
     setSelectedClass(classData);
@@ -257,6 +294,14 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
         </div>
       </div>
       
+      {policyMessage && (
+        <Alert
+          type="info"
+          title="Política de Agendamento e Cancelamento de Aulas"
+          message={policyMessage}
+        />
+      )}
+
       {isExpired && (
         <Alert
             type="warning"
@@ -300,7 +345,7 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
               <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
                 {availableSlots.map(slot => {
                   const isFull = slot.enrolledCount >= slot.capacity;
-                  const isDisabled = slot.isPast || isFull || isExpired;
+                  const isDisabled = slot.isPast || isFull || isExpired || slot.bookingDisabledByDeadline;
                   return (
                     <button 
                       key={slot.id} 
@@ -311,6 +356,12 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
                               ? 'bg-brand-gray-100 dark:bg-brand-gray-800 opacity-60 cursor-not-allowed'
                               : 'bg-brand-gray-50 dark:bg-brand-gray-700/50 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700'
                       }`}
+                      title={
+                        slot.bookingDisabledByDeadline ? slot.deadlineMessage :
+                        isFull ? 'Turma Lotada' :
+                        isExpired ? 'Seu plano está vencido' :
+                        ''
+                      }
                     >
                       <div className="flex-1">
                         <p className="font-bold text-brand-gray-900 dark:text-white">{slot.turma.name}</p>
@@ -323,6 +374,8 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
                       <div className="flex items-center gap-2 text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mt-3 sm:mt-0">
                         {slot.isPast ? (
                           <span className="font-bold text-brand-gray-500">Encerrado</span>
+                        ) : slot.bookingDisabledByDeadline ? (
+                          <span className="font-bold text-yellow-500">Prazo Esgotado</span>
                         ) : isFull ? (
                           <span className="font-bold text-red-500">Lotado</span>
                         ) : isExpired ? (

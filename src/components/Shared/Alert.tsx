@@ -62,7 +62,7 @@ const Alert: React.FC<AlertProps> = ({ type = 'info', title, message }) => {
         <div className="ml-3">
           <h3 className={`text-sm font-bold ${config.titleColor}`}>{title}</h3>
           <div className={`mt-1 text-sm ${config.messageColor}`}>
-            {typeof message === 'string' ? <p>{message}</p> : message}
+            {message}
           </div>
         </div>
       </div>

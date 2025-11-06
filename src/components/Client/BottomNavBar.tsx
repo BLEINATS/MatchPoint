@@ -1,7 +1,8 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { Dock, DockIcon, DockItem, DockLabel } from '../ui/dock';
+import { cn } from '../../lib/utils';
 
-type View = 'inicio' | 'aulas' | 'reservas' | 'perfil';
+type View = 'inicio' | 'aulas' | 'reservas' | 'loja' | 'amigos' | 'perfil';
 
 interface NavItem {
   id: View;
@@ -18,29 +19,37 @@ interface BottomNavBarProps {
 
 const BottomNavBar: React.FC<BottomNavBarProps> = ({ items, activeView, setActiveView }) => {
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-brand-gray-900/80 backdrop-blur-lg border-t border-brand-gray-200 dark:border-brand-gray-700 shadow-t-lg z-40">
-      <div className="flex justify-around items-center h-16">
+    <div className="md:hidden fixed bottom-2 left-0 right-0 z-40">
+      <Dock 
+        className="bg-white/80 dark:bg-brand-gray-900/80 backdrop-blur-lg border border-brand-gray-200 dark:border-brand-gray-700"
+        magnification={60}
+        distance={80}
+        panelHeight={56}
+      >
         {items.filter(item => item.visible).map((item) => (
-          <motion.button
+          <DockItem
             key={item.id}
-            onClick={() => setActiveView(item.id)}
-            className={`flex flex-col items-center justify-center w-full h-full transition-colors relative ${
-              activeView === item.id ? 'text-brand-blue-500' : 'text-brand-gray-500 dark:text-brand-gray-400'
-            }`}
-            whileTap={{ scale: 0.95 }}
-          >
-            <item.icon className="h-6 w-6" />
-            <span className="text-xs font-medium mt-1">{item.label}</span>
-            {activeView === item.id && (
-              <motion.div
-                layoutId="bottom-nav-active"
-                className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-1 bg-brand-blue-500 rounded-full"
-              />
+            className={cn(
+              'aspect-square rounded-full transition-colors',
+              activeView === item.id 
+                ? 'bg-blue-100 dark:bg-brand-blue-500/20' 
+                : 'bg-transparent hover:bg-brand-gray-100 dark:hover:bg-brand-gray-800'
             )}
-          </motion.button>
+            onClick={() => setActiveView(item.id)}
+          >
+            <DockLabel>{item.label}</DockLabel>
+            <DockIcon>
+              <item.icon className={cn(
+                'h-6 w-6 transition-colors',
+                activeView === item.id 
+                  ? 'text-brand-blue-500' 
+                  : 'text-brand-gray-500 dark:text-brand-gray-400'
+              )} />
+            </DockIcon>
+          </DockItem>
         ))}
-      </div>
-    </nav>
+      </Dock>
+    </div>
   );
 };
 

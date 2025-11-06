@@ -1,76 +1,121 @@
 import { localApi } from '../lib/localApi';
-import { Reserva, Aluno, GamificationSettings, GamificationPointTransaction, CreditTransaction, Quadra } from '../types';
+import { Reserva, Aluno, GamificationSettings, GamificationPointTransaction, CreditTransaction, Quadra, GamificationAchievement, AlunoAchievement } from '../types';
 import { formatCurrency } from './formatters';
-import { differenceInHours, format } from 'date-fns';
+import { differenceInHours, format, isBefore } from 'date-fns';
 import { parseDateStringAsLocal } from './dateUtils';
 
 /**
- * Awards points for a completed reservation.
- * Checks for existing transactions to prevent awarding points multiple times.
+ * Awards points for a completed reservation and checks for any newly unlocked achievements.
  */
 export const awardPointsForCompletedReservation = async (reserva: Reserva, arenaId: string) => {
-  if (reserva.status !== 'confirmada' && reserva.status !== 'realizada') {
-    return;
-  }
-  
+  if (!reserva.profile_id) return;
+
   try {
-    const { data: allAlunos } = await localApi.select<Aluno>('alunos', arenaId);
-    let aluno: Aluno | undefined;
-
-    if (reserva.aluno_id) {
-      aluno = allAlunos.find(a => a.id === reserva.aluno_id);
-    }
-    if (!aluno && reserva.profile_id) {
-      aluno = allAlunos.find(a => a.profile_id === reserva.profile_id);
-    }
-    if (!aluno && reserva.clientName) {
-      aluno = allAlunos.find(a => a.name === reserva.clientName);
-    }
-    
-    if (!aluno) return;
-
     const { data: settingsData } = await localApi.select<GamificationSettings>('gamification_settings', arenaId);
     const settings = settingsData?.[0];
     if (!settings || !settings.is_enabled) return;
 
-    const { data: existingTransactions } = await localApi.select<GamificationPointTransaction>('gamification_point_transactions', arenaId);
-    const alreadyAwarded = existingTransactions.some(t => t.related_reservation_id === reserva.id && (t.type === 'reservation_completed' || t.type === 'reservation_created'));
+    const { data: allAlunos } = await localApi.select<Aluno>('alunos', arenaId);
+    let aluno = allAlunos.find(a => a.profile_id === reserva.profile_id);
+    if (!aluno) return;
+
+    const { data: transactions } = await localApi.select<GamificationPointTransaction>('gamification_point_transactions', arenaId);
+    const alreadyAwarded = transactions.some(t => t.related_reservation_id === reserva.id && (t.type === 'reservation_completed'));
     if (alreadyAwarded) return;
 
     let totalPointsToAdd = 0;
-    const descriptions: string[] = [];
+    const newPointTransactions: Omit<GamificationPointTransaction, 'id' | 'created_at'>[] = [];
 
+    // Points for the reservation itself
     if (settings.points_per_reservation > 0) {
       totalPointsToAdd += settings.points_per_reservation;
-      descriptions.push('Reserva concluída');
+      newPointTransactions.push({
+        aluno_id: aluno.id,
+        arena_id: arenaId,
+        points: settings.points_per_reservation,
+        type: 'reservation_completed',
+        description: 'Reserva concluída',
+        related_reservation_id: reserva.id,
+        related_achievement_id: null,
+      });
     }
     if (settings.points_per_real > 0 && reserva.total_price) {
       const pointsFromPrice = Math.floor(reserva.total_price * settings.points_per_real);
       if (pointsFromPrice > 0) {
         totalPointsToAdd += pointsFromPrice;
-        descriptions.push(`Valor da reserva (${formatCurrency(reserva.total_price)})`);
+        newPointTransactions.push({
+          aluno_id: aluno.id,
+          arena_id: arenaId,
+          points: pointsFromPrice,
+          type: 'reservation_completed',
+          description: `Valor da reserva (${formatCurrency(reserva.total_price)})`,
+          related_reservation_id: reserva.id,
+          related_achievement_id: null,
+        });
       }
     }
 
-    if (totalPointsToAdd === 0) return;
+    // Check for achievements
+    const { data: allUserReservas } = await localApi.select<Reserva>('reservas', arenaId);
+    const userCompletedReservas = allUserReservas.filter(r => 
+        r.profile_id === aluno?.profile_id && 
+        (r.status === 'confirmada' || r.status === 'realizada')
+    );
+    const completedCount = userCompletedReservas.length;
 
-    const updatedPoints = (aluno.gamification_points || 0) + totalPointsToAdd;
-    await localApi.upsert('alunos', [{ ...aluno, gamification_points: updatedPoints }], arenaId);
+    const { data: achievements } = await localApi.select<GamificationAchievement>('gamification_achievements', arenaId);
+    const { data: unlockedAchievementsData } = await localApi.select<AlunoAchievement>('aluno_achievements', arenaId);
+    const unlockedForUser = unlockedAchievementsData.filter(ua => ua.aluno_id === aluno!.id);
+    const unlockedIds = new Set(unlockedForUser.map(ua => ua.achievement_id));
 
-    await localApi.upsert('gamification_point_transactions', [{
-      aluno_id: aluno.id,
-      arena_id: arenaId,
-      points: totalPointsToAdd,
-      type: 'reservation_completed',
-      description: descriptions.join(' + '),
-      related_reservation_id: reserva.id,
-    }], arenaId);
+    const newUnlockedAchievements: Omit<AlunoAchievement, 'unlocked_at'>[] = [];
 
+    for (const ach of achievements) {
+      if (unlockedIds.has(ach.id)) continue;
+
+      let unlocked = false;
+      switch (ach.type) {
+        case 'first_reservation':
+          if (completedCount === 1) unlocked = true;
+          break;
+        case 'loyalty_10':
+          if (completedCount >= 10) unlocked = true;
+          break;
+        case 'loyalty_50':
+          if (completedCount >= 50) unlocked = true;
+          break;
+        case 'loyalty_100':
+          if (completedCount >= 100) unlocked = true;
+          break;
+      }
+
+      if (unlocked) {
+        totalPointsToAdd += ach.points_reward;
+        newPointTransactions.push({
+          aluno_id: aluno.id,
+          arena_id: arenaId,
+          points: ach.points_reward,
+          type: 'achievement_unlocked',
+          description: `Conquista: ${ach.name}`,
+          related_achievement_id: ach.id,
+          related_reservation_id: null,
+        });
+        newUnlockedAchievements.push({ aluno_id: aluno.id, achievement_id: ach.id });
+      }
+    }
+
+    if (totalPointsToAdd > 0) {
+      const updatedPoints = (aluno.gamification_points || 0) + totalPointsToAdd;
+      await localApi.upsert('alunos', [{ ...aluno, gamification_points: updatedPoints }], arenaId);
+      await localApi.upsert('gamification_point_transactions', newPointTransactions, arenaId);
+      if (newUnlockedAchievements.length > 0) {
+        await localApi.upsert('aluno_achievements', newUnlockedAchievements, arenaId);
+      }
+    }
   } catch (error) {
-    console.error("Error awarding points for completed reservation:", error);
+    console.error("Error awarding points/achievements:", error);
   }
 };
-
 
 /**
  * Handles credit refund for a reservation cancellation.

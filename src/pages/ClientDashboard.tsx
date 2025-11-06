@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, PlanoAula, Friendship, GamificationPointTransaction, FinanceTransaction } from '../types';
-import { Calendar, Compass, Search, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star, User, Users, Banknote } from 'lucide-react';
+import { Calendar, Compass, Search, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star, User, Users, Banknote, FileText, MessageSquare } from 'lucide-react';
 import { isAfter, startOfDay, isSameDay, format, parse, getDay, addDays, isBefore, endOfDay, addMinutes, subDays, isWithinInterval, formatDistanceToNow, isPast, differenceInHours, differenceInWeeks, endOfWeek, startOfWeek, addWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
@@ -24,17 +24,15 @@ import HirePlayerModal from '../components/Client/HirePlayerModal';
 import AssignToReservationModal from '../components/Client/AssignToReservationModal';
 import AulasTab from '../components/Client/Student/AulasTab';
 import ClientProfileView from '../components/Client/ClientProfileView';
-import SideNavBar from '../components/Client/SideNavBar';
-import BottomNavBar from '../components/Client/BottomNavBar';
 import Alert from '../components/Shared/Alert';
 import FriendsView from '../components/Client/FriendsView';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Timer from '../components/Shared/Timer';
 import PaymentModal from '../components/Shared/PaymentModal';
 import ProfileDetailModal from '../components/Client/ProfileDetailModal';
 import AttendanceReportModal from '../components/Client/Student/AttendanceReportModal';
-import Header from '../components/Layout/Header';
 import LojaView from '../components/Client/LojaView';
+import DocumentsTab from '../components/Client/DocumentsTab';
 
 type View = 'inicio' | 'aulas' | 'reservas' | 'loja' | 'amigos' | 'perfil';
 
@@ -42,10 +40,12 @@ const ClientDashboard: React.FC = () => {
   const { profile, selectedArenaContext, switchArenaContext, memberships, allArenas, alunoProfileForSelectedArena, refreshAlunoProfile, updateProfile } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [activeView, setActiveView] = useState<View>('inicio');
   const [quadras, setQuadras] = useState<Quadra[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [completedReservationsCount, setCompletedReservationsCount] = useState(0);
   const [allArenaReservations, setAllArenaReservations] = useState<Reserva[]>([]);
   const [allArenaAlunos, setAllArenaAlunos] = useState<Aluno[]>([]);
   const [creditHistory, setCreditHistory] = useState<CreditTransaction[]>([]);
@@ -88,11 +88,6 @@ const ClientDashboard: React.FC = () => {
   const [profileModalInitialTab, setProfileModalInitialTab] = useState<'credits' | 'gamification' | 'payments'>('credits');
 
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
-
-  const handleOpenProfileModal = (tab: 'credits' | 'gamification' | 'payments') => {
-    setProfileModalInitialTab(tab);
-    setIsProfileModalOpen(true);
-  };
   
   const isStudent = useMemo(() => !!alunoProfileForSelectedArena?.plan_id, [alunoProfileForSelectedArena]);
 
@@ -160,6 +155,10 @@ const ClientDashboard: React.FC = () => {
         r.profile_id === profile.id || r.participants?.some(p => p.profile_id === profile.id)
       );
       setReservas(myReservations);
+
+      const myBookedReservations = allReservations.filter(r => r.profile_id === profile.id);
+      const completedCount = myBookedReservations.filter(r => (r.status === 'confirmada' || r.status === 'realizada') && isBefore(parseDateStringAsLocal(`${r.date}T${r.end_time}`), new Date())).length;
+      setCompletedReservationsCount(completedCount);
 
       setQuadras(quadrasRes.data || []);
       setTurmas(turmasRes.data || []);
@@ -239,11 +238,11 @@ const ClientDashboard: React.FC = () => {
       const now = new Date();
       const myCompletedReservations = reservas.filter(r => {
         const isMine = r.profile_id === profile.id;
-        const isConfirmed = r.status === 'confirmada';
+        const isConfirmed = r.status === 'confirmada' || r.status === 'realizada';
         if (!isMine || !isConfirmed) return false;
         
         try {
-          const endDateTime = parseDateStringAsLocal(`${r.date}T${r.end_time}`);
+          const endDateTime = new Date(`${r.date}T${r.end_time}`);
           return isBefore(endDateTime, now);
         } catch {
           return false;
@@ -258,7 +257,7 @@ const ClientDashboard: React.FC = () => {
         .map(t => t.related_reservation_id)
       );
   
-      const reservationsToProcess = myCompletedReservations.filter(r => !processedReservationIds.has(r.id));
+      const reservationsToProcess = myCompletedReservations.filter(r => !r.id || !processedReservationIds.has(r.id));
   
       if (reservationsToProcess.length > 0) {
         let pointsAwarded = false;
@@ -325,17 +324,36 @@ const ClientDashboard: React.FC = () => {
             }
         }
 
+        let toastMessage = 'Reserva criada com sucesso!';
         if (savedReserva.participants && savedReserva.participants.length > 1) {
+            const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+            const profilesMap = new Map((allProfiles || []).map(p => [p.id, p]));
+
             const notifications = savedReserva.participants
                 .filter(p => p.profile_id !== profile.id)
-                .map(p => ({
-                    profile_id: p.profile_id,
-                    arena_id: selectedArenaContext.id,
-                    message: `${profile.name} convidou você para um jogo em ${format(parseDateStringAsLocal(savedReserva.date), 'dd/MM')} às ${savedReserva.start_time.slice(0,5)}.`,
-                    type: 'game_invite',
-                    link_to: `/perfil`
-                }));
-            await localApi.upsert('notificacoes', notifications, selectedArenaContext.id);
+                .map(p => {
+                    const recipientProfile = profilesMap.get(p.profile_id);
+                    const wantsGameInvites = recipientProfile?.notification_preferences?.game_invites ?? true;
+                    if (wantsGameInvites) {
+                        return {
+                            profile_id: p.profile_id,
+                            arena_id: selectedArenaContext.id,
+                            message: `convidou você para um jogo em ${format(parseDateStringAsLocal(savedReserva.date), 'dd/MM')} às ${savedReserva.start_time.slice(0,5)}.`,
+                            type: 'game_invite',
+                            link_to: `/perfil`,
+                            sender_id: profile.id,
+                            sender_name: profile.name,
+                            sender_avatar_url: profile.avatar_url,
+                        };
+                    }
+                    return null;
+                })
+                .filter((n): n is NonNullable<typeof n> => n !== null);
+            
+            if (notifications.length > 0) {
+                await localApi.upsert('notificacoes', notifications, selectedArenaContext.id);
+                toastMessage = `Reserva criada e ${notifications.length} convite(s) enviado(s)!`;
+            }
         }
         
         setIsModalOpen(false);
@@ -346,7 +364,7 @@ const ClientDashboard: React.FC = () => {
             const amountToPay = (savedReserva.total_price || 0) - (savedReserva.credit_used || 0);
             handleOpenPaymentModal(savedReserva, amountToPay, false);
         } else {
-            addToast({ message: 'Reserva criada com sucesso!', type: 'success' });
+            addToast({ message: toastMessage, type: 'success' });
         }
 
     } catch (error: any) { addToast({ message: `Erro no processo de reserva: ${error.message}`, type: 'error' }); }
@@ -386,13 +404,22 @@ const ClientDashboard: React.FC = () => {
 
     const ownerProfileId = reserva.profile_id;
     if (ownerProfileId && ownerProfileId !== profile.id) {
-        await localApi.upsert('notificacoes', [{
-            profile_id: ownerProfileId,
-            arena_id: selectedArenaContext.id,
-            message: `${profile.name} ${status === 'accepted' ? 'aceitou' : 'recusou'} seu convite para o jogo.`,
-            type: 'game_invite_response',
-            link_to: `/perfil`
-        }], selectedArenaContext.id);
+        const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+        const ownerProfile = allProfiles.find(p => p.id === ownerProfileId);
+        const wantsGameInvites = ownerProfile?.notification_preferences?.game_invites ?? true;
+
+        if (wantsGameInvites) {
+            await localApi.upsert('notificacoes', [{
+                profile_id: ownerProfileId,
+                arena_id: selectedArenaContext.id,
+                message: `aceitou sua solicitação de amizade.`,
+                type: 'friend_requests',
+                link_to: '/perfil',
+                sender_id: profile.id,
+                sender_name: profile.name,
+                sender_avatar_url: profile.avatar_url,
+            }], selectedArenaContext.id);
+        }
     }
     addToast({ message: `Convite ${status === 'accepted' ? 'aceito' : 'recusado'}!`, type: 'success' });
   };
@@ -445,8 +472,30 @@ const ClientDashboard: React.FC = () => {
   
       await localApi.upsert('reservas', [{ ...reserva, status: 'cancelada' }], selectedArenaContext.id);
       
-      addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
-      if (creditRefunded > 0) addToast({ message: `${formatCurrency(creditRefunded)} de crédito adicionado à sua conta.`, type: 'info' });
+      let toastMessage = 'Reserva cancelada com sucesso!';
+      if (creditRefunded > 0) {
+        toastMessage += ` ${formatCurrency(creditRefunded)} de crédito foi adicionado à sua conta.`;
+      }
+
+      if (selectedArenaContext.owner_id) {
+        const quadraName = quadras.find(q => q.id === reserva.quadra_id)?.name || 'Quadra';
+        const reservaDetails = `${quadraName} em ${format(parseDateStringAsLocal(reserva.date), 'dd/MM/yy')} às ${reserva.start_time.slice(0,5)}`;
+        const notificationMessage = `cancelou a reserva para ${reservaDetails}.`;
+
+        await localApi.upsert('notificacoes', [{
+            arena_id: selectedArenaContext.id,
+            profile_id: selectedArenaContext.owner_id,
+            message: notificationMessage,
+            type: 'cancellation',
+            read: false,
+            sender_id: profile.id,
+            sender_name: profile.name,
+            sender_avatar_url: profile.avatar_url,
+        }], selectedArenaContext.id);
+        toastMessage += ' O administrador foi notificado.';
+      }
+
+      addToast({ message: toastMessage, type: 'success' });
   
       await handleDataChange();
     } catch (error: any) {
@@ -594,14 +643,13 @@ const ClientDashboard: React.FC = () => {
     return upcomingClasses[0];
   }, [isStudent, alunoProfileForSelectedArena, turmas, quadras, professores]);
 
-  const navItems: { id: View; label: string; icon: React.ElementType; visible: boolean }[] = [
-    { id: 'inicio', label: 'Início', icon: LayoutDashboard, visible: true },
-    { id: 'aulas', label: 'Aulas', icon: GraduationCap, visible: isStudent },
-    { id: 'reservas', label: 'Reservas', icon: Calendar, visible: true },
-    { id: 'loja', label: 'Loja', icon: ShoppingBag, visible: true },
-    { id: 'amigos', label: 'Amigos', icon: Users, visible: true },
-    { id: 'perfil', label: 'Perfil', icon: User, visible: true },
-  ];
+  useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    const tab = query.get('tab');
+    if (tab && ['inicio', 'aulas', 'reservas', 'loja', 'amigos', 'perfil'].includes(tab)) {
+      setActiveView(tab as View);
+    }
+  }, [location.search]);
 
   if (!profile) return null;
 
@@ -623,54 +671,47 @@ const ClientDashboard: React.FC = () => {
   const renderContent = () => {
     if (isLoading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>;
     switch (activeView) {
-      case 'inicio': return <InicioView alunoProfile={alunoProfileForSelectedArena} planos={planos} levels={levels} rewards={rewards} onOpenProfileModal={handleOpenProfileModal} nextReservation={upcomingReservations[0]} pendingReservations={pendingPaymentReservations} onDetail={handleOpenDetailModal} onDataChange={handleDataChange} nextClass={nextClass} quadras={quadras} reservas={allArenaReservations} onSlotClick={handleSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} arenaName={selectedArenaContext?.name} selectedArena={selectedArenaContext} onOpenAttendanceModal={() => setIsAttendanceModalOpen(true)} />;
-      case 'reservas': return <ReservationsTab upcoming={upcomingReservations} past={pastReservations} quadras={quadras} arenaName={selectedArenaContext?.name} onCancel={handleOpenCancelModal} onDetail={handleOpenDetailModal} onHirePlayer={(res) => { setReservationToHireFor(res); setIsHirePlayerModalOpen(true); }} profileId={profile.id} />;
+      case 'inicio': return <InicioView alunoProfile={alunoProfileForSelectedArena} planos={planos} levels={levels} rewards={rewards} onOpenProfileModal={handleOpenProfileModal} nextReservation={upcomingReservations[0]} pendingReservations={pendingPaymentReservations} onDetail={handleOpenDetailModal} onDataChange={handleDataChange} nextClass={nextClass} quadras={quadras} reservas={allArenaReservations} onSlotClick={handleSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} arenaName={selectedArenaContext?.name} selectedArena={selectedArenaContext} onOpenAttendanceModal={() => setIsAttendanceModalOpen(true)} creditHistory={creditHistory} />;
+      case 'reservas': return <ReservationsTab upcoming={upcomingReservations} past={pastReservations} quadras={quadras} atletas={atletas} arenaName={selectedArenaContext?.name} onCancel={handleOpenCancelModal} onDetail={handleOpenDetailModal} onHirePlayer={(res) => { setReservationToHireFor(res); setIsHirePlayerModalOpen(true); }} profileId={profile.id} />;
       case 'aulas': return <AulasTab aluno={alunoProfileForSelectedArena!} allAlunos={allArenaAlunos} turmas={studentTurmas} professores={professores} quadras={quadras} planos={planos} onDataChange={handleDataChange} />;
       case 'loja': return <LojaView />;
       case 'amigos': return <FriendsView />;
-      case 'perfil': return <ClientProfileView aluno={alunoProfileForSelectedArena} profile={profile} onProfileUpdate={updateProfile} creditHistory={creditHistory} gamificationHistory={gamificationHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} atletas={atletas} onHireAtleta={(atleta) => { setAtletaToAssign(atleta); setIsAssignModalOpen(true); }} />;
+      case 'perfil': return <ClientProfileView aluno={alunoProfileForSelectedArena} profile={profile} onProfileUpdate={updateProfile} creditHistory={creditHistory} gamificationHistory={gamificationHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} atletas={atletas} onHireAtleta={(atleta) => { setAtletaToAssign(atleta); setIsAssignModalOpen(true); }} completedReservationsCount={completedReservationsCount} />;
       default: return null;
     }
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-brand-gray-50 dark:bg-brand-gray-950">
-      <SideNavBar items={navItems} activeView={activeView} setActiveView={setActiveView} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
-        <div className="flex-1 overflow-y-auto pt-16">
-          <main className="p-4 sm:p-6 lg:p-8 pb-24">
-            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 flex flex-col md:flex-row justify-between md:items-center gap-4">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-brand-gray-900 dark:text-white">Meu Painel</h1>
-                <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-1 md:mt-2">Gerencie suas reservas, aulas e perfil.</p>
-              </div>
-              <div className="w-full md:w-auto">
-                <ArenaSelector arenas={myArenas} selectedArena={selectedArenaContext} onSelect={switchArenaContext} />
-              </div>
+    <div className="flex-1 overflow-y-auto pt-8 md:pt-0">
+      <main className="p-4 sm:p-6 lg:p-8 pb-24">
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 flex flex-col md:flex-row justify-between md:items-center gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-brand-gray-900 dark:text-white">Meu Painel</h1>
+            <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-1 md:mt-2">Gerencie suas reservas, aulas e perfil.</p>
+          </div>
+          <div className="w-full md:w-auto">
+            <ArenaSelector arenas={myArenas} selectedArena={selectedArenaContext} onSelect={switchArenaContext} />
+          </div>
+        </motion.div>
+        {!selectedArenaContext ? (
+          <div className="text-center py-16 bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
+            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
+              <Compass className="h-12 w-12 text-brand-blue-400 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-brand-gray-800 dark:text-brand-gray-200">Selecione uma arena</h2>
+              <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Escolha uma das suas arenas para ver seus dados.</p>
             </motion.div>
-            {!selectedArenaContext ? (
-              <div className="text-center py-16 bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
-                <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
-                  <Compass className="h-12 w-12 text-brand-blue-400 mx-auto mb-4" />
-                  <h2 className="text-2xl font-bold text-brand-gray-800 dark:text-brand-gray-200">Selecione uma arena</h2>
-                  <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Escolha uma das suas arenas para ver seus dados.</p>
-                </motion.div>
-              </div>
-            ) : (
-              <AnimatePresence mode="wait">
-                <motion.div key={activeView} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                  {renderContent()}
-                </motion.div>
-              </AnimatePresence>
-            )}
-          </main>
-        </div>
-      </div>
-      <BottomNavBar items={navItems} activeView={activeView} setActiveView={setActiveView} />
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div key={activeView} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+              {renderContent()}
+            </motion.div>
+          </AnimatePresence>
+        )}
+      </main>
       
       <AnimatePresence>{isModalOpen && modalSlot && selectedArenaContext && (<ReservationModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveClientReservation} onCancelReservation={() => {}} newReservationSlot={{ quadraId: modalSlot.quadraId, time: modalSlot.time, type: 'avulsa' }} quadras={quadras} alunos={alunoProfileForSelectedArena ? [alunoProfileForSelectedArena] : []} allReservations={reservas} arenaId={selectedArenaContext.id} selectedDate={selectedDate} isClientBooking={true} userProfile={profile} clientProfile={alunoProfileForSelectedArena} profissionais={atletas} friends={friends} />)}</AnimatePresence>
-      <AnimatePresence>{isCancelModalOpen && reservationToCancel && selectedArenaContext && (<ClientCancellationModal isOpen={isCancelModalOpen} onClose={() => setIsCancelModalOpen(false)} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} policyText={selectedArenaContext.cancellation_policy} />)}</AnimatePresence>
+      <AnimatePresence>{isCancelModalOpen && reservationToCancel && selectedArenaContext && (<ClientCancellationModal isOpen={isCancelModalOpen} onClose={() => setIsCancelModalOpen(false)} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} policyText={selectedArenaContext.cancellation_policy} creditExpirationDays={selectedArenaContext.credit_expiration_days} />)}</AnimatePresence>
       <AnimatePresence>{isDetailModalOpen && reservationToDetail && selectedArenaContext && (<ReservationDetailModal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} reserva={reservationToDetail} quadra={quadras.find(q => q.id === reservationToDetail.quadra_id) || null} arenaName={selectedArenaContext.name} onCancel={handleOpenCancelModal} onUpdateParticipantStatus={handleUpdateParticipantStatus} onUpdateReservation={handleUpdateReservation} friends={friends} onPay={handleOpenPaymentModal} />)}</AnimatePresence>
       <AnimatePresence>{isHirePlayerModalOpen && reservationToHireFor && (<HirePlayerModal isOpen={isHirePlayerModalOpen} onClose={() => setIsHirePlayerModalOpen(false)} onConfirm={(profId) => handleHireProfessional(reservationToHireFor.id, profId)} reserva={reservationToHireFor} />)}</AnimatePresence>
       <AnimatePresence>{isAssignModalOpen && atletaToAssign && (<AssignToReservationModal isOpen={isAssignModalOpen} onClose={() => setIsAssignModalOpen(false)} onConfirm={(reservaId) => handleHireProfessional(reservaId, atletaToAssign.id)} profissional={atletaToAssign} minhasReservas={upcomingReservations} quadras={quadras} />)}</AnimatePresence>
@@ -681,15 +722,15 @@ const ClientDashboard: React.FC = () => {
   );
 };
 
-const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: Quadra[], arenaName?: string, onCancel: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string}> = ({upcoming, past, quadras, arenaName, onCancel, onDetail, onHirePlayer, profileId}) => {
+const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: Quadra[], atletas: AtletaAluguel[], arenaName?: string, onCancel: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string}> = ({upcoming, past, quadras, atletas, arenaName, onCancel, onDetail, onHirePlayer, profileId}) => {
   const [showAllPast, setShowAllPast] = useState(false);
   const shouldPaginatePast = past.length > 5;
   const displayedPastReservations = shouldPaginatePast && !showAllPast ? past.slice(0, 5) : past;
 
   return (
     <div className="space-y-8">
-      <ReservationList title="Próximas Reservas" reservations={upcoming} quadras={quadras} arenaName={arenaName} onCancel={onCancel} onDetail={onDetail} onHirePlayer={onHirePlayer} profileId={profileId} />
-      <ReservationList title="Histórico de Reservas" reservations={displayedPastReservations} quadras={quadras} arenaName={arenaName} isPast onDetail={onDetail} profileId={profileId} />
+      <ReservationList title="Próximas Reservas" reservations={upcoming} quadras={quadras} atletas={atletas} arenaName={arenaName} onCancel={onCancel} onDetail={onDetail} onHirePlayer={onHirePlayer} profileId={profileId} />
+      <ReservationList title="Histórico de Reservas" reservations={displayedPastReservations} quadras={quadras} atletas={atletas} arenaName={arenaName} isPast onDetail={onDetail} profileId={profileId} />
       {shouldPaginatePast && !showAllPast && (
         <div className="text-center">
           <Button variant="outline" onClick={() => setShowAllPast(true)}>
@@ -701,7 +742,7 @@ const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: 
   );
 };
 
-const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras: Quadra[], arenaName?: string, isPast?: boolean, onCancel?: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string}> = ({title, reservations, quadras, arenaName, isPast, onCancel, onDetail, onHirePlayer, profileId}) => {
+const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras: Quadra[], atletas: AtletaAluguel[], arenaName?: string, isPast?: boolean, onCancel?: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string}> = ({title, reservations, quadras, atletas, arenaName, isPast, onCancel, onDetail, onHirePlayer, profileId}) => {
   return (
     <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
       <h3 className="text-xl font-semibold p-6">{title}</h3>
@@ -713,6 +754,7 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
             const isOrganizer = res.profile_id === profileId;
             const isInvited = res.participants?.some(p => p.profile_id === profileId) && !isOrganizer;
             const isClickable = !isPast || res.status === 'aguardando_pagamento';
+            const atleta = res.atleta_aluguel_id ? atletas.find(a => a.id === res.atleta_aluguel_id) : null;
             return (
               <li key={res.id} onClick={() => isClickable && onDetail(res)} className={`p-4 sm:p-6 transition-colors ${isClickable ? 'hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer' : 'cursor-default opacity-70'}`}>
                 <div className="flex flex-col sm:flex-row justify-between gap-4">
@@ -749,6 +791,23 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
                     )}
                   </div>
                 </div>
+                {atleta && res.status !== 'aguardando_aceite_profissional' && (
+                    <div className="mt-4 pt-4 border-t border-dashed border-brand-gray-200 dark:border-brand-gray-700">
+                        <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400 font-medium mb-2">Atleta Contratado:</p>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <img src={atleta.avatar_url || `https://avatar.vercel.sh/${atleta.id}.svg`} className="w-8 h-8 rounded-full object-cover"/>
+                                <span className="font-semibold text-sm">{atleta.name}</span>
+                            </div>
+                            <a href={`https://wa.me/${atleta.phone?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="sm">
+                                    <MessageSquare className="h-4 w-4 mr-2"/>
+                                    Contato
+                                </Button>
+                            </a>
+                        </div>
+                    </div>
+                )}
               </li>
             )
           })}
@@ -758,9 +817,28 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
   );
 };
 
-const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], levels: GamificationLevel[], rewards: GamificationReward[], onOpenProfileModal: (tab: 'credits' | 'gamification' | 'payments') => void, nextReservation?: Reserva, pendingReservations: Reserva[], onDetail: (reserva: Reserva) => void, onDataChange: () => void, nextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, selectedArena: Arena | null, onOpenAttendanceModal: () => void }> = ({ alunoProfile, planos, levels, rewards, onOpenProfileModal, nextReservation, pendingReservations, onDetail, onDataChange, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, selectedArena, onOpenAttendanceModal }) => { 
+const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], levels: GamificationLevel[], rewards: GamificationReward[], onOpenProfileModal: (tab: 'credits' | 'gamification' | 'payments') => void, nextReservation?: Reserva, pendingReservations: Reserva[], onDetail: (reserva: Reserva) => void, onDataChange: () => void, nextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, selectedArena: Arena | null, onOpenAttendanceModal: () => void, creditHistory: CreditTransaction[] }> = ({ alunoProfile, planos, levels, rewards, onOpenProfileModal, nextReservation, pendingReservations, onDetail, onDataChange, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, selectedArena, onOpenAttendanceModal, creditHistory }) => { 
   const [favoriteQuadras, setFavoriteQuadras] = useState<string[]>([]);
   const [timeUntilNext, setTimeUntilNext] = useState<string | null>(null);
+
+  const expiringCredits = useMemo(() => {
+    if (!alunoProfile || !selectedArena?.credit_expiration_days || !creditHistory) {
+        return [];
+    }
+    const now = new Date();
+    const expirationDays = selectedArena.credit_expiration_days;
+
+    return creditHistory
+        .filter(tx => tx.amount > 0) // Only positive credits can expire
+        .map(tx => {
+            const creationDate = new Date(tx.created_at!);
+            const expirationDate = addDays(creationDate, expirationDays);
+            const daysUntilExpiry = differenceInHours(expirationDate, now) / 24;
+            return { ...tx, expirationDate, daysUntilExpiry };
+        })
+        .filter(tx => isAfter(tx.expirationDate, now) && tx.daysUntilExpiry <= 7) // Expiring within 7 days
+        .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
+  }, [alunoProfile, selectedArena, creditHistory]);
 
   const currentLevel = useMemo(() => {
     if (!alunoProfile || !levels || levels.length === 0) return null;
@@ -876,7 +954,7 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
           }
         />
       ))}
-      {timeUntilNext && nextReservation && (
+      {timeUntilNext && nextReservation && nextReservation.status !== 'cancelada' && (
         <Alert
           type="info"
           title="Lembrete de Reserva"
@@ -889,6 +967,25 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
         />
       )}
       
+      {expiringCredits.length > 0 && (
+        <Alert
+            type="warning"
+            title="Créditos a Expirar"
+            message={
+                <div>
+                    <p>Você tem créditos que expirarão em breve. Use-os antes que seja tarde!</p>
+                    <ul className="list-disc list-inside mt-2 text-sm">
+                        {expiringCredits.map(tx => (
+                            <li key={tx.id}>
+                                <strong>{formatCurrency(tx.amount)}</strong> expira em {Math.ceil(tx.daysUntilExpiry)} dia(s) ({format(tx.expirationDate, 'dd/MM/yyyy')}).
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            }
+        />
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">
           {nextClass ? (

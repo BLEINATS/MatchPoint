@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, User, Star } from 'lucide-react';
-import { ProfissionalAluguel, Reserva } from '../../types';
+import { AtletaAluguel, Reserva } from '../../types';
 import Button from '../Forms/Button';
-import { localApi } from '../../lib/localApi';
 import { formatCurrency } from '../../utils/formatters';
 
 interface HirePlayerModalProps {
@@ -11,33 +10,19 @@ interface HirePlayerModalProps {
   onClose: () => void;
   onConfirm: (profissionalId: string) => void;
   reserva: Reserva;
+  profissionais: AtletaAluguel[];
 }
 
-const HirePlayerModal: React.FC<HirePlayerModalProps> = ({ isOpen, onClose, onConfirm, reserva }) => {
-  const [profissionais, setProfissionais] = useState<ProfissionalAluguel[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+const HirePlayerModal: React.FC<HirePlayerModalProps> = ({ isOpen, onClose, onConfirm, reserva, profissionais }) => {
   const [selectedProfissionalId, setSelectedProfissionalId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      const fetchProfissionais = async () => {
-        setIsLoading(true);
-        try {
-          const { data } = await localApi.select<ProfissionalAluguel>('profissionais_aluguel', reserva.arena_id);
-          const availableProfissionais = data.filter(p => 
-            p.status === 'disponivel' && 
-            p.esportes.some(e => e.sport === reserva.sport_type)
-          );
-          setProfissionais(availableProfissionais);
-        } catch (error) {
-          console.error("Failed to fetch professionals", error);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      fetchProfissionais();
-    }
-  }, [isOpen, reserva.arena_id, reserva.sport_type]);
+  const availableProfissionais = useMemo(() => {
+    if (!profissionais) return [];
+    return profissionais.filter(p => 
+      p.status === 'disponivel' && 
+      p.esportes.some(e => e.sport === reserva.sport_type)
+    );
+  }, [profissionais, reserva.sport_type]);
 
   const handleConfirm = () => {
     if (selectedProfissionalId) {
@@ -61,11 +46,9 @@ const HirePlayerModal: React.FC<HirePlayerModalProps> = ({ isOpen, onClose, onCo
               <Button variant="ghost" size="sm" onClick={onClose}><X className="h-5 w-5" /></Button>
             </div>
             <div className="p-6 space-y-4 overflow-y-auto">
-              {isLoading ? (
-                <div className="flex justify-center items-center h-40"><Loader2 className="w-6 h-6 animate-spin text-brand-blue-500" /></div>
-              ) : profissionais.length > 0 ? (
+              {availableProfissionais.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {profissionais.map(prof => (
+                  {availableProfissionais.map(prof => (
                     <button 
                       key={prof.id} 
                       onClick={() => setSelectedProfissionalId(prof.id)}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Arena } from '../../types';
-import { FileText, Info } from 'lucide-react';
+import { FileText, Info, Clock } from 'lucide-react';
+import Input from '../Forms/Input';
 
 interface OperationTabProps {
   formData: Partial<Arena>;
@@ -8,12 +9,26 @@ interface OperationTabProps {
 }
 
 const OperationTab: React.FC<OperationTabProps> = ({ formData, setFormData }) => {
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+  const handleDeadlineChange = (
+    field: 'class_cancellation_deadline' | 'class_booking_deadline',
+    part: 'value' | 'unit',
+    value: string
+  ) => {
+    const valueKey = `${field}_value` as keyof Arena;
+    const unitKey = `${field}_unit` as keyof Arena;
+
+    if (part === 'value') {
+      setFormData(prev => ({ ...prev, [valueKey]: value === '' ? null : parseInt(value, 10) }));
+    } else {
+      setFormData(prev => ({ ...prev, [unitKey]: value as 'hours' | 'minutes' }));
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Políticas padrão como modelo
   const defaultCancellationPolicy = `POLÍTICA DE CANCELAMENTO
 
 • Cancelamento com 24h ou mais de antecedência: reembolso de 100%
@@ -24,32 +39,8 @@ const OperationTab: React.FC<OperationTabProps> = ({ formData, setFormData }) =>
 
 Para cancelar, entre em contato pelo WhatsApp ou telefone informando o número da reserva.`;
 
-  const defaultTermsOfUse = `TERMOS DE USO DA ARENA
-
-EQUIPAMENTOS E VESTUÁRIO:
-• Obrigatório uso de calçado esportivo adequado (chuteira society, tênis)
-• Proibido uso de chuteira com travas de metal
-• Recomendado uso de roupas esportivas
-
-REGRAS GERAIS:
-• Proibido fumar nas dependências da arena
-• Proibido consumo de bebidas alcoólicas
-• Não é permitido levar animais de estimação
-• Música deve estar em volume moderado
-
-RESPONSABILIDADES:
-• A arena não se responsabiliza por objetos perdidos ou furtados
-• Praticantes jogam por sua conta e risco
-• Danos ao patrimônio serão cobrados do responsável pela reserva
-• Tolerância de 15 minutos para chegada
-
-COMPORTAMENTO:
-• Respeite outros usuários e a vizinhança
-• Mantenha a quadra limpa
-• Comunique imediatamente qualquer problema ou acidente`;
-
-  const fillDefaultPolicy = (field: 'cancellation_policy' | 'terms_of_use') => {
-    const defaultValue = field === 'cancellation_policy' ? defaultCancellationPolicy : defaultTermsOfUse;
+  const fillDefaultPolicy = (field: 'cancellation_policy') => {
+    const defaultValue = defaultCancellationPolicy;
     setFormData(prev => ({ ...prev, [field]: defaultValue }));
   };
 
@@ -58,7 +49,7 @@ COMPORTAMENTO:
       <Section title="Políticas da Arena" icon={FileText}>
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300">Política de Cancelamento</label>
+            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300">Política de Cancelamento de Reservas</label>
             <button
               type="button"
               onClick={() => fillDefaultPolicy('cancellation_policy')}
@@ -76,26 +67,63 @@ COMPORTAMENTO:
             placeholder="Ex: Cancelamentos com até 24h de antecedência têm reembolso de 100%. Após esse período, não há reembolso."
           />
         </div>
-        
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300">Termos de Uso</label>
-            <button
-              type="button"
-              onClick={() => fillDefaultPolicy('terms_of_use')}
-              className="text-xs text-brand-blue-600 dark:text-brand-blue-400 hover:text-brand-blue-800 dark:hover:text-brand-blue-300 font-medium"
-            >
-              Usar modelo padrão
-            </button>
+      </Section>
+      <Section title="Gestão de Aulas" icon={Clock}>
+        <div className="space-y-6">
+          <div>
+            <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">
+              Defina o prazo limite para que um aluno possa <strong>agendar</strong> uma aula. Após este prazo, o agendamento não será mais permitido.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+              <Input
+                label="Prazo para Agendamento"
+                name="class_booking_deadline_value"
+                type="number"
+                min="0"
+                value={formData.class_booking_deadline_value || ''}
+                onChange={(e) => handleDeadlineChange('class_booking_deadline', 'value', e.target.value)}
+                placeholder="Ex: 2"
+              />
+              <div className="flex items-end">
+                <select
+                  name="class_booking_deadline_unit"
+                  value={formData.class_booking_deadline_unit || 'hours'}
+                  onChange={(e) => handleDeadlineChange('class_booking_deadline', 'unit', e.target.value)}
+                  className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500"
+                >
+                  <option value="hours">Horas antes</option>
+                  <option value="minutes">Minutos antes</option>
+                </select>
+              </div>
+            </div>
           </div>
-          <textarea
-            rows={10}
-            name="terms_of_use"
-            value={formData.terms_of_use || ''}
-            onChange={handleChange}
-            className="w-full form-textarea rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500"
-            placeholder="Ex: É obrigatório o uso de calçado apropriado. Proibido fumar nas dependências da quadra."
-          />
+          <div className="pt-6 border-t border-brand-gray-200 dark:border-brand-gray-700">
+            <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">
+              Defina o prazo limite para que um aluno possa <strong>cancelar</strong> uma aula agendada. Após este prazo, a aula será considerada como realizada.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+              <Input
+                label="Prazo para Cancelamento"
+                name="class_cancellation_deadline_value"
+                type="number"
+                min="0"
+                value={formData.class_cancellation_deadline_value || ''}
+                onChange={(e) => handleDeadlineChange('class_cancellation_deadline', 'value', e.target.value)}
+                placeholder="Ex: 12"
+              />
+              <div className="flex items-end">
+                <select
+                  name="class_cancellation_deadline_unit"
+                  value={formData.class_cancellation_deadline_unit || 'hours'}
+                  onChange={(e) => handleDeadlineChange('class_cancellation_deadline', 'unit', e.target.value)}
+                  className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500"
+                >
+                  <option value="hours">Horas antes</option>
+                  <option value="minutes">Minutos antes</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
       </Section>
     </div>

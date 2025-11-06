@@ -19,23 +19,20 @@ const Layout: React.FC<LayoutProps> = ({ children, showHeader = true }) => {
 
   const isAdminOrStaff = profile?.role === 'admin_arena' || profile?.role === 'funcionario';
   
-  // The banner is only for active or past_due states, not for expired.
   const showBanner = isAdminOrStaff && selectedArenaContext && profile && !isExpired;
-  
-  // The lock overlay is for expired plans, but it should NOT show on the settings page.
   const showLockOverlay = isAdminOrStaff && isExpired && location.pathname !== '/settings';
-
-  // Show chat for admin and staff
   const showHelpChat = isAdminOrStaff;
 
   return (
-    <div className="min-h-screen bg-brand-gray-50 dark:bg-brand-gray-900">
+    <div className="min-h-screen bg-brand-gray-50 dark:bg-brand-gray-950 flex flex-col">
       {showHeader && <Header />}
-      {showLockOverlay && <SubscriptionLockOverlay />}
-      <main className={`relative z-0 ${showHeader ? "pt-16" : ""}`}>
+      
+      <main className={`relative z-0 flex-1 flex flex-col overflow-hidden ${showHeader ? "pt-16" : ""}`}>
+        {showLockOverlay && <SubscriptionLockOverlay />}
         {showBanner && <PlanStatusBanner arena={selectedArenaContext!} profile={profile!} />}
         {children}
       </main>
+      
       {showHelpChat && <HelpChatWidget />}
     </div>
   );

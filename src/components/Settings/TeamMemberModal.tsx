@@ -5,7 +5,7 @@ import { Profile, PermissionLevel, ProfilePermissions } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { v4 as uuidv4 } from 'uuid';
-import { PERMISSIONS_CONFIG } from './TeamSettingsTab';
+import { PERMISSIONS_CONFIG } from '../../config/permissions';
 
 type PermissionKey = keyof ProfilePermissions;
 

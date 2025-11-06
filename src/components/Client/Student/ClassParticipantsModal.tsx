@@ -2,12 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Aluno } from '../../../types';
 import { X, Calendar, Clock, GraduationCap, MapPin, Users, AlertCircle, RefreshCw } from 'lucide-react';
-import { format, isSameDay } from 'date-fns';
+import { format, isSameDay, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Button from '../../Forms/Button';
 import ConfirmationModal from '../../Shared/ConfirmationModal';
 import { useToast } from '../../../context/ToastContext';
 import { localApi } from '../../../lib/localApi';
+import { useAuth } from '../../../context/AuthContext';
+import { parseDateStringAsLocal } from '../../../utils/dateUtils';
 
 interface ClassParticipantsModalProps {
   isOpen: boolean;
@@ -22,6 +24,7 @@ interface ClassParticipantsModalProps {
 
 const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen, onClose, classData, aluno, allAlunos, onDataChange, scheduledClasses, isUnlimited }) => {
   const { addToast } = useToast();
+  const { selectedArenaContext: arena } = useAuth();
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showBookConfirm, setShowBookConfirm] = useState(false);
   const [showSwapConfirm, setShowSwapConfirm] = useState(false);
@@ -35,6 +38,22 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
       )
     );
   }, [allAlunos, turma, date, time]);
+
+  const cancellationPolicyHours = useMemo(() => {
+    return arena?.class_cancellation_hours ?? 2; // Default to 2 hours if not set
+  }, [arena]);
+
+  const canCancel = useMemo(() => {
+    try {
+        const classDateTime = parseDateStringAsLocal(`${format(date, 'yyyy-MM-dd')}T${time}`);
+        if (isNaN(classDateTime.getTime())) return false;
+        
+        const hoursUntilClass = differenceInHours(classDateTime, new Date());
+        return hoursUntilClass > cancellationPolicyHours;
+    } catch {
+        return false;
+    }
+  }, [date, time, cancellationPolicyHours]);
 
   const bookedClassOnDay = useMemo(() => {
     return scheduledClasses.find(c => isSameDay(c.date, date));
@@ -108,7 +127,24 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
 
   const getActionButton = () => {
     if (isEnrolled) {
-      return <Button variant="outline" className="w-full" onClick={() => setShowCancelConfirm(true)}>Cancelar Agendamento</Button>;
+      return (
+        <div className="w-full">
+          <Button 
+            variant="outline" 
+            className="w-full" 
+            onClick={() => setShowCancelConfirm(true)}
+            disabled={!canCancel}
+            title={!canCancel ? `O cancelamento só é permitido até ${cancellationPolicyHours} horas antes da aula.` : ''}
+          >
+            Cancelar Agendamento
+          </Button>
+          {!canCancel && (
+            <div className="mt-2 text-xs text-center text-yellow-600 dark:text-yellow-400 p-2 bg-yellow-50 dark:bg-yellow-900/50 rounded-md">
+              O prazo para cancelamento expirou. A aula será considerada como realizada.
+            </div>
+          )}
+        </div>
+      );
     }
     if (canSwap) {
       return <Button className="w-full" onClick={() => setShowSwapConfirm(true)}><RefreshCw className="h-4 w-4 mr-2" />Trocar Horário</Button>;
