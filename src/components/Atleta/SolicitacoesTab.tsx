@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Reserva, Quadra, Aluno } from '../../types';
+import { Reserva, Quadra, Aluno, Arena } from '../../types';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -12,6 +12,7 @@ interface SolicitacoesTabProps {
   quadras: Quadra[];
   clientes: Aluno[];
   onUpdateRequest: (reserva: Reserva, newStatus: 'aceito' | 'recusado') => void;
+  arenaSettings: Partial<Arena>;
 }
 
 const ReservaCard: React.FC<{ reserva: Reserva, quadra?: Quadra, cliente?: Aluno, onUpdateRequest?: (reserva: Reserva, newStatus: 'aceito' | 'recusado') => void }> = ({ reserva, quadra, cliente, onUpdateRequest }) => {
@@ -60,7 +61,7 @@ const Column: React.FC<{ title: string, icon: React.ElementType, reservas: Reser
   );
 };
 
-const SolicitacoesTab: React.FC<SolicitacoesTabProps> = ({ reservas, quadras, clientes, onUpdateRequest }) => {
+const SolicitacoesTab: React.FC<SolicitacoesTabProps> = ({ reservas, quadras, clientes, onUpdateRequest, arenaSettings }) => {
 
   const categorizedReservas = useMemo(() => {
     const pending = reservas.filter(r => r.atleta_aceite_status === 'pendente');

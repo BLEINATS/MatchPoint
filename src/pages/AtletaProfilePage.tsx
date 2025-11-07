@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { AtletaAluguel, Reserva, Aluno, Quadra } from '../types';
+import { AtletaAluguel, Reserva, Aluno, Quadra, Arena } from '../types';
 import { Loader2, Calendar, List, DollarSign, Star, User, ArrowLeft, Mail, Phone, Briefcase, Percent } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { localApi } from '../lib/localApi';
@@ -27,6 +27,7 @@ const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfi
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [quadras, setQuadras] = useState<Quadra[]>([]);
   const [clientes, setClientes] = useState<Aluno[]>([]);
+  const [arenaSettings, setArenaSettings] = useState<Partial<Arena>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('solicitacoes');
 
@@ -34,16 +35,18 @@ const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfi
     if (!selectedArenaContext || !atletaProfile.id) return;
     setIsLoading(true);
     try {
-      const [reservasRes, quadrasRes, clientesRes] = await Promise.all([
+      const [reservasRes, quadrasRes, clientesRes, arenaRes] = await Promise.all([
         localApi.select<Reserva>('reservas', selectedArenaContext.id),
         localApi.select<Quadra>('quadras', selectedArenaContext.id),
         localApi.select<Aluno>('alunos', selectedArenaContext.id),
+        localApi.select<Arena>('arenas', 'all'),
       ]);
 
       const atletaReservas = (reservasRes.data || []).filter(r => r.atleta_aluguel_id === atletaProfile.id);
       setReservas(atletaReservas);
       setQuadras(quadrasRes.data || []);
       setClientes(clientesRes.data || []);
+      setArenaSettings(arenaRes.data?.find(a => a.id === selectedArenaContext.id) || {});
     } catch (error: any) {
       addToast({ message: `Erro ao carregar dados: ${error.message}`, type: 'error' });
     } finally {
@@ -58,12 +61,17 @@ const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfi
   const handleUpdateRequest = async (reserva: Reserva, newStatus: 'aceito' | 'recusado') => {
     if (!atletaProfile || !selectedArenaContext) return;
     try {
+      const paymentWindow = arenaSettings.athlete_payment_window_minutes || 30;
+      const deadline = new Date();
+      deadline.setMinutes(deadline.getMinutes() + paymentWindow);
+
       const updatedReserva: Reserva = {
         ...reserva,
         atleta_aceite_status: newStatus,
-        status: newStatus === 'aceito' ? 'confirmada' : 'confirmada', // Status da reserva principal não muda
+        status: 'confirmada', // Status da reserva principal não muda
         atleta_aluguel_id: newStatus === 'recusado' ? null : reserva.atleta_aluguel_id,
         atleta_cost: newStatus === 'recusado' ? undefined : reserva.atleta_cost,
+        athlete_payment_deadline: newStatus === 'aceito' ? deadline.toISOString() : null,
       };
 
       await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
@@ -116,7 +124,7 @@ const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfi
     
     switch (activeTab) {
       case 'solicitacoes':
-        return <SolicitacoesTab reservas={reservas} quadras={quadras} clientes={clientes} onUpdateRequest={handleUpdateRequest} />;
+        return <SolicitacoesTab reservas={reservas} quadras={quadras} clientes={clientes} onUpdateRequest={handleUpdateRequest} arenaSettings={arenaSettings} />;
       case 'agenda':
         return <AtletaAgendaTab reservas={reservas} quadras={quadras} />;
       case 'financeiro':

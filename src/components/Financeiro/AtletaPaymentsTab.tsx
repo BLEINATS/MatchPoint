@@ -25,7 +25,9 @@ interface PaymentItem {
   pixKey?: string | null;
   clientName: string;
   date: string;
-  amount: number;
+  grossAmount: number;
+  commissionPercentage: number;
+  netAmount: number;
   status: 'pendente_repasse' | 'pago';
   paidAt?: string | null;
 }
@@ -44,6 +46,10 @@ const AtletaPaymentsTab: React.FC<AtletaPaymentsTabProps> = ({ reservas, profiss
         if (isGameCompleted && (reserva.atleta_payment_status === 'pendente_repasse' || reserva.atleta_payment_status === 'pago')) {
           const profissional = profissionais.find(p => p.id === reserva.atleta_aluguel_id);
           if (profissional) {
+            const grossAmount = reserva.atleta_cost;
+            const commissionPercentage = (profissional as AtletaAluguel).comissao_arena || 0;
+            const netAmount = grossAmount * (1 - commissionPercentage / 100);
+
             payments.push({
               reservaId: reserva.id,
               profissionalId: profissional.id,
@@ -52,7 +58,9 @@ const AtletaPaymentsTab: React.FC<AtletaPaymentsTabProps> = ({ reservas, profiss
               pixKey: profissional.pix_key,
               clientName: reserva.clientName,
               date: reserva.date,
-              amount: reserva.atleta_cost,
+              grossAmount,
+              commissionPercentage,
+              netAmount,
               status: reserva.atleta_payment_status,
               paidAt: reserva.atleta_paid_at,
             });
@@ -87,7 +95,7 @@ const AtletaPaymentsTab: React.FC<AtletaPaymentsTabProps> = ({ reservas, profiss
       const expenseTransaction: Omit<FinanceTransaction, 'id' | 'created_at'> = {
         arena_id: arena.id,
         description: `Pagamento para ${paymentToConfirm.profissionalName} (Jogo com ${paymentToConfirm.clientName})`,
-        amount: paymentToConfirm.amount,
+        amount: paymentToConfirm.netAmount,
         type: 'despesa',
         category: 'Pagamento de Profissionais',
         date: new Date().toISOString().split('T')[0],
@@ -100,7 +108,7 @@ const AtletaPaymentsTab: React.FC<AtletaPaymentsTabProps> = ({ reservas, profiss
         const notification: Omit<Notificacao, 'id' | 'created_at'> = {
           arena_id: arena.id,
           profile_id: profissional.profile_id,
-          message: `A arena realizou o repasse de ${formatCurrency(paymentToConfirm.amount)} referente ao jogo com ${paymentToConfirm.clientName}.`,
+          message: `A arena realizou o repasse de ${formatCurrency(paymentToConfirm.netAmount)} referente ao jogo com ${paymentToConfirm.clientName}.`,
           type: 'payment_received',
           read: false,
           sender_id: profile.id,
@@ -135,7 +143,7 @@ const AtletaPaymentsTab: React.FC<AtletaPaymentsTabProps> = ({ reservas, profiss
           paymentToConfirm && (
             <p>
               Você confirma que realizou o pagamento de{' '}
-              <strong>{formatCurrency(paymentToConfirm.amount)}</strong> para{' '}
+              <strong>{formatCurrency(paymentToConfirm.netAmount)}</strong> para{' '}
               <strong>{paymentToConfirm.profissionalName}</strong>?
             </p>
           )
@@ -150,36 +158,55 @@ const PaymentList: React.FC<{ title: string, payments: PaymentItem[], onMarkAsPa
   <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
     <h3 className="text-xl font-semibold mb-4">{title}</h3>
     {payments.length > 0 ? (
-      <div className="space-y-3">
+      <div className="space-y-4">
         {payments.map(payment => (
-          <div key={payment.reservaId} className="p-4 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <img src={payment.profissionalAvatar || `https://avatar.vercel.sh/${payment.profissionalId}.svg`} alt={payment.profissionalName} className="w-12 h-12 rounded-full object-cover"/>
-              <div>
-                <p className="font-bold text-brand-gray-900 dark:text-white">{payment.profissionalName}</p>
-                <div className="text-sm text-brand-gray-500 dark:text-brand-gray-400 flex items-center gap-4">
-                  <span className="flex items-center"><User className="h-3 w-3 mr-1.5"/>{payment.clientName}</span>
-                  <span className="flex items-center"><Calendar className="h-3 w-3 mr-1.5"/>{format(parseDateStringAsLocal(payment.date), 'dd/MM/yy')}</span>
-                </div>
-                {payment.pixKey && !isHistory && (
-                  <div className="text-sm text-brand-blue-500 dark:text-brand-blue-400 flex items-center mt-1">
-                    <Banknote className="h-3 w-3 mr-1.5"/>
-                    <span className="font-mono">{payment.pixKey}</span>
+          <div key={payment.reservaId} className="p-4 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <img src={payment.profissionalAvatar || `https://avatar.vercel.sh/${payment.profissionalId}.svg`} alt={payment.profissionalName} className="w-12 h-12 rounded-full object-cover flex-shrink-0"/>
+                <div className="min-w-0">
+                  <p className="font-bold text-brand-gray-900 dark:text-white truncate">{payment.profissionalName}</p>
+                  <div className="text-sm text-brand-gray-500 dark:text-brand-gray-400 flex items-center gap-4">
+                    <span className="flex items-center"><User className="h-3 w-3 mr-1.5"/>{payment.clientName}</span>
+                    <span className="flex items-center"><Calendar className="h-3 w-3 mr-1.5"/>{format(parseDateStringAsLocal(payment.date), 'dd/MM/yy')}</span>
                   </div>
+                </div>
+              </div>
+              <div className="flex-shrink-0">
+                {isHistory ? (
+                   <div className="text-right">
+                      <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(payment.netAmount)}</p>
+                      {payment.paidAt && <p className="text-xs text-brand-gray-500">Pago em {format(new Date(payment.paidAt), 'dd/MM/yy')}</p>}
+                   </div>
+                ) : (
+                  onMarkAsPaid && (
+                    <Button size="sm" onClick={() => onMarkAsPaid(payment)} className="w-full sm:w-auto">
+                      <CheckCircle className="h-4 w-4 mr-2"/> Marcar como Pago
+                    </Button>
+                  )
                 )}
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="text-left sm:text-right">
-                <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(payment.amount)}</p>
-                {isHistory && payment.paidAt && (
-                  <p className="text-xs text-brand-gray-500">Pago em {format(new Date(payment.paidAt), 'dd/MM/yy')}</p>
-                )}
+            <div className="mt-3 pt-3 border-t border-brand-gray-200 dark:border-brand-gray-600 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between sm:justify-start sm:gap-4">
+                  <span className="text-brand-gray-500">Valor Bruto:</span>
+                  <span className="font-medium">{formatCurrency(payment.grossAmount)}</span>
+                </div>
+                <div className="flex justify-between sm:justify-start sm:gap-4">
+                  <span className="text-brand-gray-500">Comissão da Arena ({payment.commissionPercentage}%):</span>
+                  <span className="font-medium text-red-500">- {formatCurrency(payment.grossAmount - payment.netAmount)}</span>
+                </div>
+                <div className="flex justify-between sm:justify-start sm:gap-4 font-bold">
+                  <span className="text-brand-gray-600 dark:text-brand-gray-300">Líquido a Pagar:</span>
+                  <span className="text-green-600 dark:text-green-400">{formatCurrency(payment.netAmount)}</span>
+                </div>
               </div>
-              {!isHistory && onMarkAsPaid && (
-                <Button size="sm" onClick={() => onMarkAsPaid(payment)} className="w-full sm:w-auto">
-                  <CheckCircle className="h-4 w-4 mr-2"/> Marcar como Pago
-                </Button>
+              {payment.pixKey && !isHistory && (
+                <div className="text-sm text-brand-blue-500 dark:text-brand-blue-400 flex items-center mt-1 bg-blue-50 dark:bg-blue-900/50 px-3 py-1.5 rounded-md flex-shrink-0">
+                  <Banknote className="h-4 w-4 mr-2"/>
+                  <span className="font-mono">{payment.pixKey}</span>
+                </div>
               )}
             </div>
           </div>

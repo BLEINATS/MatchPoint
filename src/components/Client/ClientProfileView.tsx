@@ -19,7 +19,7 @@ interface ClientProfileViewProps {
   unlockedAchievements: AlunoAchievement[];
   gamificationEnabled: boolean;
   atletas: AtletaAluguel[];
-  onHireAtleta: (atleta: AtletaAluguel) => void;
+  onViewProfile: (atleta: AtletaAluguel) => void;
   onProfileUpdate: (updatedProfile: Partial<Profile>) => void;
   completedReservationsCount: number;
 }
@@ -35,7 +35,7 @@ const ClientProfileView: React.FC<ClientProfileViewProps> = ({
   unlockedAchievements,
   gamificationEnabled,
   atletas,
-  onHireAtleta,
+  onViewProfile,
   onProfileUpdate,
   completedReservationsCount
 }) => {
@@ -68,7 +68,7 @@ const ClientProfileView: React.FC<ClientProfileViewProps> = ({
       </div>
 
       <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-        <AtletasTab atletas={atletas} onHire={onHireAtleta} />
+        <AtletasTab atletas={atletas} onViewProfile={onViewProfile} />
       </div>
     </div>
   );

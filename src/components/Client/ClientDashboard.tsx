@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, PlanoAula, Friendship, GamificationPointTransaction, FinanceTransaction } from '../../types';
-import { Calendar, Compass, Search, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star, User, Users, Banknote, FileText, MessageSquare, Briefcase, Repeat, XCircle, LifeBuoy, Lock, Unlock, Bell, Trash2, Edit } from 'lucide-react';
+import { Calendar, Compass, Search, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star, User, Users, Banknote, FileText, MessageSquare, Briefcase, Repeat, XCircle, LifeBuoy, Lock, Unlock, Bell, Trash2, Edit, Hourglass } from 'lucide-react';
 import { isAfter, startOfDay, isSameDay, format, parse, getDay, addDays, isBefore, endOfDay, addMinutes, subDays, isWithinInterval, formatDistanceToNow, isPast, differenceInHours, differenceInWeeks, endOfWeek, startOfWeek, addWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
@@ -112,7 +112,7 @@ const ClientDashboard: React.FC = () => {
     const [atletaToPay, setAtletaToPay] = useState<AtletaAluguel | null>(null);
     const [reservaForAtletaPayment, setReservaForAtletaPayment] = useState<Reserva | null>(null);
 
-    const [viewingAtletaProfile, setViewingAtletaProfile] = useState<AtletaAluguel | null>(null);
+    const [viewingAtletaProfile, setViewingAtletaProfile] = useState<{ atleta: AtletaAluguel; completedGames: number } | null>(null);
 
     const isStudent = useMemo(() => !!alunoProfileForSelectedArena?.plan_id, [alunoProfileForSelectedArena]);
 
@@ -374,13 +374,13 @@ const ClientDashboard: React.FC = () => {
                         return null;
                     })
                     .filter((n): n is NonNullable<typeof n> => n !== null);
-                
+            
                 if (notifications.length > 0) {
                     await localApi.upsert('notificacoes', notifications, selectedArenaContext.id);
                     toastMessage = `Reserva criada e ${notifications.length} convite(s) enviado(s)!`;
                 }
             }
-            
+        
             setIsModalOpen(false);
             setModalSlot(null);
             await handleDataChange();
@@ -437,8 +437,8 @@ const ClientDashboard: React.FC = () => {
                 await localApi.upsert('notificacoes', [{
                     profile_id: ownerProfileId,
                     arena_id: selectedArenaContext.id,
-                    message: `${profile.name} ${status === 'accepted' ? 'aceitou' : 'recusou'} seu convite para o jogo.`,
-                    type: 'game_invite_response',
+                    message: `aceitou sua solicitação de amizade.`,
+                    type: 'friend_requests',
                     link_to: '/perfil',
                     sender_id: profile.id,
                     sender_name: profile.name,
@@ -761,6 +761,35 @@ const ClientDashboard: React.FC = () => {
         }
     };
 
+    const handleAthletePaymentExpire = async (reserva: Reserva) => {
+        if (!selectedArenaContext) return;
+        const atleta = atletas.find(a => a.id === reserva.atleta_aluguel_id);
+        const updatedReserva = {
+          ...reserva,
+          atleta_aluguel_id: null,
+          atleta_cost: 0,
+          atleta_aceite_status: null,
+          atleta_payment_status: null,
+          athlete_payment_deadline: null,
+          notes: (reserva.notes || '') + ` [Contratação de ${atleta?.name || 'atleta'} cancelada por falta de pagamento]`
+        };
+        await handleUpdateReservation(updatedReserva);
+        if (atleta && atleta.profile_id && profile) {
+          await localApi.upsert('notificacoes', [{
+            arena_id: selectedArenaContext.id,
+            profile_id: atleta.profile_id,
+            message: `O prazo para pagamento do jogo com ${reserva.clientName} expirou e a contratação foi cancelada.`,
+            type: 'cancellation',
+            read: false,
+            sender_id: profile.id,
+            sender_name: profile.name,
+            sender_avatar_url: profile.avatar_url,
+          }], selectedArenaContext.id);
+        }
+        addToast({ message: 'Prazo de pagamento do atleta expirou. A contratação foi cancelada.', type: 'warning' });
+        setIsDetailModalOpen(false);
+    };
+
     const upcomingReservations = useMemo(() => {
         const now = new Date();
         return reservas
@@ -893,15 +922,40 @@ const ClientDashboard: React.FC = () => {
         );
     }
 
+    const completedGamesByAtleta = useMemo(() => {
+        const counts = new Map<string, number>();
+        allArenaReservations.forEach(r => {
+          if (
+            r.atleta_aluguel_id &&
+            r.atleta_aceite_status === 'aceito' &&
+            isPast(parseDateStringAsLocal(`${r.date}T${r.end_time}`))
+          ) {
+            counts.set(r.atleta_aluguel_id, (counts.get(r.atleta_aluguel_id) || 0) + 1);
+          }
+        });
+        return counts;
+    }, [allArenaReservations]);
+
+    const handleOpenAtletaProfile = (atleta: AtletaAluguel) => {
+        const completedGames = completedGamesByAtleta.get(atleta.id) || 0;
+        setViewingAtletaProfile({ atleta, completedGames });
+    };
+
+    const handleHireFromProfile = (atleta: AtletaAluguel) => {
+        setViewingAtletaProfile(null);
+        setAtletaToAssign(atleta);
+        setIsAssignModalOpen(true);
+    };
+
     const renderContent = () => {
         if (isLoading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>;
         switch (activeView) {
         case 'inicio': return <InicioView alunoProfile={alunoProfileForSelectedArena} planos={planos} levels={levels} rewards={rewards} onOpenProfileModal={handleOpenProfileModal} nextReservation={upcomingReservations[0]} pendingReservations={pendingPaymentReservations} onDetail={handleOpenDetailModal} onDataChange={handleDataChange} nextClass={nextClass} quadras={quadras} reservas={allArenaReservations} onSlotClick={handleSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} arenaName={selectedArenaContext?.name} selectedArena={selectedArenaContext} onOpenAttendanceModal={() => setIsAttendanceModalOpen(true)} creditHistory={creditHistory} />;
-        case 'reservas': return <ReservationsTab upcoming={upcomingReservations} past={pastReservations} quadras={quadras} atletas={atletas} arenaName={selectedArenaContext?.name} onCancel={handleOpenCancelModal} onDetail={handleOpenDetailModal} onHirePlayer={(res) => { setReservationToHireFor(res); setIsHirePlayerModalOpen(true); }} profileId={profile.id} onAvaliarAtleta={handleAvaliarAtleta} />;
+        case 'reservas': return <ReservationsTab upcoming={upcomingReservations} past={pastReservations} quadras={quadras} atletas={atletas} arenaName={selectedArenaContext?.name} onCancel={handleOpenCancelModal} onDetail={handleOpenDetailModal} onHirePlayer={(res) => { setReservationToHireFor(res); setIsHirePlayerModalOpen(true); }} profileId={profile.id} onAvaliarAtleta={handleAvaliarAtleta} arenaSettings={selectedArenaContext} />;
         case 'aulas': return <AulasTab aluno={alunoProfileForSelectedArena!} allAlunos={allArenaAlunos} turmas={studentTurmas} professores={professores} quadras={quadras} planos={planos} onDataChange={handleDataChange} />;
         case 'loja': return <LojaView />;
         case 'amigos': return <FriendsView />;
-        case 'perfil': return <ClientProfileView aluno={alunoProfileForSelectedArena} profile={profile} onProfileUpdate={handleProfileUpdate} creditHistory={creditHistory} gamificationHistory={gamificationHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} atletas={atletas} onHireAtleta={(atleta) => { setAtletaToAssign(atleta); setIsAssignModalOpen(true); }} completedReservationsCount={completedReservationsCount} />;
+        case 'perfil': return <ClientProfileView aluno={alunoProfileForSelectedArena} profile={profile} onProfileUpdate={handleProfileUpdate} creditHistory={creditHistory} gamificationHistory={gamificationHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} atletas={atletas} onViewProfile={handleOpenAtletaProfile} completedReservationsCount={completedReservationsCount} />;
         default: return null;
         }
     };
@@ -941,8 +995,8 @@ const ClientDashboard: React.FC = () => {
             
             <AnimatePresence>{isModalOpen && modalSlot && selectedArenaContext && (<ReservationModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveClientReservation} onCancelReservation={() => {}} newReservationSlot={{ quadraId: modalSlot.quadraId, time: modalSlot.time, type: 'avulsa' }} quadras={quadras} alunos={alunoProfileForSelectedArena ? [alunoProfileForSelectedArena] : []} allReservations={allArenaReservations} arenaId={selectedArenaContext.id} selectedDate={selectedDate} isClientBooking={true} userProfile={profile} clientProfile={alunoProfileForSelectedArena} profissionais={atletas} friends={friends} />)}</AnimatePresence>
             <AnimatePresence>{isCancelModalOpen && reservationToCancel && selectedArenaContext && (<ClientCancellationModal isOpen={isCancelModalOpen} onClose={() => setIsCancelModalOpen(false)} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} policyText={selectedArenaContext.cancellation_policy} creditExpirationDays={selectedArenaContext.credit_expiration_days} />)}</AnimatePresence>
-            <AnimatePresence>{isDetailModalOpen && reservationToDetail && selectedArenaContext && (<ReservationDetailModal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} reserva={reservationToDetail} quadra={quadras.find(q => q.id === reservationToDetail.quadra_id) || null} atleta={atletas.find(a => a.id === reservationToDetail.atleta_aluguel_id) || null} arenaName={selectedArenaContext.name} onCancel={handleOpenCancelModal} onUpdateParticipantStatus={handleUpdateParticipantStatus} onUpdateReservation={handleUpdateReservation} friends={friends} onPay={handleOpenPaymentModal} onAvaliarAtleta={handleAvaliarAtleta} onContactAtleta={handleContactAtleta} onTrocarAtleta={handleTrocarAtleta} onCancelarAtleta={handleCancelarAtleta} onPayAtleta={handlePayAtleta} />)}</AnimatePresence>
-            <AnimatePresence>{isHirePlayerModalOpen && reservationToHireFor && (<HirePlayerModal isOpen={isHirePlayerModalOpen} onClose={() => setIsHirePlayerModalOpen(false)} onConfirm={(profId) => handleHireProfessional(reservationToHireFor.id, profId)} reserva={reservationToHireFor} profissionais={atletas} onViewProfile={setViewingAtletaProfile} />)}</AnimatePresence>
+            <AnimatePresence>{isDetailModalOpen && reservationToDetail && selectedArenaContext && (<ReservationDetailModal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} reserva={reservationToDetail} quadra={quadras.find(q => q.id === reservationToDetail.quadra_id) || null} atleta={atletas.find(a => a.id === reservationToDetail.atleta_aluguel_id) || null} arenaName={selectedArenaContext.name} onCancel={handleOpenCancelModal} onUpdateParticipantStatus={handleUpdateParticipantStatus} onUpdateReservation={handleUpdateReservation} friends={friends} onPay={handleOpenPaymentModal} onAvaliarAtleta={handleAvaliarAtleta} onContactAtleta={handleContactAtleta} onTrocarAtleta={handleTrocarAtleta} onCancelarAtleta={handleCancelarAtleta} onPayAtleta={handlePayAtleta} onAthletePaymentExpire={handleAthletePaymentExpire} />)}</AnimatePresence>
+            <AnimatePresence>{isHirePlayerModalOpen && reservationToHireFor && (<HirePlayerModal isOpen={isHirePlayerModalOpen} onClose={() => setIsHirePlayerModalOpen(false)} onConfirm={(profId) => handleHireProfessional(reservationToHireFor.id, profId)} reserva={reservationToHireFor} profissionais={atletas} onViewProfile={handleOpenAtletaProfile} />)}</AnimatePresence>
             <AnimatePresence>{isAssignModalOpen && atletaToAssign && (<AssignToReservationModal isOpen={isAssignModalOpen} onClose={() => setIsAssignModalOpen(false)} onConfirm={(reservaId) => handleHireProfessional(reservaId, atletaToAssign.id)} profissional={atletaToAssign} minhasReservas={upcomingReservations} quadras={quadras} />)}</AnimatePresence>
             <AnimatePresence>{isPaymentModalOpen && (<PaymentModal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} onConfirm={handleConfirmPayment} reservation={paymentInfo?.reservation || null} amountToPay={paymentInfo?.amount || 0} isProcessing={isPaymentProcessing} />)}</AnimatePresence>
             <AnimatePresence>{isProfileModalOpen && (<ProfileDetailModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} initialTab={profileModalInitialTab} aluno={alunoProfileForSelectedArena} creditHistory={creditHistory} gamificationHistory={gamificationHistory} paymentHistory={paymentHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} />)}</AnimatePresence>
@@ -951,20 +1005,20 @@ const ClientDashboard: React.FC = () => {
             <AnimatePresence>{isMessageModalOpen && atletaToContact && (<SendMessageModal isOpen={isMessageModalOpen} onClose={() => setIsMessageModalOpen(false)} onConfirm={handleSendMessage} friend={atletaToContact} />)}</AnimatePresence>
             <AnimatePresence>{isCancelAtletaConfirmOpen && (<ConfirmationModal isOpen={isCancelAtletaConfirmOpen} onClose={() => setIsCancelAtletaConfirmOpen(false)} onConfirm={handleConfirmCancelAtleta} title="Cancelar Contratação?" message="Tem certeza que deseja cancelar a contratação deste atleta? Ele será notificado." confirmText="Sim, Cancelar" />)}</AnimatePresence>
             <AnimatePresence>{isPayAtletaModalOpen && atletaToPay && reservaForAtletaPayment && (<PayAtletaModal isOpen={isPayAtletaModalOpen} onClose={() => setIsPayAtletaModalOpen(false)} onConfirm={handleConfirmPayAtleta} atleta={atletaToPay} isProcessing={isPaymentProcessing} />)}</AnimatePresence>
-            <AtletaPublicProfileModal isOpen={!!viewingAtletaProfile} onClose={() => setViewingAtletaProfile(null)} atleta={viewingAtletaProfile} />
+            <AtletaPublicProfileModal isOpen={!!viewingAtletaProfile} onClose={() => setViewingAtletaProfile(null)} atleta={viewingAtletaProfile?.atleta || null} completedGames={viewingAtletaProfile?.completedGames} onHire={handleHireFromProfile} />
         </div>
     );
 };
 
-const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: Quadra[], atletas: AtletaAluguel[], arenaName?: string, onCancel: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string, onAvaliarAtleta: (reserva: Reserva) => void}> = ({upcoming, past, quadras, atletas, arenaName, onCancel, onDetail, onHirePlayer, profileId, onAvaliarAtleta}) => {
+const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: Quadra[], atletas: AtletaAluguel[], arenaName?: string, onCancel: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string, onAvaliarAtleta: (reserva: Reserva) => void, arenaSettings: Partial<Arena> | null}> = ({upcoming, past, quadras, atletas, arenaName, onCancel, onDetail, onHirePlayer, profileId, onAvaliarAtleta, arenaSettings}) => {
   const [showAllPast, setShowAllPast] = useState(false);
   const shouldPaginatePast = past.length > 5;
   const displayedPastReservations = shouldPaginatePast && !showAllPast ? past.slice(0, 5) : past;
 
   return (
     <div className="space-y-8">
-      <ReservationList title="Próximas Reservas" reservations={upcoming} quadras={quadras} atletas={atletas} arenaName={arenaName} onCancel={onCancel} onDetail={onDetail} onHirePlayer={onHirePlayer} profileId={profileId} onAvaliarAtleta={onAvaliarAtleta} />
-      <ReservationList title="Histórico de Reservas" reservations={displayedPastReservations} quadras={quadras} atletas={atletas} arenaName={arenaName} isPast onDetail={onDetail} profileId={profileId} onAvaliarAtleta={onAvaliarAtleta} />
+      <ReservationList title="Próximas Reservas" reservations={upcoming} quadras={quadras} atletas={atletas} arenaName={arenaName} onCancel={onCancel} onDetail={onDetail} onHirePlayer={onHirePlayer} profileId={profileId} onAvaliarAtleta={onAvaliarAtleta} arenaSettings={arenaSettings} />
+      <ReservationList title="Histórico de Reservas" reservations={displayedPastReservations} quadras={quadras} atletas={atletas} arenaName={arenaName} isPast onDetail={onDetail} profileId={profileId} onAvaliarAtleta={onAvaliarAtleta} arenaSettings={arenaSettings} />
       {shouldPaginatePast && !showAllPast && (
         <div className="text-center">
           <Button variant="outline" onClick={() => setShowAllPast(true)}>
@@ -976,7 +1030,7 @@ const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: 
   );
 };
 
-const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras: Quadra[], atletas: AtletaAluguel[], arenaName?: string, isPast?: boolean, onCancel?: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string, onAvaliarAtleta: (reserva: Reserva) => void}> = ({title, reservations, quadras, atletas, arenaName, isPast, onCancel, onDetail, onHirePlayer, profileId, onAvaliarAtleta}) => {
+const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras: Quadra[], atletas: AtletaAluguel[], arenaName?: string, isPast?: boolean, onCancel?: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string, onAvaliarAtleta: (reserva: Reserva) => void, arenaSettings: Partial<Arena> | null}> = ({title, reservations, quadras, atletas, arenaName, isPast, onCancel, onDetail, onHirePlayer, profileId, onAvaliarAtleta, arenaSettings}) => {
   return (
     <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
       <h3 className="text-xl font-semibold p-6">{title}</h3>
@@ -990,6 +1044,23 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
             const isClickable = true;
             const atleta = res.atleta_aluguel_id ? atletas.find(a => a.id === res.atleta_aluguel_id) : null;
             const podeAvaliar = isPast && atleta && res.atleta_aceite_status === 'aceito' && !atleta.ratings?.some(r => r.reservationId === res.id && r.clientId === profileId);
+            
+            const canHire = !isPast && onHirePlayer && isOrganizer && !res.atleta_aluguel_id && res.type === 'avulsa';
+            let hireDisabled = false;
+            let hireDisabledMessage = '';
+
+            if (canHire && arenaSettings?.athlete_booking_deadline_hours) {
+              try {
+                const reservationStart = parseDateStringAsLocal(`${res.date}T${res.start_time}`);
+                const hoursUntilGame = differenceInHours(reservationStart, new Date());
+                if (hoursUntilGame < arenaSettings.athlete_booking_deadline_hours) {
+                  hireDisabled = true;
+                  hireDisabledMessage = `O prazo para contratar um atleta (${arenaSettings.athlete_booking_deadline_hours}h antes do jogo) já expirou.`;
+                }
+              } catch (e) {
+                console.error("Error calculating hiring deadline", e);
+              }
+            }
 
             return (
               <li key={res.id} onClick={() => isClickable && onDetail(res)} className={`p-4 sm:p-6 transition-colors ${isClickable ? 'hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer' : 'cursor-default opacity-70'}`}>
@@ -1003,8 +1074,24 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
                     <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">
                       {format(parseDateStringAsLocal(res.date), "dd/MM/yyyy")} • {res.start_time.slice(0, 5)} - {res.end_time.slice(0, 5)}
                     </p>
-                    {res.status === 'aguardando_aceite_profissional' && <p className="text-xs text-orange-500 font-medium mt-1">Aguardando aceite do profissional</p>}
-                    {atleta && <p className="text-xs text-indigo-500 font-medium mt-1">com {atleta.name}</p>}
+                    {atleta ? (
+                      <div className="flex items-center flex-wrap gap-2 mt-2 text-xs">
+                        <span className="text-indigo-500 font-medium">com {atleta.name}</span>
+                        {res.atleta_aceite_status === 'aceito' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Aceito
+                          </span>
+                        ) : res.atleta_aceite_status === 'pendente' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
+                            <Hourglass className="h-3 w-3 mr-1" />
+                            Aguardando
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : res.status === 'aguardando_aceite_profissional' ? (
+                      <p className="text-xs text-orange-500 font-medium mt-1">Aguardando aceite do profissional</p>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-4 self-end sm:self-center">
                     <div className="text-right">
@@ -1020,6 +1107,11 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
                         <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onAvaliarAtleta(res); }}>
                             <Star className="h-4 w-4 mr-1"/> Avaliar Atleta
                         </Button>
+                    )}
+                    {canHire && (
+                      <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onHirePlayer(res); }} disabled={hireDisabled} title={hireDisabledMessage}>
+                        <Handshake className="h-4 w-4 mr-2"/> Contratar Atleta
+                      </Button>
                     )}
                   </div>
                 </div>

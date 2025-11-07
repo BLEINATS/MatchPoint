@@ -1,18 +1,88 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Plus, DollarSign, TrendingUp, TrendingDown, FileText, Loader2, Filter, BarChart2, List, Handshake } from 'lucide-react';
+import { ArrowLeft, Plus, DollarSign, TrendingUp, TrendingDown, FileText, Loader2, Filter, BarChart2, List, Handshake, Edit, Trash2 } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { localApi } from '../lib/localApi';
 import { Reserva, FinanceTransaction, Professor, AtletaAluguel } from '../types';
 import Button from '../components/Forms/Button';
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { formatCurrency } from '../utils/formatters';
 import FinancialChart from '../components/Financeiro/FinancialChart';
 import TransactionModal from '../components/Financeiro/TransactionModal';
 import AtletaPaymentsTab from '../components/Financeiro/AtletaPaymentsTab';
+
+const TransactionCard: React.FC<{ transaction: FinanceTransaction, onEdit: (t: FinanceTransaction) => void, onDelete: (id: string) => void }> = ({ transaction, onEdit, onDelete }) => (
+  <div className="p-4 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg space-y-3 border border-brand-gray-200 dark:border-brand-gray-700">
+    <div className="flex justify-between items-start">
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-brand-gray-900 dark:text-white truncate">{transaction.description}</p>
+        <p className="text-sm text-brand-gray-500">{transaction.category}</p>
+      </div>
+      <div className={`text-lg font-bold ${transaction.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
+        {formatCurrency(transaction.amount)}
+      </div>
+    </div>
+    <div className="flex justify-between items-center text-xs text-brand-gray-500 dark:text-brand-gray-400">
+      <span>{format(new Date(transaction.date), 'dd/MM/yy')}</span>
+      {!transaction.id.startsWith('res-') && (
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" onClick={() => onEdit(transaction)}>Editar</Button>
+          <Button variant="ghost" size="sm" onClick={() => onDelete(transaction.id)} className="text-red-500">Excluir</Button>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+const TransactionList: React.FC<{ transactions: FinanceTransaction[], onEdit: (t: FinanceTransaction) => void, onDelete: (id: string) => void }> = ({ transactions, onEdit, onDelete }) => (
+  <div>
+    {/* Mobile View */}
+    <div className="md:hidden space-y-3">
+      {transactions.map(t => (
+        <TransactionCard key={t.id} transaction={t} onEdit={onEdit} onDelete={onDelete} />
+      ))}
+    </div>
+
+    {/* Desktop View */}
+    <div className="hidden md:block overflow-x-auto">
+      <table className="min-w-full">
+        <thead className="bg-brand-gray-50 dark:bg-brand-gray-700/50">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Data</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Descrição</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Categoria</th>
+            <th className="px-4 py-3 text-right text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Valor</th>
+            <th className="relative px-4 py-3"><span className="sr-only">Ações</span></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
+          {transactions.map(t => (
+            <tr key={t.id}>
+              <td className="px-4 py-3 text-sm">{format(new Date(t.date), 'dd/MM/yy')}</td>
+              <td className="px-4 py-3 text-sm">{t.description}</td>
+              <td className="px-4 py-3 text-sm"><span className="px-2 py-1 text-xs rounded-full bg-brand-gray-100 dark:bg-brand-gray-700">{t.category}</span></td>
+              <td className={`px-4 py-3 text-sm text-right font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(t.amount)}</td>
+              <td className="px-4 py-3 text-right">
+                {!t.id.startsWith('res-') && (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={() => onEdit(t)}><Edit className="h-4 w-4"/></Button>
+                    <Button variant="ghost" size="sm" onClick={() => onDelete(t.id)} className="text-red-500"><Trash2 className="h-4 w-4"/></Button>
+                  </>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    {transactions.length === 0 && (
+      <p className="text-center py-8 text-sm text-brand-gray-500">Nenhuma transação encontrada.</p>
+    )}
+  </div>
+);
 
 const Financeiro: React.FC = () => {
   const { selectedArenaContext: arena } = useAuth();
@@ -211,40 +281,6 @@ const StatCard: React.FC<{ label: string, value: string, icon: React.ElementType
       <Icon className={`h-6 w-6 ${color}`} />
     </div>
     <p className="text-3xl font-bold text-brand-gray-900 dark:text-white mt-2">{value}</p>
-  </div>
-);
-
-const TransactionList: React.FC<{ transactions: FinanceTransaction[], onEdit: (t: FinanceTransaction) => void, onDelete: (id: string) => void }> = ({ transactions, onEdit, onDelete }) => (
-  <div className="overflow-x-auto">
-    <table className="min-w-full">
-      <thead className="bg-brand-gray-50 dark:bg-brand-gray-700/50">
-        <tr>
-          <th className="px-4 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Data</th>
-          <th className="px-4 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Descrição</th>
-          <th className="px-4 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Categoria</th>
-          <th className="px-4 py-3 text-right text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Valor</th>
-          <th className="relative px-4 py-3"><span className="sr-only">Ações</span></th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
-        {transactions.map(t => (
-          <tr key={t.id}>
-            <td className="px-4 py-3 text-sm">{format(new Date(t.date), 'dd/MM/yy')}</td>
-            <td className="px-4 py-3 text-sm">{t.description}</td>
-            <td className="px-4 py-3 text-sm"><span className="px-2 py-1 text-xs rounded-full bg-brand-gray-100 dark:bg-brand-gray-700">{t.category}</span></td>
-            <td className={`px-4 py-3 text-sm text-right font-semibold ${t.type === 'receita' ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(t.amount)}</td>
-            <td className="px-4 py-3 text-right">
-              {!t.id.startsWith('res-') && (
-                <>
-                  <Button variant="ghost" size="sm" onClick={() => onEdit(t)}>Editar</Button>
-                  <Button variant="ghost" size="sm" onClick={() => onDelete(t.id)} className="text-red-500">Excluir</Button>
-                </>
-              )}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   </div>
 );
 

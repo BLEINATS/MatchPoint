@@ -46,7 +46,7 @@ const HirePlayerModal: React.FC<HirePlayerModalProps> = ({ isOpen, onClose, onCo
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-between items-center p-6 border-b border-brand-gray-200 dark:border-brand-gray-700">
-              <h3 className="text-xl font-semibold">Contratar Atleta de Aluguel</h3>
+              <h3 className="text-xl font-semibold">Contratar Atleta para {reserva.sport_type}</h3>
               <Button variant="ghost" size="sm" onClick={onClose}><X className="h-5 w-5" /></Button>
             </div>
             <div className="p-6 space-y-4 overflow-y-auto">

@@ -53,15 +53,19 @@ const AtletaPerfilTab: React.FC<AtletaPerfilTabProps> = ({ atleta, onSave }) => 
     <form onSubmit={handleSubmit} className="space-y-8">
       <Section title="Disponibilidade e Taxa">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Input
-            label="Taxa por Jogo/Hora (R$)"
-            name="taxa_hora"
-            type="number"
-            value={formData.taxa_hora || ''}
-            onChange={handleChange}
-            icon={<DollarSign className="h-4 w-4 text-brand-gray-400" />}
-            required
-          />
+          <div>
+            <Input
+              label="Taxa por Jogo/Hora (R$)"
+              name="taxa_hora"
+              type="number"
+              value={formData.taxa_hora || ''}
+              onChange={handleChange}
+              icon={<DollarSign className="h-4 w-4 text-brand-gray-400" />}
+              required
+              disabled
+            />
+            <p className="text-xs text-brand-gray-500 mt-1">O valor da taxa é gerenciado pelo administrador da arena.</p>
+          </div>
           <div className="flex items-center justify-between p-4 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg">
             <span className="font-medium">Disponível para jogos</span>
             <ToggleSwitch

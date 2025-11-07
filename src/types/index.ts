@@ -116,6 +116,9 @@ export interface Arena {
   class_cancellation_deadline_unit?: 'hours' | 'minutes';
   class_booking_deadline_value?: number | null;
   class_booking_deadline_unit?: 'hours' | 'minutes';
+  athlete_booking_deadline_hours?: number | null;
+  athlete_cancellation_deadline_hours?: number | null;
+  athlete_payment_window_minutes?: number | null;
 }
 
 export interface ArenaMembership {
@@ -339,6 +342,7 @@ export interface Reserva {
   atleta_payment_status?: 'pendente_cliente' | 'pendente_repasse' | 'pago';
   atleta_paid_at?: string | null;
   atleta_cost?: number;
+  athlete_payment_deadline?: string | null;
   participants?: {
     profile_id: string;
     name: string;

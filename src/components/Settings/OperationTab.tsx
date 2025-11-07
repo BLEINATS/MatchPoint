@@ -1,6 +1,6 @@
 import React from 'react';
 import { Arena } from '../../types';
-import { FileText, Info, Clock } from 'lucide-react';
+import { FileText, Info, Clock, Handshake } from 'lucide-react';
 import Input from '../Forms/Input';
 
 interface OperationTabProps {
@@ -22,6 +22,14 @@ const OperationTab: React.FC<OperationTabProps> = ({ formData, setFormData }) =>
     } else {
       setFormData(prev => ({ ...prev, [unitKey]: value as 'hours' | 'minutes' }));
     }
+  };
+
+  const handleAthleteSettingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value === '' ? null : parseInt(value, 10)
+    }));
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -125,6 +133,40 @@ Para cancelar, entre em contato pelo WhatsApp ou telefone informando o número d
             </div>
           </div>
         </div>
+      </Section>
+      <Section title="Gestão de Atletas de Aluguel" icon={Handshake}>
+        <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 -mt-2">
+          Defina prazos para a contratação, cancelamento e pagamento de atletas de aluguel.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <Input
+            label="Prazo para Contratar (horas antes)"
+            name="athlete_booking_deadline_hours"
+            type="number"
+            min="0"
+            value={formData.athlete_booking_deadline_hours || ''}
+            onChange={handleAthleteSettingChange}
+            placeholder="Ex: 24"
+          />
+          <Input
+            label="Prazo para Cancelar (horas antes)"
+            name="athlete_cancellation_deadline_hours"
+            type="number"
+            min="0"
+            value={formData.athlete_cancellation_deadline_hours || ''}
+            onChange={handleAthleteSettingChange}
+            placeholder="Ex: 12"
+          />
+        </div>
+        <Input
+          label="Tempo para Pagamento (minutos após aceite)"
+          name="athlete_payment_window_minutes"
+          type="number"
+          min="5"
+          value={formData.athlete_payment_window_minutes || ''}
+          onChange={handleAthleteSettingChange}
+          placeholder="Ex: 30"
+        />
       </Section>
     </div>
   );

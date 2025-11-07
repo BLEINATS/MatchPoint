@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, GraduationCap, BookOpen, Plus, Search, BadgeCheck, BadgeX, Briefcase, Loader2, MessageSquare, MoreVertical, Handshake, UserCheck, Star, Edit, Trash2, Phone, Calendar, List, Mail, Percent, FileText, DollarSign, BadgeHelp, UserPlus, Repeat } from 'lucide-react';
+import { ArrowLeft, Users, GraduationCap, BookOpen, Plus, Search, BadgeCheck, BadgeX, Briefcase, Loader2, MessageSquare, MoreVertical, Handshake, UserCheck, Star, Edit, Trash2, Phone, Calendar, List, Mail, Percent, FileText, DollarSign, BadgeHelp, UserPlus, Repeat, Trophy } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -14,7 +14,7 @@ import ProfessorModal from '../components/Alunos/ProfessorModal';
 import TurmaModal from '../components/Alunos/TurmaModal';
 import TurmaCard from '../components/Alunos/TurmaCard';
 import ConfirmationModal from '../components/Shared/ConfirmationModal';
-import { format, isBefore } from 'date-fns';
+import { format, isBefore, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
 import { formatCurrency } from '../utils/formatters';
@@ -66,7 +66,7 @@ const Alunos: React.FC = () => {
   const [isMensalistaModalOpen, setIsMensalistaModalOpen] = useState(false);
   const [selectedMensalista, setSelectedMensalista] = useState<Reserva | null>(null);
 
-  const [viewingAtletaProfile, setViewingAtletaProfile] = useState<AtletaAluguel | null>(null);
+  const [viewingAtletaProfile, setViewingAtletaProfile] = useState<{ atleta: AtletaAluguel; completedGames: number } | null>(null);
 
   const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.gerenciamento_arena === 'edit', [profile]);
 
@@ -222,12 +222,60 @@ const Alunos: React.FC = () => {
   const handleSaveAtletaAluguel = async (atletaData: Omit<AtletaAluguel, 'id' | 'arena_id' | 'created_at'> | AtletaAluguel, photoFile?: File | null) => {
     if (!arena) return;
     try {
+        const isEditing = 'id' in atletaData && !!atletaData.id;
         let finalAvatarUrl = atletaData.avatar_url;
         if (photoFile) {
             const { publicUrl } = await localUploadPhoto(photoFile);
             finalAvatarUrl = publicUrl;
         }
-        await localApi.upsert('atletas_aluguel', [{ ...atletaData, arena_id: arena.id, avatar_url: finalAvatarUrl }], arena.id);
+
+        let finalProfileId = atletaData.profile_id;
+
+        if (!isEditing && !atletaData.profile_id && atletaData.email) {
+            const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+            let existingProfile = allProfiles.find(p => p.email.toLowerCase() === atletaData.email!.toLowerCase());
+
+            if (!existingProfile) {
+                const newProfilePayload: Omit<Profile, 'id' | 'created_at'> = {
+                    name: atletaData.name,
+                    email: atletaData.email,
+                    avatar_url: finalAvatarUrl,
+                    role: 'cliente',
+                    phone: atletaData.phone,
+                };
+                const { data: createdProfiles } = await localApi.upsert('profiles', [newProfilePayload], 'all');
+                existingProfile = createdProfiles[0];
+                addToast({ message: `Conta de usuário criada para ${atletaData.name}.`, type: 'info' });
+            }
+
+            if (existingProfile) {
+                finalProfileId = existingProfile.id;
+                
+                const { data: allAlunos } = await localApi.select<Aluno>('alunos', arena.id);
+                const existingAluno = allAlunos.find(a => a.profile_id === finalProfileId);
+
+                if (!existingAluno) {
+                    const newAlunoPayload: Omit<Aluno, 'id' | 'created_at' | 'arena_id'> = {
+                        profile_id: finalProfileId,
+                        name: atletaData.name,
+                        email: atletaData.email,
+                        phone: atletaData.phone,
+                        status: 'ativo',
+                        sport: atletaData.esportes[0]?.sport || null,
+                        plan_id: null,
+                        plan_name: 'Avulso',
+                        monthly_fee: 0,
+                        aulas_restantes: 0,
+                        aulas_agendadas: [],
+                        join_date: new Date().toISOString().split('T')[0],
+                    };
+                    await localApi.upsert('alunos', [newAlunoPayload], arena.id);
+                    addToast({ message: `${atletaData.name} também foi adicionado como cliente da arena.`, type: 'info' });
+                }
+            }
+        }
+
+        await localApi.upsert('atletas_aluguel', [{ ...atletaData, arena_id: arena.id, avatar_url: finalAvatarUrl, profile_id: finalProfileId }], arena.id);
         addToast({ message: `Atleta salvo com sucesso!`, type: 'success' });
         await loadData();
         setIsAtletaAluguelModalOpen(false);
@@ -275,12 +323,12 @@ const Alunos: React.FC = () => {
 
   const filteredClientes = useMemo(() => 
     alunos.filter(a => !isAluno(a) && a.name.toLowerCase().includes(searchTerm.toLowerCase())), 
-    [alunos, searchTerm, isAluno]
+    [alunos, searchTerm]
   );
   
   const filteredAlunos = useMemo(() => 
     alunos.filter(a => isAluno(a) && a.name.toLowerCase().includes(searchTerm.toLowerCase())), 
-    [alunos, searchTerm, isAluno]
+    [alunos, searchTerm]
   );
 
   const filteredProfessores = useMemo(() => professores.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())), [professores, searchTerm]);
@@ -396,7 +444,7 @@ const Alunos: React.FC = () => {
             )}
           </div>
         );
-      case 'atletas': return <AtletasAluguelList atletas={filteredAtletasAluguel} onEdit={setEditingAtletaAluguel} onDelete={(id, name) => handleDeleteRequest(id, name, 'atleta')} canEdit={canEdit} onViewProfile={setViewingAtletaProfile} />;
+      case 'atletas': return <AtletasAluguelList atletas={filteredAtletasAluguel} onEdit={setEditingAtletaAluguel} onDelete={(id, name) => handleDeleteRequest(id, name, 'atleta')} canEdit={canEdit} onViewProfile={(atleta, completedGames) => setViewingAtletaProfile({ atleta, completedGames })} reservas={reservas} />;
       case 'turmas': return <TurmasList turmas={filteredTurmas} professores={professores} quadras={quadras} onEdit={setEditingTurma} onDelete={(id, name) => handleDeleteRequest(id, name, 'turma')} canEdit={canEdit} />;
       default: return null;
     }
@@ -439,7 +487,7 @@ const Alunos: React.FC = () => {
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <Link to="/dashboard" className="inline-flex items-center text-sm font-medium text-brand-gray-600 dark:text-brand-gray-400 hover:text-brand-blue-500 dark:hover:text-brand-blue-400 mb-4"><ArrowLeft className="h-4 w-4 mr-2" />Voltar</Link>
+          <Link to="/dashboard" className="inline-flex items-center text-sm font-medium text-brand-gray-600 dark:text-brand-gray-400 hover:text-brand-blue-500 dark:hover:text-brand-blue-400 transition-colors mb-4"><ArrowLeft className="h-4 w-4 mr-2" />Voltar</Link>
           <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Gerenciamento da Arena</h1>
           <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Gerencie sua base de clientes, alunos, profissionais e turmas.</p>
         </motion.div>
@@ -480,7 +528,7 @@ const Alunos: React.FC = () => {
         )}
       </AnimatePresence>
       <ConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleConfirmDelete} title="Confirmar Exclusão" message={<><p>Tem certeza que deseja excluir <strong>{itemToDelete?.name}</strong>?</p><p className="mt-2 text-xs text-red-500 dark:text-red-400">Esta ação é irreversível.</p></>} confirmText="Sim, Excluir" />
-      <AtletaPublicProfileModal isOpen={!!viewingAtletaProfile} onClose={() => setViewingAtletaProfile(null)} atleta={viewingAtletaProfile} />
+      <AtletaPublicProfileModal isOpen={!!viewingAtletaProfile} onClose={() => setViewingAtletaProfile(null)} atleta={viewingAtletaProfile?.atleta || null} completedGames={viewingAtletaProfile?.completedGames} />
     </Layout>
   );
 };
@@ -559,136 +607,6 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, on
   );
 };
 
-const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Professor) => void, onDelete: (id: string, name: string) => void, canEdit: boolean }> = ({ professores, onEdit, onDelete, canEdit }) => {
-  const navigate = useNavigate();
-  if (professores.length === 0) return <PlaceholderTab title="Nenhum professor encontrado" description="Cadastre os professores que dão aulas na sua arena." />;
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {professores.map((prof, index) => (
-        <motion.div 
-          key={prof.id} 
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ delay: index * 0.05 }} 
-          onClick={() => prof.profile_id && navigate(`/professores/${prof.id}`)}
-          className={`bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-purple-500 ${prof.profile_id ? 'cursor-pointer hover:shadow-xl dark:hover:shadow-brand-blue-500/10 transition-shadow' : ''}`}
-        >
-          <div>
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-4">
-                <div className="flex-shrink-0 h-16 w-16">
-                  {prof.avatar_url ? (<img src={prof.avatar_url} alt={prof.name} className="w-16 h-16 rounded-full object-cover border-2 border-brand-gray-200 dark:border-brand-gray-600" />) : (<div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600"><span className="text-2xl text-brand-gray-500 font-bold">{prof.name ? prof.name.charAt(0).toUpperCase() : '?'}</span></div>)}
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg text-brand-gray-900 dark:text-white">{prof.name}</h3>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${prof.status === 'ativo' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
-                    {prof.status === 'ativo' ? <BadgeCheck className="h-3 w-3 mr-1" /> : <BadgeX className="h-3 w-3 mr-1" />}
-                    {prof.status === 'ativo' ? 'Ativo' : 'Inativo'}
-                  </span>
-                </div>
-              </div>
-              {canEdit && (
-                <div className="flex space-x-1">
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(prof); }} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(prof.id, prof.name); }} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              )}
-            </div>
-            <div className="space-y-3 text-sm mb-4 border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
-              <div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><Mail className="h-4 w-4 mr-2 text-brand-gray-400" /><span>{prof.email}</span></div>
-              <div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><Phone className="h-4 w-4 mr-2 text-brand-gray-400" /><span>{prof.phone}</span></div>
-              <div className="flex items-center text-brand-gray-600 dark:text-brand-gray-400"><DollarSign className="h-4 w-4 mr-2 text-brand-gray-400" /><span>{formatCurrency(prof.valor_hora_aula)} / hora</span></div>
-            </div>
-          </div>
-        </motion.div>
-      ))}
-    </div>
-  );
-};
-
-const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (prof: AtletaAluguel) => void, onDelete: (id: string, name: string) => void, canEdit: boolean, onViewProfile: (atleta: AtletaAluguel) => void }> = ({ atletas, onEdit, onDelete, canEdit, onViewProfile }) => {
-  if (atletas.length === 0) return <PlaceholderTab title="Nenhum atleta encontrado" description="Cadastre jogadores que podem ser contratados por seus clientes." />;
-  
-  const getStatusProps = (status: AtletaAluguel['status']) => ({
-    'disponivel': { icon: BadgeCheck, color: 'text-green-500', label: 'Disponível' },
-    'indisponivel': { icon: BadgeX, color: 'text-red-500', label: 'Indisponível' },
-  }[status]);
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {atletas.map((atleta, index) => {
-        const statusProps = getStatusProps(atleta.status);
-        const specialtiesString = atleta.esportes.map(e => e.position ? `${e.sport} (${e.position})` : e.sport).join(', ');
-        
-        const handleCardClick = () => {
-          onViewProfile(atleta);
-        };
-
-        return (
-          <motion.div 
-            key={atleta.id} 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ delay: index * 0.05 }} 
-            onClick={handleCardClick}
-            className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-indigo-500 cursor-pointer hover:shadow-xl dark:hover:shadow-brand-blue-500/10 transition-shadow"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-4">
-                <div className="flex-shrink-0 h-16 w-16">
-                  {atleta.avatar_url ? (
-                    <img src={atleta.avatar_url} alt={atleta.name} className="w-16 h-16 rounded-full object-cover border-2 border-brand-gray-200 dark:border-brand-gray-600" />
-                  ) : (
-                    <div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600"><span className="text-2xl text-brand-gray-500 font-bold">{atleta.name ? atleta.name.charAt(0).toUpperCase() : '?'}</span></div>
-                  )}
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg text-brand-gray-900 dark:text-white">{atleta.name}</h3>
-                  <p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{atleta.phone}</p>
-                  <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400 mt-1">Membro desde {format(new Date(atleta.created_at), "MMMM 'de' yyyy", { locale: ptBR })}</p>
-                </div>
-              </div>
-              {canEdit && (
-                <div className="flex space-x-1">
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(atleta); }} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(atleta.id, atleta.name); }} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              )}
-            </div>
-            
-            <div className="mb-4 flex-grow">
-              <h4 className="text-xs font-medium text-brand-gray-500 dark:text-brand-gray-400 mb-1">Especialidades</h4>
-              <p className="text-sm text-brand-gray-800 dark:text-brand-gray-200">{specialtiesString}</p>
-            </div>
-
-            <div className="mt-auto pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Valor/Partida</p>
-                  <p className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(atleta.taxa_hora)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Comissão Arena</p>
-                  <p className="font-semibold text-brand-gray-800 dark:text-white">{atleta.comissao_arena}%</p>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Status</p>
-                <p className={`font-semibold text-sm flex items-center ${statusProps.color}`}><statusProps.icon className="h-4 w-4 mr-1.5" />{statusProps.label}</p>
-              </div>
-            </div>
-          </motion.div>
-        );
-      })}
-    </div>
-  );
-};
-
-const TurmasList: React.FC<{ turmas: Turma[], professores: Professor[], quadras: Quadra[], onEdit: (turma: Turma) => void, onDelete: (id: string, name: string) => void, canEdit: boolean }> = ({ turmas, professores, quadras, onEdit, onDelete, canEdit }) => {
-  if (turmas.length === 0) return <PlaceholderTab title="Nenhuma turma encontrada" description="Clique em 'Adicionar Turma' para criar sua primeira turma e começar a agendar aulas." />;
-  return (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{turmas.map((turma, index) => (<TurmaCard key={turma.id} turma={turma} professor={professores.find(p => p.id === turma.professor_id)} quadra={quadras.find(q => q.id === turma.quadra_id)} onEdit={() => canEdit && onEdit(turma)} onDelete={() => canEdit && onDelete(turma.id, turma.name)} index={index} />))}</div>);
-};
-
 const PlaceholderTab: React.FC<{ title: string, description: string }> = ({ title, description }) => (<div className="text-center py-16"><motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="max-w-md mx-auto"><div className="flex justify-center items-center w-16 h-16 bg-brand-gray-100 dark:bg-brand-gray-800 rounded-full mx-auto mb-6"><Users className="h-8 w-8 text-brand-gray-400" /></div><h3 className="text-xl font-bold text-brand-gray-900 dark:text-white mb-2">{title}</h3><p className="text-brand-gray-600 dark:text-brand-gray-400">{description}</p></motion.div></div>);
 
 const ActionMenu: React.FC<{ aluno: Aluno, onPromoteToProfessor: () => void, onPromoteToAtleta: () => void, isProfessor: boolean, isAtleta: boolean }> = ({ aluno, onPromoteToProfessor, onPromoteToAtleta, isProfessor, isAtleta }) => {
@@ -724,6 +642,137 @@ const ActionMenu: React.FC<{ aluno: Aluno, onPromoteToProfessor: () => void, onP
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+};
+
+const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Professor) => void, onDelete: (id: string, name: string) => void, canEdit: boolean }> = ({ professores, onEdit, onDelete, canEdit }) => {
+  if (professores.length === 0) return <PlaceholderTab title="Nenhum professor encontrado" description="Cadastre novos professores para vê-los aqui." />;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {professores.map((prof, index) => (
+        <motion.div key={prof.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-green-500">
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0 h-16 w-16">
+                {prof.avatar_url ? (<img src={prof.avatar_url} alt={prof.name} className="w-16 h-16 rounded-full object-cover border-2 border-brand-gray-200 dark:border-brand-gray-600" />) : (<div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600"><span className="text-2xl text-brand-gray-500 font-bold">{prof.name ? prof.name.charAt(0).toUpperCase() : '?'}</span></div>)}
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-brand-gray-900 dark:text-white">{prof.name}</h3>
+                <p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{prof.phone}</p>
+              </div>
+            </div>
+            {canEdit && (
+              <div className="flex space-x-1">
+                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(prof); }} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(prof.id, prof.name); }} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
+              </div>
+            )}
+          </div>
+          <div className="mb-4 flex-grow">
+            <h4 className="text-xs font-medium text-brand-gray-500 dark:text-brand-gray-400 mb-1">Especialidades</h4>
+            <p className="text-sm text-brand-gray-800 dark:text-brand-gray-200">{prof.specialties.join(', ')}</p>
+          </div>
+          <div className="mt-auto pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 space-y-3">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-brand-gray-500 dark:text-brand-gray-400">Valor Hora/Aula</span>
+              <span className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(prof.valor_hora_aula)}</span>
+            </div>
+            <div>
+              <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Status</p>
+              <p className={`font-semibold text-sm flex items-center ${prof.status === 'ativo' ? 'text-green-500' : 'text-red-500'}`}>
+                {prof.status === 'ativo' ? <BadgeCheck className="h-4 w-4 mr-1.5" /> : <BadgeX className="h-4 w-4 mr-1.5" />}
+                {prof.status === 'ativo' ? 'Ativo' : 'Inativo'}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
+};
+
+const AtletasAluguelList: React.FC<{ atletas: AtletaAluguel[], onEdit: (atleta: AtletaAluguel) => void, onDelete: (id: string, name: string) => void, canEdit: boolean, onViewProfile: (atleta: AtletaAluguel, completedGames: number) => void, reservas: Reserva[] }> = ({ atletas, onEdit, onDelete, canEdit, onViewProfile, reservas }) => {
+  const completedGamesByAtleta = useMemo(() => {
+    const counts = new Map<string, number>();
+    reservas.forEach(r => {
+      if (
+        r.atleta_aluguel_id &&
+        r.atleta_aceite_status === 'aceito' &&
+        isPast(parseDateStringAsLocal(`${r.date}T${r.end_time}`))
+      ) {
+        counts.set(r.atleta_aluguel_id, (counts.get(r.atleta_aluguel_id) || 0) + 1);
+      }
+    });
+    return counts;
+  }, [reservas]);
+
+  if (atletas.length === 0) return <PlaceholderTab title="Nenhum atleta encontrado" description="Cadastre novos atletas de aluguel para vê-los aqui." />;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {atletas.map((atleta, index) => {
+        const completedGames = completedGamesByAtleta.get(atleta.id) || 0;
+        return (
+          <motion.div key={atleta.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-orange-500">
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center gap-4">
+                <div className="flex-shrink-0 h-16 w-16">
+                  {atleta.avatar_url ? (<img src={atleta.avatar_url} alt={atleta.name} className="w-16 h-16 rounded-full object-cover border-2 border-brand-gray-200 dark:border-brand-gray-600" />) : (<div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600"><span className="text-2xl text-brand-gray-500 font-bold">{atleta.name ? atleta.name.charAt(0).toUpperCase() : '?'}</span></div>)}
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-brand-gray-900 dark:text-white">{atleta.name}</h3>
+                  <p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{atleta.nivel_tecnico}</p>
+                </div>
+              </div>
+              {canEdit && (
+                <div className="flex space-x-1">
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(atleta); }} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(atleta.id, atleta.name); }} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              )}
+            </div>
+            <div className="mb-4 flex-grow">
+              <h4 className="text-xs font-medium text-brand-gray-500 dark:text-brand-gray-400 mb-1">Esportes</h4>
+              <p className="text-sm text-brand-gray-800 dark:text-brand-gray-200">{atleta.esportes.map(e => e.sport).join(', ')}</p>
+            </div>
+            <div className="mt-auto pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 space-y-3">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-brand-gray-500 dark:text-brand-gray-400">Taxa por Jogo</span>
+                <span className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(atleta.taxa_hora)}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-brand-gray-500 dark:text-brand-gray-400">Jogos Concluídos</span>
+                <span className="font-semibold text-brand-gray-800 dark:text-white flex items-center gap-1.5"><Trophy className="h-4 w-4 text-yellow-500"/>{completedGames}</span>
+              </div>
+              <Button variant="outline" size="sm" className="w-full mt-2" onClick={(e) => { e.stopPropagation(); onViewProfile(atleta, completedGames); }}>Ver Perfil</Button>
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+};
+
+const TurmasList: React.FC<{ turmas: Turma[], professores: Professor[], quadras: Quadra[], onEdit: (turma: Turma) => void, onDelete: (id: string, name: string) => void, canEdit: boolean }> = ({ turmas, professores, quadras, onEdit, onDelete, canEdit }) => {
+  if (turmas.length === 0) return <PlaceholderTab title="Nenhuma turma encontrada" description="Cadastre novas turmas para vê-las aqui." />;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {turmas.map((turma, index) => {
+        const professor = professores.find(p => p.id === turma.professor_id);
+        const quadra = quadras.find(q => q.id === turma.quadra_id);
+        return (
+          <TurmaCard
+            key={turma.id}
+            turma={turma}
+            professor={professor}
+            quadra={quadra}
+            onEdit={() => onEdit(turma)}
+            onDelete={() => onDelete(turma.id, turma.name)}
+            index={index}
+          />
+        );
+      })}
     </div>
   );
 };

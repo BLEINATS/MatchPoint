@@ -30,9 +30,10 @@ interface ReservationDetailModalProps {
   onTrocarAtleta: (reserva: Reserva) => void;
   onCancelarAtleta: () => void;
   onPayAtleta: (reserva: Reserva, atleta: AtletaAluguel) => void;
+  onAthletePaymentExpire: (reserva: Reserva) => void;
 }
 
-const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen, onClose, reserva: initialReserva, quadra, atleta, arenaName, onCancel, onUpdateParticipantStatus, onUpdateReservation, friends, onPay, onAvaliarAtleta, onContactAtleta, onTrocarAtleta, onCancelarAtleta, onPayAtleta }) => {
+const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen, onClose, reserva: initialReserva, quadra, atleta, arenaName, onCancel, onUpdateParticipantStatus, onUpdateReservation, friends, onPay, onAvaliarAtleta, onContactAtleta, onTrocarAtleta, onCancelarAtleta, onPayAtleta, onAthletePaymentExpire }) => {
   const { profile } = useAuth();
   const [reserva, setReserva] = useState(initialReserva);
   const [isAddingFriends, setIsAddingFriends] = useState(false);
@@ -144,14 +145,9 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                 action: isOrganizer ? () => atleta && onPayAtleta(reserva, atleta) : undefined,
             };
         case 'pendente_repasse':
-            return {
-                label: 'Aguardando Repasse da Arena',
-                color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
-                icon: Clock,
-            };
         case 'pago':
             return {
-                label: 'Pago',
+                label: 'Atleta Pago',
                 color: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
                 icon: CheckCircle,
             };
@@ -230,13 +226,13 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                     <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><StarIcon className="h-5 w-5 mr-2 text-yellow-500" /> Atleta Contratado</h4>
                     <div className="p-3 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg space-y-3">
                       <div className="flex items-center justify-between">
-                        <Link to={`/atleta/${atleta.id}`} className="flex items-center gap-3 group" onClick={onClose}>
+                        <div className="flex items-center gap-3 group">
                           <img src={atleta.avatar_url || `https://avatar.vercel.sh/${atleta.id}.svg`} alt={atleta.name} className="w-10 h-10 rounded-full object-cover" />
                           <div>
                             <p className="font-bold group-hover:underline">{atleta.name}</p>
-                            <p className="text-xs text-brand-gray-500">{atleta.nivel_tecnico}</p>
+                            <p className="text-xs text-brand-gray-500">para {reserva.sport_type}</p>
                           </div>
-                        </Link>
+                        </div>
                         {isOrganizer && !isPastReservation && (
                             <div className="flex items-center gap-1">
                                 <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onTrocarAtleta(reserva); }}><Edit className="h-4 w-4"/></Button>
@@ -249,6 +245,9 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                       </div>
                       {reserva.atleta_aceite_status === 'aceito' && (
                         <>
+                          {reserva.athlete_payment_deadline && reserva.atleta_payment_status === 'pendente_cliente' && (
+                            <Alert type="warning" title="Pagamento do Atleta Pendente" message={<span>O pagamento da taxa do atleta expira em <Timer deadline={reserva.athlete_payment_deadline} onExpire={() => onAthletePaymentExpire(reserva)} />.</span>} />
+                          )}
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-brand-gray-600 dark:text-brand-gray-400">Valor do Atleta:</span>
                             <span className="font-medium text-brand-gray-800 dark:text-white">{formatCurrency(reserva.atleta_cost)}</span>
