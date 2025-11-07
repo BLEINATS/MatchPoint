@@ -8,15 +8,6 @@ import { maskPhone } from '../../utils/masks';
 import { ToggleSwitch } from '../Gamification/ToggleSwitch';
 import { useToast } from '../../context/ToastContext';
 
-interface AtletaAluguelModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (atleta: Omit<AtletaAluguel, 'id' | 'arena_id' | 'created_at'> | AtletaAluguel, photoFile?: File | null) => void;
-  onDelete: (id: string) => void;
-  initialData: AtletaAluguel | null;
-  alunos: { profile_id: string; name: string; email?: string | null; phone?: string | null; avatar_url?: string | null; }[];
-}
-
 const ALL_SPORTS = ['Futevôlei', 'Beach Tennis', 'Futebol', 'Futsal', 'Futsal Society', 'Vôlei', 'Basquete', 'Squash', 'Badminton', 'Ping Pong', 'Padel', 'Multiuso'];
 const NIVEIS_TECNICOS = ['Iniciante', 'Intermediário', 'Avançado', 'Profissional'];
 
@@ -43,6 +34,7 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
   const [isUploading, setIsUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const { addToast } = useToast();
+  const [customSport, setCustomSport] = useState('');
 
   const isEditing = !!initialData;
 
@@ -77,6 +69,9 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
         status: initialData.status || 'disponivel',
         pix_key: initialData.pix_key || '',
       });
+
+      const customSportEntry = initialData.esportes?.find(e => !ALL_SPORTS.includes(e.sport));
+      setCustomSport(customSportEntry ? customSportEntry.sport : '');
     } else {
       setFormData({
         name: '', email: '', phone: '', avatar_url: null, profile_id: null,
@@ -84,6 +79,7 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
         taxa_hora: 0, comissao_arena: 10, biografia: '', certificacoes: '',
         palavras_chave: [], status: 'disponivel', pix_key: '',
       });
+      setCustomSport('');
     }
     setPhotoFile(null);
   }, [initialData, isOpen]);
@@ -120,6 +116,34 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
         return { ...prev, esportes: prev.esportes.filter(e => e.sport !== sport) };
       } else {
         return { ...prev, esportes: [...prev.esportes, { sport: sport, position: '' }] };
+      }
+    });
+  };
+
+  const handleToggleOther = () => {
+    const isOtherCurrentlySelected = formData.esportes.some(e => !ALL_SPORTS.includes(e.sport));
+    if (isOtherCurrentlySelected) {
+      setFormData(prev => ({
+        ...prev,
+        esportes: prev.esportes.filter(e => ALL_SPORTS.includes(e.sport))
+      }));
+      setCustomSport('');
+    }
+  };
+
+  const handleCustomSportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newCustomValue = e.target.value;
+    setCustomSport(newCustomValue);
+
+    setFormData(prev => {
+      const standardSports = prev.esportes.filter(es => ALL_SPORTS.includes(es.sport));
+      const existingCustomSport = prev.esportes.find(e => !ALL_SPORTS.includes(e.sport));
+      const position = existingCustomSport ? existingCustomSport.position : '';
+      
+      if (newCustomValue.trim()) {
+        return { ...prev, esportes: [...standardSports, { sport: newCustomValue.trim(), position }] };
+      } else {
+        return { ...prev, esportes: standardSports };
       }
     });
   };
@@ -252,6 +276,29 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
                         </div>
                       );
                     })}
+                    <div>
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={formData.esportes.some(e => !ALL_SPORTS.includes(e.sport))}
+                          onChange={handleToggleOther}
+                          className="h-4 w-4 rounded text-brand-blue-600 border-brand-gray-300 focus:ring-brand-blue-500"
+                        />
+                        <span className="ml-3 text-sm font-medium text-brand-gray-800 dark:text-brand-gray-200">Outro</span>
+                      </label>
+                      <AnimatePresence>
+                        {formData.esportes.some(e => !ALL_SPORTS.includes(e.sport)) && (
+                          <motion.div initial={{ opacity: 0, height: 0, marginTop: 0 }} animate={{ opacity: 1, height: 'auto', marginTop: '0.5rem' }} exit={{ opacity: 0, height: 0, marginTop: 0 }} className="pl-8">
+                            <Input
+                              label="Qual esporte?"
+                              value={customSport}
+                              onChange={handleCustomSportChange}
+                              placeholder="Digite o nome do esporte"
+                            />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </div>
               </Section>

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Reserva, Quadra, Profile, AtletaAluguel } from '../../types';
 import { format, isBefore, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Clock, MapPin, X, ShoppingBag, CreditCard, DollarSign, CheckCircle, AlertTriangle, User, Info, Users, UserPlus, Trash2, Lock, Unlock, MessageSquare, Star as StarIcon, Edit } from 'lucide-react';
+import { Calendar, Clock, MapPin, X, ShoppingBag, CreditCard, DollarSign, CheckCircle, AlertTriangle, User, Info, Users, UserPlus, Trash2, Lock, Unlock, MessageSquare, Star as StarIcon, Edit, Handshake } from 'lucide-react';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import Button from '../Forms/Button';
 import { formatCurrency } from '../../utils/formatters';
@@ -33,17 +33,17 @@ interface ReservationDetailModalProps {
   onAthletePaymentExpire: (reserva: Reserva) => void;
 }
 
-const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen, onClose, reserva: initialReserva, quadra, atleta, arenaName, onCancel, onUpdateParticipantStatus, onUpdateReservation, friends, onPay, onAvaliarAtleta, onContactAtleta, onTrocarAtleta, onCancelarAtleta, onPayAtleta, onAthletePaymentExpire }) => {
+const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen, onClose, reserva, quadra, atleta, arenaName, onCancel, onUpdateParticipantStatus, onUpdateReservation, friends, onPay, onAvaliarAtleta, onContactAtleta, onTrocarAtleta, onCancelarAtleta, onPayAtleta, onAthletePaymentExpire }) => {
   const { profile } = useAuth();
-  const [reserva, setReserva] = useState(initialReserva);
   const [isAddingFriends, setIsAddingFriends] = useState(false);
   const [isLockConfirmOpen, setIsLockConfirmOpen] = useState(false);
   const [lockAction, setLockAction] = useState<'lock' | 'unlock' | null>(null);
 
   useEffect(() => {
-    setReserva(initialReserva);
-    setIsAddingFriends(false);
-  }, [initialReserva, isOpen]);
+    if (isOpen) {
+      setIsAddingFriends(false);
+    }
+  }, [isOpen]);
 
   if (!reserva || !quadra) return null;
 
@@ -221,7 +221,14 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                   </div>
                 )}
 
-                {atleta && (
+                {isOrganizer && !isPastReservation && (!atleta || reserva.atleta_aceite_status === 'recusado') && reserva.status !== 'aguardando_aceite_profissional' && (
+                    <Button onClick={() => onTrocarAtleta(reserva)} className="w-full mt-4">
+                        <Handshake className="h-4 w-4 mr-2"/>
+                        Contratar Atleta
+                    </Button>
+                )}
+
+                {atleta && reserva.atleta_aceite_status !== 'recusado' && (
                   <div className="border-t border-brand-gray-200 dark:border-brand-gray-700 pt-4">
                     <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><StarIcon className="h-5 w-5 mr-2 text-yellow-500" /> Atleta Contratado</h4>
                     <div className="p-3 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg space-y-3">

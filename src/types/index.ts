@@ -338,7 +338,7 @@ export interface Reserva {
     price: number;
   }[] | null;
   atleta_aluguel_id?: string | null;
-  atleta_aceite_status?: 'pendente' | 'aceito' | 'recusado' | null;
+  atleta_aceite_status?: 'pendente' | 'aceito' | 'recusado' | 'cancelado_pelo_cliente' | null;
   atleta_payment_status?: 'pendente_cliente' | 'pendente_repasse' | 'pago';
   atleta_paid_at?: string | null;
   atleta_cost?: number;

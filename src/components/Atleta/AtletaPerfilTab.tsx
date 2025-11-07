@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AtletaAluguel } from '../../types';
 import Input from '../Forms/Input';
 import Button from '../Forms/Button';
 import { Save, DollarSign, Briefcase } from 'lucide-react';
 import { ToggleSwitch } from '../Gamification/ToggleSwitch';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface AtletaPerfilTabProps {
   atleta: AtletaAluguel;
@@ -22,6 +23,20 @@ const AtletaPerfilTab: React.FC<AtletaPerfilTabProps> = ({ atleta, onSave }) => 
     biografia: atleta.biografia,
     status: atleta.status,
   });
+  const [customSport, setCustomSport] = useState('');
+
+  useEffect(() => {
+    const customSportEntry = atleta.esportes?.find(e => !ALL_SPORTS.includes(e.sport));
+    setCustomSport(customSportEntry ? customSportEntry.sport : '');
+    setFormData({
+      taxa_hora: atleta.taxa_hora,
+      esportes: atleta.esportes,
+      nivel_tecnico: atleta.nivel_tecnico,
+      experiencia_anos: atleta.experiencia_anos,
+      biografia: atleta.biografia,
+      status: atleta.status,
+    });
+  }, [atleta]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -41,6 +56,31 @@ const AtletaPerfilTab: React.FC<AtletaPerfilTabProps> = ({ atleta, onSave }) => 
       } else {
         return { ...prev, esportes: [...currentEsportes, { sport: sport, position: '' }] };
       }
+    });
+  };
+
+  const handleToggleOther = () => {
+    const isOtherCurrentlySelected = formData.esportes?.some(e => !ALL_SPORTS.includes(e.sport));
+    if (isOtherCurrentlySelected) {
+      setFormData(prev => ({
+        ...prev,
+        esportes: prev.esportes?.filter(e => ALL_SPORTS.includes(e.sport))
+      }));
+      setCustomSport('');
+    }
+  };
+
+  const handleCustomSportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newCustomValue = e.target.value;
+    setCustomSport(newCustomValue);
+
+    setFormData(prev => {
+      const standardSports = (prev.esportes || []).filter(es => ALL_SPORTS.includes(es.sport));
+      const newEsportes = [...standardSports];
+      if (newCustomValue.trim()) {
+        newEsportes.push({ sport: newCustomValue.trim(), position: '' });
+      }
+      return { ...prev, esportes: newEsportes };
     });
   };
 
@@ -108,6 +148,28 @@ const AtletaPerfilTab: React.FC<AtletaPerfilTabProps> = ({ atleta, onSave }) => 
                 <span className="text-sm">{sport}</span>
               </label>
             ))}
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.esportes?.some(e => !ALL_SPORTS.includes(e.sport))}
+                  onChange={handleToggleOther}
+                  className="form-checkbox h-4 w-4 rounded text-brand-blue-600 border-brand-gray-300 focus:ring-brand-blue-500"
+                />
+                <span className="text-sm">Outro</span>
+              </label>
+              <AnimatePresence>
+                {formData.esportes?.some(e => !ALL_SPORTS.includes(e.sport)) && (
+                  <motion.div initial={{ opacity: 0, height: 0, marginTop: 0 }} animate={{ opacity: 1, height: 'auto', marginTop: '0.5rem' }} exit={{ opacity: 0, height: 0, marginTop: 0 }} className="pl-7">
+                    <Input
+                      value={customSport}
+                      onChange={handleCustomSportChange}
+                      placeholder="Digite o esporte"
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
         <div>

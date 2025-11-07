@@ -7,7 +7,6 @@ import { Loader2, Calendar, List, DollarSign, Star, User, ArrowLeft, Mail, Phone
 import { useToast } from '../context/ToastContext';
 import { localApi } from '../lib/localApi';
 import SolicitacoesTab from '../components/Atleta/SolicitacoesTab';
-import Layout from '../components/Layout/Layout';
 import AtletaAgendaTab from '../components/Atleta/AtletaAgendaTab';
 import AtletaFinanceiroTab from '../components/Atleta/AtletaFinanceiroTab';
 import AtletaPerfilTab from '../components/Atleta/AtletaPerfilTab';
@@ -59,7 +58,7 @@ const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfi
   }, [loadData]);
 
   const handleUpdateRequest = async (reserva: Reserva, newStatus: 'aceito' | 'recusado') => {
-    if (!atletaProfile || !selectedArenaContext) return;
+    if (!atletaProfile || !selectedArenaContext || !profile) return;
     try {
       const paymentWindow = arenaSettings.athlete_payment_window_minutes || 30;
       const deadline = new Date();
@@ -68,9 +67,9 @@ const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfi
       const updatedReserva: Reserva = {
         ...reserva,
         atleta_aceite_status: newStatus,
-        status: 'confirmada', // Status da reserva principal não muda
-        atleta_aluguel_id: newStatus === 'recusado' ? null : reserva.atleta_aluguel_id,
-        atleta_cost: newStatus === 'recusado' ? undefined : reserva.atleta_cost,
+        status: 'confirmada',
+        atleta_payment_status: newStatus === 'aceito' ? 'pendente_cliente' : null,
+        atleta_cost: newStatus === 'recusado' ? 0 : reserva.atleta_cost,
         athlete_payment_deadline: newStatus === 'aceito' ? deadline.toISOString() : null,
       };
 
@@ -86,9 +85,9 @@ const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfi
           arena_id: selectedArenaContext.id,
           message: notificationMessage,
           type: 'game_invite_response',
-          sender_id: profile?.id,
-          sender_name: profile?.name,
-          sender_avatar_url: profile?.avatar_url,
+          sender_id: profile.id,
+          sender_name: profile.name,
+          sender_avatar_url: profile.avatar_url,
         }], selectedArenaContext.id);
       }
       
@@ -199,7 +198,7 @@ const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfi
   return content;
 };
 
-const AtletaProfilePageWrapper: React.FC = () => {
+const AtletaProfilePage: React.FC = () => {
     const { id: paramId } = useParams<{ id: string }>();
     const { profile, selectedArenaContext, currentAtletaId } = useAuth();
     const { addToast } = useToast();
@@ -231,22 +230,14 @@ const AtletaProfilePageWrapper: React.FC = () => {
     }, [selectedArenaContext, addToast, atletaIdToLoad]);
 
     if (isLoading) {
-        return (
-            <Layout>
-                <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-brand-blue-500" /></div>
-            </Layout>
-        );
+        return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-brand-blue-500" /></div>;
     }
     
     if (!atletaProfile) {
-        return (
-            <Layout>
-                <div className="text-center p-8">Perfil do atleta não encontrado.</div>
-            </Layout>
-        );
+        return <div className="text-center p-8">Perfil do atleta não encontrado.</div>;
     }
 
     return <AtletaProfileContent atletaProfile={atletaProfile} isAdminView={isAdminView} />;
 };
 
-export default AtletaProfilePageWrapper;
+export default AtletaProfilePage;

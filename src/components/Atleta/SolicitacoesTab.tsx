@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Reserva, Quadra, Aluno, Arena } from '../../types';
 import { motion } from 'framer-motion';
-import { format } from 'date-fns';
+import { format, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { Calendar, Clock, User, Check, X, Hourglass, CheckCircle, XCircle, Trophy } from 'lucide-react';
@@ -16,13 +16,32 @@ interface SolicitacoesTabProps {
 }
 
 const ReservaCard: React.FC<{ reserva: Reserva, quadra?: Quadra, cliente?: Aluno, onUpdateRequest?: (reserva: Reserva, newStatus: 'aceito' | 'recusado') => void }> = ({ reserva, quadra, cliente, onUpdateRequest }) => {
+  const isRefusedOrCanceled = reserva.atleta_aceite_status === 'recusado' || reserva.atleta_aceite_status === 'cancelado_pelo_cliente' || reserva.status === 'cancelada';
+
+  const cardClasses = `relative bg-white dark:bg-brand-gray-900 p-4 rounded-lg shadow-md transition-all ${
+    isRefusedOrCanceled ? 'border border-red-500/30' : 'border border-transparent dark:border-brand-gray-700'
+  }`;
+  
+  const getStatusLabel = () => {
+    if (reserva.atleta_aceite_status === 'recusado') return 'Recusado';
+    if (reserva.atleta_aceite_status === 'cancelado_pelo_cliente' || reserva.status === 'cancelada') return 'Cancelado';
+    return null;
+  };
+
+  const statusLabel = getStatusLabel();
+
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white dark:bg-brand-gray-700/50 p-4 rounded-lg shadow-md"
+      className={cardClasses}
     >
+      {isRefusedOrCanceled && statusLabel && (
+        <div className="absolute top-2 right-2 text-xs font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">
+          {statusLabel}
+        </div>
+      )}
       <div className="flex items-center gap-3 mb-3">
         <img src={cliente?.avatar_url || `https://avatar.vercel.sh/${reserva.profile_id}.svg`} alt={reserva.clientName} className="w-10 h-10 rounded-full object-cover" />
         <div>
@@ -46,7 +65,7 @@ const ReservaCard: React.FC<{ reserva: Reserva, quadra?: Quadra, cliente?: Aluno
 
 const Column: React.FC<{ title: string, icon: React.ElementType, reservas: Reserva[], quadras: Quadra[], clientes: Aluno[], onUpdateRequest?: (reserva: Reserva, newStatus: 'aceito' | 'recusado') => void }> = ({ title, icon: Icon, reservas, quadras, clientes, onUpdateRequest }) => {
   return (
-    <div className="w-72 lg:w-80 flex-shrink-0 bg-brand-gray-100 dark:bg-brand-gray-800 rounded-lg flex flex-col">
+    <div className="w-[calc(100%-2rem)] md:w-72 lg:w-80 flex-shrink-0 snap-center bg-brand-gray-100 dark:bg-brand-gray-800 rounded-lg flex flex-col">
       <h3 className="font-bold text-lg flex items-center p-4 border-b border-brand-gray-200 dark:border-brand-gray-700 flex-shrink-0">
         <Icon className="h-5 w-5 mr-2" /> {title} ({reservas.length})
       </h3>
@@ -64,15 +83,30 @@ const Column: React.FC<{ title: string, icon: React.ElementType, reservas: Reser
 const SolicitacoesTab: React.FC<SolicitacoesTabProps> = ({ reservas, quadras, clientes, onUpdateRequest, arenaSettings }) => {
 
   const categorizedReservas = useMemo(() => {
-    const pending = reservas.filter(r => r.atleta_aceite_status === 'pendente');
-    const confirmed = reservas.filter(r => r.atleta_aceite_status === 'aceito' && r.status !== 'realizada' && r.status !== 'cancelada');
-    const completed = reservas.filter(r => r.atleta_aceite_status === 'aceito' && r.status === 'realizada');
-    const refused = reservas.filter(r => r.atleta_aceite_status === 'recusado' || r.status === 'cancelada');
+    const pending = reservas.filter(r => r.atleta_aceite_status === 'pendente' && !isPast(parseDateStringAsLocal(`${r.date}T${r.end_time}`)));
+    
+    const confirmed = reservas.filter(r => 
+      r.atleta_aceite_status === 'aceito' && 
+      (r.status === 'confirmada' || r.status === 'aguardando_pagamento_profissional' || r.status === 'aguardando_pagamento') && 
+      !isPast(parseDateStringAsLocal(`${r.date}T${r.end_time}`))
+    );
+
+    const completed = reservas.filter(r => 
+      r.atleta_aceite_status === 'aceito' &&
+      (r.status === 'realizada' || ((r.status === 'confirmada' || r.status === 'aguardando_pagamento_profissional' || r.status === 'aguardando_pagamento') && isPast(parseDateStringAsLocal(`${r.date}T${r.end_time}`))))
+    );
+      
+    const refused = reservas.filter(r => 
+        r.atleta_aceite_status === 'recusado' || 
+        r.atleta_aceite_status === 'cancelado_pelo_cliente' ||
+        r.status === 'cancelada'
+    );
+    
     return { pending, confirmed, completed, refused };
   }, [reservas]);
 
   return (
-    <div className="flex space-x-4 overflow-x-auto pb-4 -mx-4 px-4 no-scrollbar">
+    <div className="flex space-x-4 overflow-x-auto pb-4 snap-x snap-mandatory md:space-x-6">
       <Column title="Pendentes" icon={Hourglass} reservas={categorizedReservas.pending} quadras={quadras} clientes={clientes} onUpdateRequest={onUpdateRequest} />
       <Column title="Confirmadas" icon={CheckCircle} reservas={categorizedReservas.confirmed} quadras={quadras} clientes={clientes} />
       <Column title="Realizadas" icon={Trophy} reservas={categorizedReservas.completed} quadras={quadras} clientes={clientes} />

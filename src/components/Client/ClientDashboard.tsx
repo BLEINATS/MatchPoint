@@ -710,10 +710,10 @@ const ClientDashboard: React.FC = () => {
     
         const updatedReserva = { 
             ...reservationToDetail, 
-            atleta_aluguel_id: null,
+            atleta_aceite_status: 'cancelado_pelo_cliente' as 'cancelado_pelo_cliente',
             atleta_cost: 0,
-            atleta_aceite_status: null,
             atleta_payment_status: null,
+            athlete_payment_deadline: null,
             status: 'confirmada',
         };
     
@@ -899,9 +899,9 @@ const ClientDashboard: React.FC = () => {
 
     const handleNavClick = (view: View) => {
         if (view === 'atleta_painel') {
-            navigate('/atleta-perfil');
+            setActiveView('atleta_painel');
         } else if (view === 'professor_painel') {
-            navigate(`/professores/${currentProfessorId}`);
+            setActiveView('professor_painel');
         } else {
             setActiveView(view);
         }
@@ -956,6 +956,8 @@ const ClientDashboard: React.FC = () => {
         case 'loja': return <LojaView />;
         case 'amigos': return <FriendsView />;
         case 'perfil': return <ClientProfileView aluno={alunoProfileForSelectedArena} profile={profile} onProfileUpdate={handleProfileUpdate} creditHistory={creditHistory} gamificationHistory={gamificationHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} atletas={atletas} onViewProfile={handleOpenAtletaProfile} completedReservationsCount={completedReservationsCount} />;
+        case 'atleta_painel': return <AtletaProfilePage />;
+        case 'professor_painel': return <ProfessorProfilePage />;
         default: return null;
         }
     };
@@ -1045,7 +1047,7 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
             const atleta = res.atleta_aluguel_id ? atletas.find(a => a.id === res.atleta_aluguel_id) : null;
             const podeAvaliar = isPast && atleta && res.atleta_aceite_status === 'aceito' && !atleta.ratings?.some(r => r.reservationId === res.id && r.clientId === profileId);
             
-            const canHire = !isPast && onHirePlayer && isOrganizer && !res.atleta_aluguel_id && res.type === 'avulsa';
+            const canHire = !isPast && onHirePlayer && isOrganizer && (!res.atleta_aluguel_id || res.atleta_aceite_status === 'recusado' || res.atleta_aceite_status === 'cancelado_pelo_cliente') && res.type === 'avulsa';
             let hireDisabled = false;
             let hireDisabledMessage = '';
 
@@ -1074,7 +1076,7 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
                     <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">
                       {format(parseDateStringAsLocal(res.date), "dd/MM/yyyy")} • {res.start_time.slice(0, 5)} - {res.end_time.slice(0, 5)}
                     </p>
-                    {atleta ? (
+                    {atleta && res.atleta_aceite_status !== 'recusado' && res.atleta_aceite_status !== 'cancelado_pelo_cliente' ? (
                       <div className="flex items-center flex-wrap gap-2 mt-2 text-xs">
                         <span className="text-indigo-500 font-medium">com {atleta.name}</span>
                         {res.atleta_aceite_status === 'aceito' ? (
@@ -1089,6 +1091,8 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
                           </span>
                         ) : null}
                       </div>
+                    ) : res.atleta_aceite_status === 'recusado' ? (
+                      <p className="text-xs text-red-500 font-medium mt-1">Atleta Recusou</p>
                     ) : res.status === 'aguardando_aceite_profissional' ? (
                       <p className="text-xs text-orange-500 font-medium mt-1">Aguardando aceite do profissional</p>
                     ) : null}
