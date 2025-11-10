@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Aluno } from '../../../types';
+import { Aluno, Turma } from '../../../types';
 import { X, Calendar, Clock, GraduationCap, MapPin, Users, AlertCircle, RefreshCw } from 'lucide-react';
-import { format, isSameDay, differenceInHours } from 'date-fns';
+import { format, isSameDay, differenceInHours, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Button from '../../Forms/Button';
 import ConfirmationModal from '../../Shared/ConfirmationModal';
@@ -40,7 +40,7 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
   }, [allAlunos, turma, date, time]);
 
   const cancellationPolicyHours = useMemo(() => {
-    return arena?.class_cancellation_hours ?? 2; // Default to 2 hours if not set
+    return arena?.class_cancellation_deadline_value ?? 2;
   }, [arena]);
 
   const canCancel = useMemo(() => {
@@ -64,7 +64,27 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
   const oldClassForSwap = bookedClassOnDay;
 
   const handleBookClass = async () => {
+    if (!arena) return;
     try {
+      const { data: allTurmas } = await localApi.select<Turma>('turmas', arena.id);
+      const turmaToUpdate = allTurmas.find(t => t.id === turma.id);
+      if (!turmaToUpdate) throw new Error("Turma não encontrada para matrícula.");
+
+      const dayOfWeek = getDay(date);
+      const matriculas = turmaToUpdate.matriculas || [];
+      const matriculaIndex = matriculas.findIndex(m => m.dayOfWeek === dayOfWeek && m.time === time);
+      
+      if (matriculaIndex > -1) {
+        const studentIds = new Set(matriculas[matriculaIndex].student_ids);
+        studentIds.add(aluno.id);
+        matriculas[matriculaIndex].student_ids = Array.from(studentIds);
+      } else {
+        matriculas.push({ dayOfWeek, time, student_ids: [aluno.id] });
+      }
+
+      const updatedTurma = { ...turmaToUpdate, matriculas };
+      await localApi.upsert('turmas', [updatedTurma], arena.id);
+
       const newBooking = { turma_id: turma.id, date: format(date, 'yyyy-MM-dd'), time };
       const updatedAulasAgendadas = [...(aluno.aulas_agendadas || []), newBooking];
       let updatedAluno = { ...aluno, aulas_agendadas: updatedAulasAgendadas };
@@ -72,19 +92,96 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
         updatedAluno.aulas_restantes = Math.max(0, (aluno.aulas_restantes || 0) - 1);
       }
       await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
+      
       addToast({ message: 'Aula agendada com sucesso!', type: 'success' });
       onDataChange();
-    } catch (e) {
-      addToast({ message: 'Erro ao agendar aula.', type: 'error' });
+    } catch (e: any) {
+      addToast({ message: `Erro ao agendar aula: ${e.message}`, type: 'error' });
     } finally {
       setShowBookConfirm(false);
       onClose();
     }
   };
 
-  const handleSwapClass = async () => {
-    if (!oldClassForSwap) return;
+  const handleCancelClass = async () => {
+    if (!arena) return;
+    const dateString = format(date, 'yyyy-MM-dd');
     try {
+      const { data: allTurmas } = await localApi.select<Turma>('turmas', arena.id);
+      const turmaToUpdate = allTurmas.find(t => t.id === turma.id);
+      if (turmaToUpdate) {
+        const dayOfWeek = getDay(date);
+        const updatedMatriculas = (turmaToUpdate.matriculas || []).map(m => {
+          if (m.dayOfWeek === dayOfWeek && m.time === time) {
+            return { ...m, student_ids: m.student_ids.filter(id => id !== aluno.id) };
+          }
+          return m;
+        });
+        const updatedTurma = { ...turmaToUpdate, matriculas: updatedMatriculas };
+        await localApi.upsert('turmas', [updatedTurma], arena.id);
+      }
+
+      const updatedAulasAgendadas = (aluno.aulas_agendadas || []).filter(a => !(a.turma_id === turma.id && a.date === dateString && a.time === time));
+      let updatedAluno = { ...aluno, aulas_agendadas: updatedAulasAgendadas };
+      if (!isUnlimited && aluno.aulas_restantes !== null) {
+        updatedAluno.aulas_restantes = (aluno.aulas_restantes || 0) + 1;
+      }
+      await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
+      
+      addToast({ message: 'Agendamento cancelado!', type: 'success' });
+      onDataChange();
+    } catch (e: any) {
+      addToast({ message: `Erro ao cancelar aula: ${e.message}`, type: 'error' });
+    } finally {
+      setShowCancelConfirm(false);
+      onClose();
+    }
+  };
+
+  const handleSwapClass = async () => {
+    if (!oldClassForSwap || !arena) return;
+    try {
+      const { data: allTurmas } = await localApi.select<Turma>('turmas', arena.id);
+      const turmasToUpdate: Turma[] = [];
+
+      const oldTurmaToUpdate = allTurmas.find(t => t.id === oldClassForSwap.turma.id);
+      if (oldTurmaToUpdate) {
+        const oldDayOfWeek = getDay(oldClassForSwap.date);
+        const oldTime = oldClassForSwap.time;
+        oldTurmaToUpdate.matriculas = (oldTurmaToUpdate.matriculas || []).map(m => {
+          if (m.dayOfWeek === oldDayOfWeek && m.time === oldTime) {
+            return { ...m, student_ids: m.student_ids.filter(id => id !== aluno.id) };
+          }
+          return m;
+        });
+        turmasToUpdate.push(oldTurmaToUpdate);
+      }
+
+      const newTurmaToUpdate = turmasToUpdate.find(t => t.id === turma.id) || allTurmas.find(t => t.id === turma.id);
+      if (newTurmaToUpdate) {
+        const newDayOfWeek = getDay(date);
+        const newTime = time;
+        const matriculas = newTurmaToUpdate.matriculas || [];
+        const matriculaIndex = matriculas.findIndex(m => m.dayOfWeek === newDayOfWeek && m.time === newTime);
+
+        if (matriculaIndex > -1) {
+          const studentIds = new Set(matriculas[matriculaIndex].student_ids);
+          studentIds.add(aluno.id);
+          matriculas[matriculaIndex].student_ids = Array.from(studentIds);
+        } else {
+          matriculas.push({ dayOfWeek: newDayOfWeek, time: newTime, student_ids: [aluno.id] });
+        }
+        newTurmaToUpdate.matriculas = matriculas;
+        
+        if (!turmasToUpdate.some(t => t.id === newTurmaToUpdate.id)) {
+          turmasToUpdate.push(newTurmaToUpdate);
+        }
+      }
+
+      if (turmasToUpdate.length > 0) {
+        await localApi.upsert('turmas', turmasToUpdate, arena.id);
+      }
+      
       const oldDateString = format(oldClassForSwap.date, 'yyyy-MM-dd');
       const newDateString = format(date, 'yyyy-MM-dd');
       const newBooking = { turma_id: turma.id, date: newDateString, time };
@@ -98,29 +195,10 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
       await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
       addToast({ message: 'Troca de horário realizada com sucesso!', type: 'success' });
       onDataChange();
-    } catch(e) {
-      addToast({ message: 'Erro ao trocar de horário.', type: 'error' });
+    } catch(e: any) {
+      addToast({ message: `Erro ao trocar de horário: ${e.message}`, type: 'error' });
     } finally {
       setShowSwapConfirm(false);
-      onClose();
-    }
-  };
-
-  const handleCancelClass = async () => {
-    const dateString = format(date, 'yyyy-MM-dd');
-    try {
-      const updatedAulasAgendadas = (aluno.aulas_agendadas || []).filter(a => !(a.turma_id === turma.id && a.date === dateString && a.time === time));
-      let updatedAluno = { ...aluno, aulas_agendadas: updatedAulasAgendadas };
-      if (!isUnlimited && aluno.aulas_restantes !== null) {
-        updatedAluno.aulas_restantes = (aluno.aulas_restantes || 0) + 1;
-      }
-      await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
-      addToast({ message: 'Agendamento cancelado!', type: 'success' });
-      onDataChange();
-    } catch (e) {
-      addToast({ message: 'Erro ao cancelar aula.', type: 'error' });
-    } finally {
-      setShowCancelConfirm(false);
       onClose();
     }
   };

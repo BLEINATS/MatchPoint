@@ -1,15 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Professor, Turma } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
-import { DollarSign, TrendingUp, TrendingDown, Clock } from 'lucide-react';
-import { differenceInMinutes, parse } from 'date-fns';
+import { DollarSign, TrendingUp, Clock, Hash, ChevronDown, Calendar } from 'lucide-react';
+import { differenceInMinutes, parse, getDay, startOfMonth, endOfMonth, eachDayOfInterval, format, subMonths, isSameMonth } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { motion, AnimatePresence } from 'framer-motion';
 
-interface ProfessorFinancialTabProps {
-  professor: Professor;
-  turmas: Turma[];
-}
-
-const StatCard: React.FC<{ label: string, value: string, icon: React.ElementType, color: string }> = ({ label, value, icon: Icon, color }) => (
+const StatCard: React.FC<{ label: string, value: string | number, icon: React.ElementType, color: string }> = ({ label, value, icon: Icon, color }) => (
   <div className="bg-white dark:bg-brand-gray-800 p-6 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
     <div className="flex items-center">
       <div className={`p-3 rounded-lg mr-4 ${color.replace('text-', 'bg-').replace('-500', '-100')} dark:${color.replace('text-', 'bg-').replace('-500', '-900/50')}`}>
@@ -23,73 +20,175 @@ const StatCard: React.FC<{ label: string, value: string, icon: React.ElementType
   </div>
 );
 
-const ProfessorFinancialTab: React.FC<ProfessorFinancialTabProps> = ({ professor, turmas }) => {
-  const financialData = useMemo(() => {
-    let totalAReceber = 0;
-    const comissoes: { id: string, turmaName: string, valor: number, data: string }[] = [];
+const ProfessorFinancialTab: React.FC<{ professor: Professor; turmas: Turma[] }> = ({ professor, turmas }) => {
+  const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(format(new Date(), 'yyyy-MM'));
 
-    turmas.forEach(turma => {
-      if (turma.professor_id === professor.id && professor.valor_hora_aula) {
-        try {
-          const startTime = parse(turma.start_time, 'HH:mm', new Date());
-          const endTime = parse(turma.end_time, 'HH:mm', new Date());
-          const durationMinutes = differenceInMinutes(endTime, startTime);
-          const durationHours = durationMinutes / 60;
-          
-          if (durationHours > 0) {
-            const comissao = durationHours * professor.valor_hora_aula;
-            totalAReceber += comissao;
-            comissoes.push({
-              id: turma.id,
-              turmaName: turma.name,
-              valor: comissao,
-              data: turma.start_date,
+  const monthlyFinancialData = useMemo(() => {
+    const professorTurmas = turmas.filter(t => t.professor_id === professor.id);
+    const today = new Date();
+    
+    return Array.from({ length: 6 }).map((_, i) => {
+      const monthDate = subMonths(today, i);
+      const monthKey = format(monthDate, 'yyyy-MM');
+      const monthLabel = format(monthDate, 'MMMM yyyy', { locale: ptBR });
+      const monthStart = startOfMonth(monthDate);
+      const monthEnd = isSameMonth(monthDate, today) ? today : endOfMonth(monthDate);
+      
+      const daysInPeriod = eachDayOfInterval({ start: monthStart, end: monthEnd });
+
+      let totalValue = 0;
+      let breakdownItems: { id: string, name: string, detail: string, value: number }[] = [];
+
+      switch (professor.payment_type) {
+        case 'mensal':
+          totalValue = professor.salario_mensal || 0;
+          breakdownItems = professorTurmas.map(turma => ({
+            id: turma.id,
+            name: turma.name,
+            detail: 'Salário Fixo Mensal',
+            value: 0,
+          }));
+          break;
+
+        case 'por_aula':
+          professorTurmas.forEach(turma => {
+            const schedule = turma.schedule || [];
+            let classesGivenForTurma = 0;
+            daysInPeriod.forEach(day => {
+              if (schedule.some(s => s.day === getDay(day))) {
+                classesGivenForTurma++;
+              }
             });
-          }
-        } catch (e) {
-          console.error("Error calculating class duration:", e);
-        }
+            const monthlyValueForTurma = classesGivenForTurma * (professor.valor_por_aula || 0);
+            totalValue += monthlyValueForTurma;
+            if (classesGivenForTurma > 0) {
+              breakdownItems.push({
+                id: turma.id,
+                name: turma.name,
+                detail: `${classesGivenForTurma} aulas dadas no mês`,
+                value: monthlyValueForTurma,
+              });
+            }
+          });
+          break;
+        
+        case 'por_hora':
+        default:
+          professorTurmas.forEach(turma => {
+            let hoursWorkedForTurma = 0;
+            const schedule = turma.schedule || [];
+            daysInPeriod.forEach(day => {
+              const scheduleForDay = schedule.find(s => s.day === getDay(day));
+              if (scheduleForDay && scheduleForDay.start_time && scheduleForDay.end_time) {
+                try {
+                  const startTime = parse(scheduleForDay.start_time, 'HH:mm', new Date());
+                  const endTime = parse(scheduleForDay.end_time, 'HH:mm', new Date());
+                  if (!isNaN(startTime.valueOf()) && !isNaN(endTime.valueOf()) && endTime > startTime) {
+                    hoursWorkedForTurma += differenceInMinutes(endTime, startTime) / 60;
+                  }
+                } catch (e) { console.error("Error parsing time for financial calculation:", e); }
+              }
+            });
+            const monthlyValueForTurma = hoursWorkedForTurma * (professor.valor_hora_aula || 0);
+            totalValue += monthlyValueForTurma;
+            if (hoursWorkedForTurma > 0) {
+              breakdownItems.push({
+                id: turma.id,
+                name: turma.name,
+                detail: `${hoursWorkedForTurma.toFixed(1).replace('.',',')}h trabalhadas no mês`,
+                value: monthlyValueForTurma,
+              });
+            }
+          });
+          break;
       }
+      
+      return { monthKey, monthLabel, totalValue, breakdownItems };
     });
-
-    return {
-      totalAReceber,
-      jaRecebido: 0, // Simulação
-      comissoes,
-    };
   }, [professor, turmas]);
+
+  const currentMonthData = monthlyFinancialData[0];
+
+  const getPaymentTypeCard = () => {
+    switch (professor.payment_type) {
+      case 'por_hora':
+        return <StatCard label="Valor por Hora" value={formatCurrency(professor.valor_hora_aula)} icon={Clock} color="text-blue-500" />;
+      case 'por_aula':
+        return <StatCard label="Valor por Aula" value={formatCurrency(professor.valor_por_aula)} icon={Hash} color="text-blue-500" />;
+      case 'mensal':
+        return <StatCard label="Salário Fixo Mensal" value={formatCurrency(professor.salario_mensal)} icon={Calendar} color="text-blue-500" />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <StatCard label="Total a Receber (Estimado)" value={formatCurrency(financialData.totalAReceber)} icon={TrendingUp} color="text-green-500" />
-        <StatCard label="Já Recebido (Este Mês)" value={formatCurrency(financialData.jaRecebido)} icon={TrendingDown} color="text-yellow-500" />
+        <StatCard 
+          label="Ganhos Realizados (Mês Atual)" 
+          value={formatCurrency(currentMonthData.totalValue)} 
+          icon={TrendingUp} 
+          color="text-green-500" 
+        />
+        {getPaymentTypeCard()}
       </div>
-      <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
-        <h3 className="text-xl font-semibold p-6">Comissões Geradas por Aula</h3>
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead className="bg-brand-gray-50 dark:bg-brand-gray-700/50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Turma</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Data Referência</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Valor Comissão</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
-              {financialData.comissoes.length > 0 ? financialData.comissoes.map(c => (
-                <tr key={c.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-gray-900 dark:text-white">{c.turmaName}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-gray-500 dark:text-brand-gray-400">{c.data}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-green-600 dark:text-green-400">{formatCurrency(c.valor)}</td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan={3} className="px-6 py-8 text-center text-sm text-brand-gray-500">Nenhuma comissão registrada.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+
+      <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+        <h3 className="text-xl font-semibold mb-4">Histórico de Ganhos</h3>
+        <div className="space-y-2">
+          {monthlyFinancialData.map(monthData => (
+            <div key={monthData.monthKey} className="border-b border-brand-gray-200 dark:border-brand-gray-700 last:border-b-0">
+              <button
+                onClick={() => setExpandedMonthKey(expandedMonthKey === monthData.monthKey ? null : monthData.monthKey)}
+                className="w-full flex justify-between items-center py-4 px-2 text-left hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 rounded-md"
+              >
+                <span className="font-semibold text-brand-gray-900 dark:text-white capitalize">{monthData.monthLabel}</span>
+                <div className="flex items-center gap-4">
+                  <span className="font-bold text-lg text-green-600 dark:text-green-400">{formatCurrency(monthData.totalValue)}</span>
+                  <ChevronDown className={`h-5 w-5 text-brand-gray-500 transition-transform ${expandedMonthKey === monthData.monthKey ? 'rotate-180' : ''}`} />
+                </div>
+              </button>
+              <AnimatePresence>
+                {expandedMonthKey === monthData.monthKey && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pb-4 px-2">
+                      {monthData.breakdownItems.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full">
+                            <thead className="bg-brand-gray-100 dark:bg-brand-gray-700/50">
+                              <tr>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Turma</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Detalhe</th>
+                                {professor.payment_type !== 'mensal' && <th className="px-4 py-2 text-right text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase">Valor</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {monthData.breakdownItems.map(item => (
+                                <tr key={item.id}>
+                                  <td className="px-4 py-2 text-sm font-medium">{item.name}</td>
+                                  <td className="px-4 py-2 text-sm text-brand-gray-500">{item.detail}</td>
+                                  {professor.payment_type !== 'mensal' && <td className="px-4 py-2 text-sm text-right font-semibold text-green-600">{formatCurrency(item.value)}</td>}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-center text-sm text-brand-gray-500 py-4">Nenhuma atividade registrada para este mês.</p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ))}
         </div>
       </div>
     </div>

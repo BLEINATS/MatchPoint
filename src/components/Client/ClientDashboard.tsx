@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, PlanoAula, Friendship, GamificationPointTransaction, FinanceTransaction } from '../../types';
-import { Calendar, Compass, Search, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star, User, Users, Banknote, FileText, MessageSquare, Briefcase, Repeat, XCircle, LifeBuoy, Lock, Unlock, Bell, Trash2, Edit, Hourglass } from 'lucide-react';
+import { Calendar, Compass, Search, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star, User, Users, Banknote, FileText, MessageSquare, Briefcase, Repeat, XCircle, LifeBuoy, Lock, Unlock, Bell, Trash2, Edit, Hourglass, List } from 'lucide-react';
 import { isAfter, startOfDay, isSameDay, format, parse, getDay, addDays, isBefore, endOfDay, addMinutes, subDays, isWithinInterval, formatDistanceToNow, isPast, differenceInHours, differenceInWeeks, endOfWeek, startOfWeek, addWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
@@ -10,6 +10,7 @@ import UpcomingReservationCard from './UpcomingReservationCard';
 import Button from '../Forms/Button';
 import ArenaSelector from './ArenaSelector';
 import NextClassCard from './Student/NextClassCard';
+import ProfessorNextClassCard from './Professor/NextClassCard';
 import ReservationModal from '../Reservations/ReservationModal';
 import { useToast } from '../../context/ToastContext';
 import { expandRecurringReservations } from '../../utils/reservationUtils';
@@ -45,6 +46,8 @@ import SendMessageModal from './SendMessageModal';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import PayAtletaModal from './PayAtletaModal';
 import AtletaPublicProfileModal from './AtletaPublicProfileModal';
+import AvaliarProfessorModal from './Student/AvaliarProfessorModal';
+import ClassAttendanceModal from '../Alunos/ClassAttendanceModal';
 
 type View = 'inicio' | 'aulas' | 'reservas' | 'loja' | 'amigos' | 'perfil' | 'atleta_painel' | 'professor_painel' | 'documentos' | 'seguranca' | 'notificacoes' | 'suporte';
 
@@ -113,6 +116,12 @@ const ClientDashboard: React.FC = () => {
     const [reservaForAtletaPayment, setReservaForAtletaPayment] = useState<Reserva | null>(null);
 
     const [viewingAtletaProfile, setViewingAtletaProfile] = useState<{ atleta: AtletaAluguel; completedGames: number } | null>(null);
+
+    const [isAvaliarProfessorModalOpen, setIsAvaliarProfessorModalOpen] = useState(false);
+    const [classToEvaluate, setClassToEvaluate] = useState<any | null>(null);
+
+    const [isClassAttendanceModalOpen, setIsClassAttendanceModalOpen] = useState(false);
+    const [selectedClassForAttendance, setSelectedClassForAttendance] = useState<any | null>(null);
 
     const isStudent = useMemo(() => !!alunoProfileForSelectedArena?.plan_id, [alunoProfileForSelectedArena]);
 
@@ -665,6 +674,41 @@ const ClientDashboard: React.FC = () => {
         }
     };
 
+    const handleAvaliarProfessor = (classData: any) => {
+        setClassToEvaluate(classData);
+        setIsAvaliarProfessorModalOpen(true);
+    };
+
+    const handleConfirmAvaliacaoProfessor = async (rating: number, comment: string) => {
+        if (!classToEvaluate || !classToEvaluate.professor || !alunoProfileForSelectedArena || !selectedArenaContext) return;
+        
+        const professorToUpdate = professores.find(p => p.id === classToEvaluate.professor.id);
+        if (!professorToUpdate) return;
+
+        const newRating = {
+            aluno_id: alunoProfileForSelectedArena.id,
+            rating,
+            comment,
+            date: new Date().toISOString(),
+        };
+
+        const updatedRatings = [...(professorToUpdate.ratings || []), newRating];
+        const newAvgRating = updatedRatings.reduce((sum, r) => sum + r.rating, 0) / updatedRatings.length;
+
+        const updatedProfessor = { ...professorToUpdate, ratings: updatedRatings, avg_rating: newAvgRating };
+
+        try {
+            await localApi.upsert('professores', [updatedProfessor], selectedArenaContext.id);
+            addToast({ message: 'Avaliação enviada com sucesso!', type: 'success' });
+            await loadData();
+        } catch (error: any) {
+            addToast({ message: `Erro ao enviar avaliação: ${error.message}`, type: 'error' });
+        } finally {
+            setIsAvaliarProfessorModalOpen(false);
+            setClassToEvaluate(null);
+        }
+    };
+
     const handleContactAtleta = (atleta: AtletaAluguel) => {
         setAtletaToContact(atleta);
         setIsMessageModalOpen(true);
@@ -876,6 +920,64 @@ const ClientDashboard: React.FC = () => {
         return upcomingClasses[0];
     }, [isStudent, alunoProfileForSelectedArena, turmas, quadras, professores]);
 
+    const professorNextClass = useMemo(() => {
+        if (!currentProfessorId) return null;
+    
+        const professorTurmas = turmas.filter(t => t.professor_id === currentProfessorId);
+        if (professorTurmas.length === 0) return null;
+    
+        const now = new Date();
+        const classOccurrences: any[] = [];
+    
+        for (let i = 0; i < 30; i++) { // Search next 30 days
+            const date = addDays(now, i);
+            const dayOfWeek = getDay(date);
+    
+            for (const turma of professorTurmas) {
+                const scheduleForDay = turma.schedule?.find(s => s.day === dayOfWeek);
+                if (scheduleForDay) {
+                    try {
+                        const startTime = parse(scheduleForDay.start_time, 'HH:mm', date);
+                        const endTime = parse(scheduleForDay.end_time, 'HH:mm', date);
+                        let currentTime = startTime;
+    
+                        while (currentTime < endTime) {
+                            const slotStartTime = format(currentTime, 'HH:mm');
+                            const slotDateTime = parse(slotStartTime, 'HH:mm', date);
+    
+                            if (isAfter(slotDateTime, now)) {
+                                const matricula = turma.matriculas?.find(m => m.dayOfWeek === dayOfWeek && m.time === slotStartTime);
+                                const enrolledCount = matricula?.student_ids.length || 0;
+    
+                                classOccurrences.push({
+                                    date: date,
+                                    dayOfWeek: dayOfWeek,
+                                    start_time: slotStartTime,
+                                    end_time: format(addMinutes(currentTime, 60), 'HH:mm'),
+                                    turma: turma,
+                                    quadra: quadras.find(q => q.id === turma.quadra_id),
+                                    enrolledCount: enrolledCount,
+                                    capacity: turma.alunos_por_horario
+                                });
+                            }
+                            currentTime = addMinutes(currentTime, 60);
+                        }
+                    } catch(e) { console.error("Error parsing professor schedule time", e); }
+                }
+            }
+        }
+    
+        if (classOccurrences.length === 0) return null;
+    
+        classOccurrences.sort((a, b) => {
+            const aDateTime = parse(a.start_time, 'HH:mm', a.date);
+            const bDateTime = parse(b.start_time, 'HH:mm', b.date);
+            return aDateTime.getTime() - bDateTime.getTime();
+        });
+    
+        return classOccurrences[0];
+    }, [currentProfessorId, turmas, quadras]);
+
     useEffect(() => {
         const query = new URLSearchParams(location.search);
         const tab = query.get('tab');
@@ -950,9 +1052,9 @@ const ClientDashboard: React.FC = () => {
     const renderContent = () => {
         if (isLoading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>;
         switch (activeView) {
-        case 'inicio': return <InicioView alunoProfile={alunoProfileForSelectedArena} planos={planos} levels={levels} rewards={rewards} onOpenProfileModal={handleOpenProfileModal} nextReservation={upcomingReservations[0]} pendingReservations={pendingPaymentReservations} onDetail={handleOpenDetailModal} onDataChange={handleDataChange} nextClass={nextClass} quadras={quadras} reservas={allArenaReservations} onSlotClick={handleSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} arenaName={selectedArenaContext?.name} selectedArena={selectedArenaContext} onOpenAttendanceModal={() => setIsAttendanceModalOpen(true)} creditHistory={creditHistory} />;
+        case 'inicio': return <InicioView alunoProfile={alunoProfileForSelectedArena} planos={planos} levels={levels} rewards={rewards} onOpenProfileModal={handleOpenProfileModal} nextReservation={upcomingReservations[0]} pendingReservations={pendingPaymentReservations} onDetail={handleOpenDetailModal} onDataChange={handleDataChange} nextClass={nextClass} professorNextClass={professorNextClass} quadras={quadras} reservas={allArenaReservations} onSlotClick={handleSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} arenaName={selectedArenaContext?.name} selectedArena={selectedArenaContext} onOpenAttendanceModal={() => setIsAttendanceModalOpen(true)} creditHistory={creditHistory} />;
         case 'reservas': return <ReservationsTab upcoming={upcomingReservations} past={pastReservations} quadras={quadras} atletas={atletas} arenaName={selectedArenaContext?.name} onCancel={handleOpenCancelModal} onDetail={handleOpenDetailModal} onHirePlayer={(res) => { setReservationToHireFor(res); setIsHirePlayerModalOpen(true); }} profileId={profile.id} onAvaliarAtleta={handleAvaliarAtleta} arenaSettings={selectedArenaContext} />;
-        case 'aulas': return <AulasTab aluno={alunoProfileForSelectedArena!} allAlunos={allArenaAlunos} turmas={studentTurmas} professores={professores} quadras={quadras} planos={planos} onDataChange={handleDataChange} />;
+        case 'aulas': return <AulasTab aluno={alunoProfileForSelectedArena!} allAlunos={allArenaAlunos} turmas={studentTurmas} professores={professores} quadras={quadras} planos={planos} onDataChange={handleDataChange} onAvaliarProfessor={handleAvaliarProfessor} />;
         case 'loja': return <LojaView />;
         case 'amigos': return <FriendsView />;
         case 'perfil': return <ClientProfileView aluno={alunoProfileForSelectedArena} profile={profile} onProfileUpdate={handleProfileUpdate} creditHistory={creditHistory} gamificationHistory={gamificationHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} atletas={atletas} onViewProfile={handleOpenAtletaProfile} completedReservationsCount={completedReservationsCount} />;
@@ -1004,6 +1106,7 @@ const ClientDashboard: React.FC = () => {
             <AnimatePresence>{isProfileModalOpen && (<ProfileDetailModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} initialTab={profileModalInitialTab} aluno={alunoProfileForSelectedArena} creditHistory={creditHistory} gamificationHistory={gamificationHistory} paymentHistory={paymentHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} />)}</AnimatePresence>
             <AnimatePresence>{isAttendanceModalOpen && alunoProfileForSelectedArena && (<AttendanceReportModal isOpen={isAttendanceModalOpen} onClose={() => setIsAttendanceModalOpen(false)} aluno={alunoProfileForSelectedArena} turmas={turmas} />)}</AnimatePresence>
             <AnimatePresence>{isAvaliarAtletaModalOpen && reservaToEvaluate && (<AvaliarAtletaModal isOpen={isAvaliarAtletaModalOpen} onClose={() => setIsAvaliarAtletaModalOpen(false)} onConfirm={handleConfirmAvaliacao} atletaName={atletas.find(a => a.id === reservaToEvaluate.atleta_aluguel_id)?.name || 'Atleta'} />)}</AnimatePresence>
+            <AnimatePresence>{isAvaliarProfessorModalOpen && classToEvaluate && (<AvaliarProfessorModal isOpen={isAvaliarProfessorModalOpen} onClose={() => setIsAvaliarProfessorModalOpen(false)} onConfirm={handleConfirmAvaliacaoProfessor} professorName={classToEvaluate?.professor?.name || 'Professor'} />)}</AnimatePresence>
             <AnimatePresence>{isMessageModalOpen && atletaToContact && (<SendMessageModal isOpen={isMessageModalOpen} onClose={() => setIsMessageModalOpen(false)} onConfirm={handleSendMessage} friend={atletaToContact} />)}</AnimatePresence>
             <AnimatePresence>{isCancelAtletaConfirmOpen && (<ConfirmationModal isOpen={isCancelAtletaConfirmOpen} onClose={() => setIsCancelAtletaConfirmOpen(false)} onConfirm={handleConfirmCancelAtleta} title="Cancelar Contratação?" message="Tem certeza que deseja cancelar a contratação deste atleta? Ele será notificado." confirmText="Sim, Cancelar" />)}</AnimatePresence>
             <AnimatePresence>{isPayAtletaModalOpen && atletaToPay && reservaForAtletaPayment && (<PayAtletaModal isOpen={isPayAtletaModalOpen} onClose={() => setIsPayAtletaModalOpen(false)} onConfirm={handleConfirmPayAtleta} atleta={atletaToPay} isProcessing={isPaymentProcessing} />)}</AnimatePresence>
@@ -1128,7 +1231,7 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
   );
 };
 
-const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], levels: GamificationLevel[], rewards: GamificationReward[], onOpenProfileModal: (tab: 'credits' | 'gamification' | 'payments') => void, nextReservation?: Reserva, pendingReservations: Reserva[], onDetail: (reserva: Reserva) => void, onDataChange: () => void, nextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, selectedArena: Arena | null, onOpenAttendanceModal: () => void, creditHistory: CreditTransaction[] }> = ({ alunoProfile, planos, levels, rewards, onOpenProfileModal, nextReservation, pendingReservations, onDetail, onDataChange, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, selectedArena, onOpenAttendanceModal, creditHistory }) => { 
+const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], levels: GamificationLevel[], rewards: GamificationReward[], onOpenProfileModal: (tab: 'credits' | 'gamification' | 'payments') => void, nextReservation?: Reserva, pendingReservations: Reserva[], onDetail: (reserva: Reserva) => void, onDataChange: () => void, nextClass?: any, professorNextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, selectedArena: Arena | null, onOpenAttendanceModal: () => void, creditHistory: CreditTransaction[] }> = ({ alunoProfile, planos, levels, rewards, onOpenProfileModal, nextReservation, pendingReservations, onDetail, onDataChange, nextClass, professorNextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, selectedArena, onOpenAttendanceModal, creditHistory }) => { 
   const [favoriteQuadras, setFavoriteQuadras] = useState<string[]>([]);
   const [timeUntilNext, setTimeUntilNext] = useState<string | null>(null);
 
@@ -1298,15 +1401,21 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1">
-          {nextClass ? (
+        <div className="lg:col-span-1 space-y-6">
+          {professorNextClass && (
+            <ProfessorNextClassCard nextClass={professorNextClass} onClick={() => {}} />
+          )}
+          {nextClass && (
             <NextClassCard date={nextClass.date} turmaName={nextClass.turma.name} quadraName={nextClass.quadra?.name} professorName={nextClass.professor?.name} startTime={nextClass.time} arenaName={arenaName} />
-          ) : nextReservation ? (
-            <UpcomingReservationCard reservation={nextReservation} quadra={quadras.find(q => q.id === nextReservation.quadra_id)} index={0} arenaName={arenaName} />
-          ) : selectedArena ? (
-            <ArenaInfoCard arena={selectedArena} />
-          ) : (
-            <EmptyState message="Você não tem nenhuma atividade agendada." />
+          )}
+          {!professorNextClass && !nextClass && (
+            nextReservation ? (
+              <UpcomingReservationCard reservation={nextReservation} quadra={quadras.find(q => q.id === nextReservation.quadra_id)} index={0} arenaName={arenaName} />
+            ) : selectedArena ? (
+              <ArenaInfoCard arena={selectedArena} />
+            ) : (
+              <EmptyState message="Você não tem nenhuma atividade agendada." />
+            )
           )}
         </div>
         <button onClick={() => onOpenProfileModal('gamification')} className="w-full text-left bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700 hover:shadow-lg hover:border-brand-blue-500 transition-all">

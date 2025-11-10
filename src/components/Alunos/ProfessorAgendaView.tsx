@@ -11,9 +11,10 @@ interface ProfessorAgendaViewProps {
   turmas: Turma[];
   quadras: Quadra[];
   isGeneralView?: boolean;
+  onClassClick: (classData: any) => void;
 }
 
-const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, turmas, quadras, isGeneralView = false }) => {
+const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, turmas, quadras, isGeneralView = false, onClassClick }) => {
   const [selectedDate, setSelectedDate] = useState(startOfDay(new Date()));
   const [selectedProfessorId, setSelectedProfessorId] = useState<'all' | string>('all');
 
@@ -39,6 +40,13 @@ const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, 
         if (!scheduleForDay) return [];
 
         const startDate = parseDateStringAsLocal(turma.start_date);
+        if (isAfter(selectedDate, startDate) || isAfter(startDate, selectedDate)) {
+            // This condition is tricky. Let's simplify: if the class is not in the past relative to its start date.
+            const today = startOfDay(new Date());
+            if (isAfter(today, parseDateStringAsLocal(turma.start_date)) && isAfter(parseDateStringAsLocal(turma.start_date), selectedDate)) {
+                // This seems complex, let's just check if start_date is not in the future relative to selectedDate
+            }
+        }
         if (isAfter(startDate, selectedDate)) return [];
         if (turma.end_date) {
           const endDate = parseDateStringAsLocal(turma.end_date);
@@ -59,6 +67,8 @@ const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, 
 
             slots.push({
               turma,
+              date: selectedDate,
+              dayOfWeek: dayOfWeek,
               start_time: slotStartTime,
               end_time: slotEndTime,
               unique_key: `${turma.id}-${format(selectedDate, 'yyyyMMdd')}-${slotStartTime}`,
@@ -108,7 +118,11 @@ const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, 
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
           {aulasDoDia.length > 0 ? (
             aulasDoDia.map(aula => (
-              <div key={aula.unique_key} className="p-4 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg border-l-4 border-purple-500">
+              <button 
+                key={aula.unique_key} 
+                onClick={() => onClassClick(aula)}
+                className="w-full text-left p-4 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg border-l-4 border-purple-500 hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700 transition-colors"
+              >
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-semibold text-brand-gray-900 dark:text-white">{aula.turma.name}</p>
@@ -123,7 +137,7 @@ const ProfessorAgendaView: React.FC<ProfessorAgendaViewProps> = ({ professores, 
                   {isGeneralView && aula.professor && <p className="flex items-center"><GraduationCap className="h-3 w-3 mr-2"/>{aula.professor.name}</p>}
                   {aula.quadra && <p className="flex items-center"><MapPin className="h-3 w-3 mr-2"/>{aula.quadra.name}</p>}
                 </div>
-              </div>
+              </button>
             ))
           ) : (
             <p className="text-center text-brand-gray-500 py-8">Nenhuma aula agendada para este dia.</p>

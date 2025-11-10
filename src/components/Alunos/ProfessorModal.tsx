@@ -31,8 +31,12 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
   const [formData, setFormData] = useState({
     name: '', email: '', phone: '', specialties: [] as string[], profile_id: null as string | null,
     avatar_url: null as string | null, status: 'ativo' as 'ativo' | 'inativo',
-    nivel_experiencia: null as Professor['nivel_experiencia'], valor_hora_aula: 0, metodologia: '', portfolio_url: '',
+    nivel_experiencia: null as Professor['nivel_experiencia'], metodologia: '', portfolio_url: '',
     pix_key: '',
+    payment_type: 'por_hora' as Professor['payment_type'],
+    valor_hora_aula: 0 as number | null,
+    salario_mensal: 0 as number | null,
+    valor_por_aula: 0 as number | null,
   });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -49,24 +53,43 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
         name: initialData.name, email: initialData.email, phone: initialData.phone || '',
         specialties: initialData.specialties || [], profile_id: initialData.profile_id || null,
         avatar_url: initialData.avatar_url || null, status: initialData.status || 'ativo',
-        nivel_experiencia: initialData.nivel_experiencia || null, valor_hora_aula: initialData.valor_hora_aula || 0,
+        nivel_experiencia: initialData.nivel_experiencia || null, 
         metodologia: initialData.metodologia || '', portfolio_url: initialData.portfolio_url || '',
         pix_key: initialData.pix_key || '',
+        payment_type: initialData.payment_type || 'por_hora',
+        valor_hora_aula: initialData.valor_hora_aula || 0,
+        salario_mensal: initialData.salario_mensal || 0,
+        valor_por_aula: initialData.valor_por_aula || 0,
       });
     } else {
       setFormData({
         name: '', email: '', phone: '', specialties: [], profile_id: null, avatar_url: null, status: 'ativo',
-        nivel_experiencia: null, valor_hora_aula: 0, metodologia: '', portfolio_url: '', pix_key: '',
+        nivel_experiencia: null, metodologia: '', portfolio_url: '', pix_key: '',
+        payment_type: 'por_hora', valor_hora_aula: 0, salario_mensal: 0, valor_por_aula: 0,
       });
     }
     setPhotoFile(null);
   }, [initialData, isOpen]);
 
   const handleSave = () => {
+    let dataToSave: Partial<Professor> = { ...formData };
+    
+    // Nullify unused payment fields
+    if (formData.payment_type === 'por_hora') {
+      dataToSave.salario_mensal = null;
+      dataToSave.valor_por_aula = null;
+    } else if (formData.payment_type === 'mensal') {
+      dataToSave.valor_hora_aula = null;
+      dataToSave.valor_por_aula = null;
+    } else if (formData.payment_type === 'por_aula') {
+      dataToSave.valor_hora_aula = null;
+      dataToSave.salario_mensal = null;
+    }
+
     if (isEditing && initialData) {
-      onSave({ ...initialData, ...formData }, photoFile);
+      onSave({ ...initialData, ...dataToSave }, photoFile);
     } else {
-      onSave(formData, photoFile);
+      onSave(dataToSave as any, photoFile);
     }
   };
   
@@ -74,9 +97,11 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    let finalValue: string | number = value;
+    let finalValue: string | number | null = value;
     if (name === 'phone') finalValue = maskPhone(value);
-    if (name === 'valor_hora_aula') finalValue = Number(value);
+    if (['valor_hora_aula', 'salario_mensal', 'valor_por_aula'].includes(name)) {
+        finalValue = value === '' ? null : Number(value);
+    }
     setFormData(prev => ({ ...prev, [name]: finalValue }));
   };
 
@@ -178,6 +203,35 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
                     </div>
                 </div>
               </Section>
+              <Section title="Remuneração">
+                <div>
+                    <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Forma de Pagamento</label>
+                    <select name="payment_type" value={formData.payment_type} onChange={handleChange} className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600">
+                        <option value="por_hora">Por Hora/Aula</option>
+                        <option value="mensal">Salário Fixo Mensal</option>
+                        <option value="por_aula">Valor Fixo por Aula</option>
+                    </select>
+                </div>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={formData.payment_type}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                  >
+                    {formData.payment_type === 'por_hora' && (
+                      <Input label="Valor por Hora/Aula (R$)" name="valor_hora_aula" type="number" value={String(formData.valor_hora_aula ?? '')} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} />
+                    )}
+                    {formData.payment_type === 'mensal' && (
+                      <Input label="Salário Fixo Mensal (R$)" name="salario_mensal" type="number" value={String(formData.salario_mensal ?? '')} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} />
+                    )}
+                    {formData.payment_type === 'por_aula' && (
+                      <Input label="Valor Fixo por Aula (R$)" name="valor_por_aula" type="number" value={String(formData.valor_por_aula ?? '')} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} />
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+                <Input label="Chave PIX" name="pix_key" value={formData.pix_key || ''} onChange={handleChange} icon={<Banknote className="h-4 w-4 text-brand-gray-400"/>} placeholder="Chave PIX para pagamentos" />
+              </Section>
               <Section title="Informações Profissionais">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -187,9 +241,7 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
                             {NIVEIS_EXPERIENCIA.map(n => <option key={n} value={n}>{n}</option>)}
                         </select>
                     </div>
-                    <Input label="Valor por Hora/Aula (R$)" name="valor_hora_aula" type="number" value={formData.valor_hora_aula.toString()} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} />
                 </div>
-                <Input label="Chave PIX" name="pix_key" value={formData.pix_key || ''} onChange={handleChange} icon={<Banknote className="h-4 w-4 text-brand-gray-400"/>} placeholder="Chave PIX para pagamentos" />
                 <div>
                     <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-2">Especialidades</label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">

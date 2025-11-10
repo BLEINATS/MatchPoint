@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Aluno, Turma, Professor, Quadra, PlanoAula } from '../../../types';
-import { Calendar, Clock, GraduationCap, MapPin, Users, RefreshCw, AlertTriangle, Info } from 'lucide-react';
+import { Calendar, Clock, GraduationCap, MapPin, Users, RefreshCw, AlertTriangle, Info, CheckCircle, Star } from 'lucide-react';
 import { format, isAfter, isSameDay, parse, getDay, isPast, addMinutes, startOfDay, addMonths, addYears, isBefore, sub, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DatePickerCalendar from '../DatePickerCalendar';
@@ -23,9 +23,10 @@ interface AulasTabProps {
   quadras: Quadra[];
   planos: PlanoAula[];
   onDataChange: () => void;
+  onAvaliarProfessor: (classData: any) => void;
 }
 
-const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professores, quadras, planos, onDataChange }) => {
+const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professores, quadras, planos, onDataChange, onAvaliarProfessor }) => {
   const [selectedDate, setSelectedDate] = useState(startOfDay(new Date()));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
@@ -120,25 +121,21 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
     );
   }, [arena]);
 
-  const { scheduledClasses, availableSlots } = useMemo(() => {
+  const { scheduledClasses, pastClasses, availableSlots } = useMemo(() => {
     const now = new Date();
-    const scheduled = (aluno.aulas_agendadas || [])
-      .map(aula => {
+    const scheduled: any[] = [];
+    const past: any[] = [];
+    
+    (aluno.aulas_agendadas || []).forEach(aula => {
         const turma = turmas.find(t => t.id === aula.turma_id);
-        if (!turma) return null;
+        if (!turma) return;
 
         const datePart = parseDateStringAsLocal(aula.date);
         const [startHour, startMinute] = aula.time.split(':').map(Number);
         const classStartDateTime = new Date(datePart.getFullYear(), datePart.getMonth(), datePart.getDate(), startHour, startMinute);
         const classEndDateTime = addMinutes(classStartDateTime, 60);
 
-        if (!isAfter(classEndDateTime, now)) return null;
-        
-        const enrolledCount = allAlunos.reduce((count, currentAluno) => {
-          return count + ((currentAluno.aulas_agendadas || []).some(a => a.turma_id === turma.id && a.date === aula.date && a.time === aula.time) ? 1 : 0);
-        }, 0);
-
-        return {
+        const classDetails = {
           id: `${turma.id}-${aula.date}-${aula.time}`,
           turma,
           date: datePart,
@@ -146,12 +143,19 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
           professor: professores.find(p => p.id === turma.professor_id),
           quadra: quadras.find(q => q.id === turma.quadra_id),
           isEnrolled: true,
-          enrolledCount,
+          enrolledCount: allAlunos.reduce((count, currentAluno) => count + ((currentAluno.aulas_agendadas || []).some(a => a.turma_id === turma.id && a.date === aula.date && a.time === aula.time) ? 1 : 0), 0),
           capacity: turma.alunos_por_horario,
         };
-      })
-      .filter((c): c is NonNullable<typeof c> => c !== null)
-      .sort((a, b) => a.date.getTime() - b.date.getTime() || a.time.localeCompare(b.time));
+
+        if (isAfter(classEndDateTime, now)) {
+            scheduled.push(classDetails);
+        } else {
+            past.push(classDetails);
+        }
+    });
+
+    scheduled.sort((a, b) => a.date.getTime() - b.date.getTime() || a.time.localeCompare(b.time));
+    past.sort((a, b) => b.date.getTime() - a.date.getTime() || b.time.localeCompare(a.time));
 
     const day = selectedDate;
     const dayOfWeek = getDay(day);
@@ -231,7 +235,7 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
     });
 
     available.sort((a, b) => a.time.localeCompare(b.time));
-    return { scheduledClasses: scheduled, availableSlots: available };
+    return { scheduledClasses: scheduled, pastClasses: past, availableSlots: available };
   }, [selectedDate, turmas, aluno, professores, quadras, allAlunos, arena]);
 
   const handleOpenModal = (classData: any) => {
@@ -333,6 +337,37 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
             ))}
           </div>
         ) : <p className="text-brand-gray-500 text-sm text-center py-4">Você não tem nenhuma aula agendada.</p>}
+      </div>
+
+      <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+        <h3 className="text-xl font-semibold mb-4">Aulas Concluídas</h3>
+        {pastClasses.length > 0 ? (
+          <div className="space-y-3 max-h-72 overflow-y-auto pr-2">
+            {pastClasses.map(aula => {
+              const hasRated = aula.professor?.ratings?.some((r: any) => r.aluno_id === aluno.id);
+              return (
+                <div key={aula.id} className="p-3 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div>
+                    <p className="font-semibold">{aula.turma.name}</p>
+                    <p className="text-sm text-brand-gray-500 capitalize">{format(aula.date, "EEEE, dd/MM/yyyy", { locale: ptBR })}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {aula.professor && !hasRated && (
+                      <Button size="sm" variant="outline" onClick={() => onAvaliarProfessor(aula)}>
+                        <Star className="h-4 w-4 mr-1.5" /> Avaliar Professor
+                      </Button>
+                    )}
+                    {hasRated && (
+                      <span className="text-sm text-green-600 flex items-center gap-1.5">
+                        <CheckCircle className="h-4 w-4" /> Avaliado
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : <p className="text-brand-gray-500 text-sm text-center py-4">Nenhuma aula concluída ainda.</p>}
       </div>
 
       <div className="mt-8">

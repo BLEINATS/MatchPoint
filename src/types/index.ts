@@ -190,7 +190,7 @@ export interface Aluno {
   monthly_fee: number | null;
   aulas_restantes: number | null;
   aulas_agendadas: { turma_id: string; date: string; time: string }[];
-  attendance_history?: { date: string; status: 'present' | 'absent' }[];
+  attendance_history?: { date: string; turma_id: string; time: string; status: 'presente' | 'falta' }[];
   join_date: string;
   created_at: string;
   avatar_url?: string;
@@ -213,12 +213,22 @@ export interface Professor {
   specialties: string[];
   status: 'ativo' | 'inativo';
   nivel_experiencia?: 'Júnior' | 'Pleno' | 'Sênior' | null;
-  valor_hora_aula?: number | null;
   metodologia?: string | null;
   portfolio_url?: string | null;
   comissao?: number;
   pix_key?: string | null;
   created_at: string;
+  payment_type?: 'por_hora' | 'mensal' | 'por_aula';
+  valor_hora_aula?: number | null;
+  salario_mensal?: number | null;
+  valor_por_aula?: number | null;
+  ratings?: {
+    aluno_id: string;
+    rating: number;
+    comment?: string;
+    date: string;
+  }[];
+  avg_rating?: number;
 }
 
 export interface AtletaAluguel {

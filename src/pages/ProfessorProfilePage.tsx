@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { Professor, Turma, Quadra } from '../types';
+import { Professor, Turma, Quadra, Aluno } from '../types';
 import { Loader2, Calendar, DollarSign, BarChart2, User, ArrowLeft, Mail, Phone, Briefcase, Percent } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { localApi } from '../lib/localApi';
@@ -10,6 +10,7 @@ import ProfessorAgendaView from '../components/Alunos/ProfessorAgendaView';
 import ProfessorFinancialTab from '../components/Financeiro/ProfessorFinancialTab';
 import ProfessorPerformanceTab from '../components/Financeiro/ProfessorPerformanceTab';
 import Layout from '../components/Layout/Layout';
+import ClassAttendanceModal from '../components/Alunos/ClassAttendanceModal';
 
 type TabType = 'agenda' | 'financeiro' | 'performance';
 
@@ -23,19 +24,25 @@ const ProfessorProfileContent: React.FC<ProfessorProfileContentProps> = ({ profe
   const { addToast } = useToast();
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [quadras, setQuadras] = useState<Quadra[]>([]);
+  const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('agenda');
+  
+  const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
+  const [selectedClassForAttendance, setSelectedClassForAttendance] = useState<any | null>(null);
 
   const loadData = useCallback(async () => {
     if (!selectedArenaContext) return;
     setIsLoading(true);
     try {
-      const [turmasRes, quadrasRes] = await Promise.all([
+      const [turmasRes, quadrasRes, alunosRes] = await Promise.all([
         localApi.select<Turma>('turmas', selectedArenaContext.id),
         localApi.select<Quadra>('quadras', selectedArenaContext.id),
+        localApi.select<Aluno>('alunos', selectedArenaContext.id),
       ]);
       setTurmas(turmasRes.data || []);
       setQuadras(quadrasRes.data || []);
+      setAlunos(alunosRes.data || []);
     } catch (error: any) {
       addToast({ message: `Erro ao carregar dados: ${error.message}`, type: 'error' });
     } finally {
@@ -49,6 +56,59 @@ const ProfessorProfileContent: React.FC<ProfessorProfileContentProps> = ({ profe
 
   const professorTurmas = turmas.filter(t => t.professor_id === professorProfile.id);
 
+  const handleOpenAttendanceModal = (classData: any) => {
+    setSelectedClassForAttendance(classData);
+    setIsAttendanceModalOpen(true);
+  };
+
+  const handleSaveAttendance = async (
+    updatedAttendance: { [alunoId: string]: 'presente' | 'falta' },
+    classDetails: { turma_id: string; date: string; time: string }
+  ) => {
+    if (!selectedArenaContext) return;
+    
+    try {
+      const { data: allAlunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
+      const updatedAlunos: Aluno[] = [];
+
+      allAlunos.forEach(aluno => {
+        if (updatedAttendance[aluno.id]) {
+          const newStatus = updatedAttendance[aluno.id];
+          const historyEntry = {
+            turma_id: classDetails.turma_id,
+            date: classDetails.date,
+            time: classDetails.time,
+            status: newStatus,
+          };
+          
+          const existingHistory = aluno.attendance_history || [];
+          const entryIndex = existingHistory.findIndex(
+            h => h.turma_id === classDetails.turma_id && h.date === classDetails.date && h.time === classDetails.time
+          );
+
+          let newHistory = [...existingHistory];
+          if (entryIndex > -1) {
+            newHistory[entryIndex] = historyEntry;
+          } else {
+            newHistory.push(historyEntry);
+          }
+          
+          updatedAlunos.push({ ...aluno, attendance_history: newHistory });
+        }
+      });
+      
+      if (updatedAlunos.length > 0) {
+        await localApi.upsert('alunos', updatedAlunos, selectedArenaContext.id);
+      }
+      
+      addToast({ message: 'Frequência salva com sucesso!', type: 'success' });
+      setIsAttendanceModalOpen(false);
+      loadData(); // Recarrega os dados para refletir as mudanças
+    } catch (error: any) {
+      addToast({ message: `Erro ao salvar frequência: ${error.message}`, type: 'error' });
+    }
+  };
+
   const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
     { id: 'agenda', label: 'Agenda', icon: Calendar },
     { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
@@ -60,11 +120,11 @@ const ProfessorProfileContent: React.FC<ProfessorProfileContentProps> = ({ profe
     
     switch (activeTab) {
       case 'agenda':
-        return <ProfessorAgendaView professores={[professorProfile]} turmas={professorTurmas} quadras={quadras} />;
+        return <ProfessorAgendaView professores={[professorProfile]} turmas={professorTurmas} quadras={quadras} onClassClick={handleOpenAttendanceModal} />;
       case 'financeiro':
         return <ProfessorFinancialTab professor={professorProfile} turmas={professorTurmas} />;
       case 'performance':
-        return <ProfessorPerformanceTab professor={professorProfile} turmas={professorTurmas} />;
+        return <ProfessorPerformanceTab professor={professorProfile} turmas={professorTurmas} alunos={alunos} />;
       default:
         return null;
     }
@@ -112,6 +172,18 @@ const ProfessorProfileContent: React.FC<ProfessorProfileContentProps> = ({ profe
         <motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
           {renderContent()}
         </motion.div>
+      </AnimatePresence>
+      
+      <AnimatePresence>
+        {isAttendanceModalOpen && selectedClassForAttendance && (
+          <ClassAttendanceModal
+            isOpen={isAttendanceModalOpen}
+            onClose={() => setIsAttendanceModalOpen(false)}
+            onSave={handleSaveAttendance}
+            classData={selectedClassForAttendance}
+            allAlunos={alunos}
+          />
+        )}
       </AnimatePresence>
     </div>
   );
