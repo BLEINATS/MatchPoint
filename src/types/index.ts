@@ -469,16 +469,19 @@ export interface Participant {
   categoryId: string;
   name: string; // Team name or individual's name
   players: {
-    name: string;
     aluno_id: string | null;
+    name: string;
+    profile_id: string | null;
     phone?: string | null;
-  }[]; // List of player objects
+    status: 'pending' | 'accepted' | 'declined';
+    payment_status: 'pendente' | 'pago';
+    payment_method?: 'pix' | 'cartao' | 'dinheiro' | null;
+    checked_in: boolean;
+  }[]; 
   email: string;
-  checked_in: boolean;
   on_waitlist?: boolean;
   ranking_points?: number;
-  payment_status?: 'pendente' | 'pago';
-  payment_method?: 'pix' | 'cartao' | 'dinheiro' | null;
+  payment_status?: 'pendente' | 'pago' | 'parcialmente_pago';
 }
 
 export interface Match {
@@ -500,7 +503,7 @@ export interface Notificacao {
   arena_id: string;
   profile_id?: string | null;
   message: string;
-  type: 'announcement' | 'game_invite' | 'friend_requests' | 'cancellation' | 'gamification_reward' | 'gamification_points' | 'direct_message' | 'game_invite_response' | 'payment_received';
+  type: 'announcement' | 'game_invite' | 'friend_requests' | 'cancellation' | 'gamification_reward' | 'gamification_points' | 'direct_message' | 'game_invite_response' | 'payment_received' | 'tournament_invite' | 'tournament_announcement';
   read: boolean;
   link_to?: string | null;
   created_at: string;

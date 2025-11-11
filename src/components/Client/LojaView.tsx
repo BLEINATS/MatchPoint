@@ -26,7 +26,21 @@ const LojaView: React.FC = () => {
     try {
       const { data, error } = await localApi.select<Product>('products', arena.id);
       if (error) throw error;
-      setProducts((data || []).filter(p => p.is_active && p.stock > 0));
+      
+      const activeProducts = (data || []).filter(p => {
+        if (!p.is_active) return false;
+        
+        // Se o produto tem variações, verifica o estoque delas
+        if (p.variants && p.variants.length > 0) {
+          const totalVariantStock = p.variants.reduce((sum, v) => sum + v.stock, 0);
+          return totalVariantStock > 0;
+        }
+        
+        // Se não tem variações, verifica o estoque principal
+        return p.stock > 0;
+      });
+      
+      setProducts(activeProducts);
     } catch (error: any) {
       addToast({ message: `Erro ao carregar produtos: ${error.message}`, type: 'error' });
     } finally {

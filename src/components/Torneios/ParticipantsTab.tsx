@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Torneio, Participant, Aluno } from '../../types';
 import Button from '../Forms/Button';
-import { Check, UserPlus, Send, BarChart3, Users, X, Edit, Trash2, AlertTriangle, ArrowUpCircle, Clock, MessageSquare, CheckCircle, DollarSign, Banknote, CreditCard } from 'lucide-react';
+import { Check, UserPlus, Send, BarChart3, Users, X, Edit, Trash2, AlertTriangle, ArrowUpCircle, Clock, MessageSquare, CheckCircle, DollarSign, ChevronDown } from 'lucide-react';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import { useToast } from '../../context/ToastContext';
 import Input from '../Forms/Input';
@@ -21,24 +21,66 @@ interface ParticipantsTabProps {
 const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, onAddParticipant, onEditParticipant, onGenerateBracket, onDeleteBracket }) => {
   const [participantToDelete, setParticipantToDelete] = useState<Participant | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [participantToUpdatePayment, setParticipantToUpdatePayment] = useState<Participant | null>(null);
   const { addToast } = useToast();
+  const [paymentConfirm, setPaymentConfirm] = useState<{ participant: Participant, playerIndex: number } | null>(null);
 
-  const handleParticipantDetailChange = (participantId: string, field: keyof Participant, value: any) => {
+  const handlePlayerDetailChange = (participantId: string, playerIndex: number, field: 'payment_status' | 'checked_in', value: any) => {
+    if (field === 'payment_status') {
+      const participant = torneio.participants.find(p => p.id === participantId);
+      if (participant && participant.players[playerIndex]?.payment_status !== 'pago') {
+        setPaymentConfirm({ participant, playerIndex });
+      }
+      return;
+    }
+
     setTorneio(prev => {
       if (!prev) return null;
-      return {
-        ...prev,
-        participants: prev.participants.map(p =>
-          p.id === participantId ? { ...p, [field]: value } : p
-        ),
-      };
+      const newParticipants = prev.participants.map(p => {
+        if (p.id === participantId) {
+          const newPlayers = [...p.players];
+          newPlayers[playerIndex] = { ...newPlayers[playerIndex], [field]: !newPlayers[playerIndex][field] };
+          return { ...p, players: newPlayers };
+        }
+        return p;
+      });
+      return { ...prev, participants: newParticipants };
     });
   };
+  
+  const handleConfirmPayment = (method: 'pix' | 'cartao' | 'dinheiro') => {
+    if (!paymentConfirm) return;
+    const { participant, playerIndex } = paymentConfirm;
+    
+    setTorneio(prev => {
+      if (!prev) return null;
+      const newParticipants = prev.participants.map(p => {
+        if (p.id === participant.id) {
+          const newPlayers = [...p.players];
+          const playerToUpdate = newPlayers[playerIndex];
 
-  const toggleCheckIn = (participantId: string) => {
-    handleParticipantDetailChange(participantId, 'checked_in', !torneio.participants.find(p => p.id === participantId)?.checked_in);
+          if (playerToUpdate.payment_status === 'pago') {
+             newPlayers[playerIndex] = { ...playerToUpdate, payment_status: 'pendente', payment_method: null };
+          } else {
+             newPlayers[playerIndex] = { ...playerToUpdate, payment_status: 'pago', payment_method: method };
+          }
+
+          const acceptedPlayers = newPlayers.filter(pl => pl.status === 'accepted');
+          const allPaid = acceptedPlayers.length > 0 && acceptedPlayers.every(pl => pl.payment_status === 'pago');
+          const somePaid = acceptedPlayers.some(pl => pl.payment_status === 'pago');
+
+          let newParticipantStatus: Participant['payment_status'] = 'pendente';
+          if (allPaid) newParticipantStatus = 'pago';
+          else if (somePaid) newParticipantStatus = 'parcialmente_pago';
+
+          return { ...p, players: newPlayers, payment_status: newParticipantStatus };
+        }
+        return p;
+      });
+      return { ...prev, participants: newParticipants };
+    });
+
+    setPaymentConfirm(null);
+    addToast({ message: 'Status de pagamento atualizado!', type: 'success' });
   };
 
   const handleDeleteRequest = (participant: Participant) => {
@@ -65,28 +107,14 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
       return;
     }
 
-    handleParticipantDetailChange(participant.id, 'on_waitlist', false);
-    addToast({ message: `${participant.name} foi promovido para a lista de inscritos.`, type: 'success' });
-  };
-
-  const handlePaymentStatusClick = (participant: Participant) => {
-    if (participant.payment_status === 'pago') {
-      if (window.confirm(`Deseja reverter o status de pagamento de ${participant.name} para "Pendente"?`)) {
-        handleParticipantDetailChange(participant.id, 'payment_status', 'pendente');
-        handleParticipantDetailChange(participant.id, 'payment_method', null);
-      }
-    } else {
-      setParticipantToUpdatePayment(participant);
-      setIsPaymentModalOpen(true);
-    }
-  };
-
-  const handleConfirmPayment = (method: 'pix' | 'cartao' | 'dinheiro') => {
-    if (!participantToUpdatePayment) return;
-    handleParticipantDetailChange(participantToUpdatePayment.id, 'payment_status', 'pago');
-    handleParticipantDetailChange(participantToUpdatePayment.id, 'payment_method', method);
-    setIsPaymentModalOpen(false);
-    setParticipantToUpdatePayment(null);
+    setTorneio(prev => {
+        if (!prev) return null;
+        return {
+            ...prev,
+            participants: prev.participants.map(p => p.id === participant.id ? { ...p, on_waitlist: false } : p)
+        };
+    });
+    addToast({ message: `${participant.name} foi promovido para la lista de inscritos.`, type: 'success' });
   };
 
   return (
@@ -96,7 +124,7 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
         const waitlistParticipants = torneio.participants.filter(p => p.categoryId === category.id && p.on_waitlist);
         const hasMatches = torneio.matches.some(m => m.categoryId === category.id);
         
-        const allCheckedIn = categoryParticipants.every(p => p.checked_in);
+        const allCheckedIn = categoryParticipants.every(p => p.players.every(player => player.checked_in));
         const allTeamsComplete = categoryParticipants.every(p => {
           const requiredSize = torneio.modality === 'individual' ? 1 : torneio.modality === 'duplas' ? 2 : torneio.team_size || 1;
           return p.players.filter(pl => pl && pl.name).length === requiredSize;
@@ -106,7 +134,7 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
         let generateBracketTooltip = '';
         if (categoryParticipants.length < 2) generateBracketTooltip = 'Mínimo de 2 inscritos para gerar chaves.';
         else if (!allTeamsComplete) generateBracketTooltip = 'Existem equipes/duplas incompletas.';
-        else if (!allCheckedIn) generateBracketTooltip = 'Todos os inscritos devem ter o check-in realizado.';
+        else if (!allCheckedIn) generateBracketTooltip = 'Todos os jogadores devem ter o check-in realizado.';
         
         const maxParticipants = torneio.max_participants || 0;
         const currentParticipantsCount = categoryParticipants.length;
@@ -117,35 +145,22 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
               <h3 className="text-xl font-semibold flex items-center gap-3">
                 <span>{category.group} - {category.level}</span>
-                <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${
-                  isFull 
-                    ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' 
-                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                }`}>
+                <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${ isFull ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'}`}>
                   {currentParticipantsCount} / {maxParticipants}
                 </span>
               </h3>
               <div className="flex gap-2 items-center">
-                {hasMatches && (
-                    <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                        <CheckCircle className="h-4 w-4" />
-                        <span className="font-semibold">Chaves Geradas</span>
-                    </div>
-                )}
                 {hasMatches ? (
                   <Button variant="outline" onClick={() => onDeleteBracket(category.id)} className="text-red-500 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Excluir Chaves
+                    <Trash2 className="h-4 w-4 mr-2" />Excluir Chaves
                   </Button>
                 ) : (
                   <Button variant="outline" onClick={() => onGenerateBracket(category.id)} disabled={!canGenerate} title={generateBracketTooltip}>
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Gerar Chaves
+                    <BarChart3 className="h-4 w-4 mr-2" />Gerar Chaves
                   </Button>
                 )}
                 <Button onClick={() => onAddParticipant(null, category.id, isFull)}>
-                  <UserPlus className="h-4 w-4 mr-2" /> 
-                  {isFull ? 'Adicionar na Espera' : 'Adicionar Inscrito'}
+                  <UserPlus className="h-4 w-4 mr-2" /> {isFull ? 'Adicionar na Espera' : 'Adicionar Inscrito'}
                 </Button>
               </div>
             </div>
@@ -153,11 +168,9 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
             <ParticipantTable
               participants={categoryParticipants}
               torneio={torneio}
-              onToggleCheckIn={toggleCheckIn}
               onEdit={onEditParticipant}
               onDelete={handleDeleteRequest}
-              onParticipantDetailChange={handleParticipantDetailChange}
-              onPaymentStatusClick={handlePaymentStatusClick}
+              onPlayerDetailChange={handlePlayerDetailChange}
             />
 
             {waitlistParticipants.length > 0 && (
@@ -166,13 +179,11 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
                 <ParticipantTable
                   participants={waitlistParticipants}
                   torneio={torneio}
-                  onToggleCheckIn={toggleCheckIn}
                   onEdit={onEditParticipant}
                   onDelete={handleDeleteRequest}
                   onPromote={handlePromoteFromWaitlist}
                   isMainListFull={isFull}
-                  onParticipantDetailChange={handleParticipantDetailChange}
-                  onPaymentStatusClick={handlePaymentStatusClick}
+                  onPlayerDetailChange={handlePlayerDetailChange}
                 />
               </div>
             )}
@@ -189,155 +200,107 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
         confirmText="Sim, Remover"
       />
       <PaymentConfirmationModal
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
+        isOpen={!!paymentConfirm}
+        onClose={() => setPaymentConfirm(null)}
         onConfirm={handleConfirmPayment}
-        participantName={participantToUpdatePayment?.name || ''}
+        participantName={paymentConfirm?.participant.players[paymentConfirm.playerIndex]?.name || ''}
       />
     </div>
   );
 };
 
-interface ParticipantTableProps {
-    participants: Participant[];
-    torneio: Torneio;
-    onToggleCheckIn: (id: string) => void;
-    onEdit: (p: Participant, categoryId: string) => void;
-    onDelete: (p: Participant) => void;
-    onPromote?: (p: Participant) => void;
-    isMainListFull?: boolean;
-    onParticipantDetailChange: (participantId: string, field: keyof Participant, value: any) => void;
-    onPaymentStatusClick: (participant: Participant) => void;
-}
+const ParticipantRow: React.FC<{
+  participant: Participant;
+  torneio: Torneio;
+  onEdit: (p: Participant, categoryId: string) => void;
+  onDelete: (p: Participant) => void;
+  onPromote?: (p: Participant) => void;
+  isMainListFull?: boolean;
+  onPlayerDetailChange: (participantId: string, playerIndex: number, field: 'payment_status' | 'checked_in', value: any) => void;
+}> = ({ participant, torneio, onEdit, onDelete, onPromote, isMainListFull, onPlayerDetailChange }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
 
-const ParticipantTable: React.FC<ParticipantTableProps> = ({ participants, torneio, onToggleCheckIn, onEdit, onDelete, onPromote, isMainListFull, onParticipantDetailChange, onPaymentStatusClick }) => {
-    
-    const handleInvite = (phone: string, name: string) => {
-        const message = encodeURIComponent(`Olá ${name}, você foi inscrito no torneio "${torneio.name}". Crie sua conta em nossa plataforma para acompanhar os jogos e receber notificações: ${window.location.origin}/auth`);
-        window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${message}`, '_blank');
-    };
+  const acceptedPlayers = participant.players.filter(p => p.status === 'accepted' && p.name);
+  const allPaid = acceptedPlayers.length > 0 && acceptedPlayers.every(p => p.payment_status === 'pago');
+  const somePaid = acceptedPlayers.some(p => p.payment_status === 'pago');
+  const allCheckedIn = acceptedPlayers.length > 0 && acceptedPlayers.every(p => p.checked_in);
 
-    const getPaymentMethodIcon = (method?: 'pix' | 'cartao' | 'dinheiro' | null) => {
-        switch (method) {
-            case 'pix': return <DollarSign className="h-3 w-3" />;
-            case 'cartao': return <CreditCard className="h-3 w-3" />;
-            case 'dinheiro': return <Banknote className="h-3 w-3" />;
-            default: return <CheckCircle className="h-3 w-3 mr-1" />;
-        }
-    };
+  let paymentStatus: 'pago' | 'parcialmente_pago' | 'pendente' = 'pendente';
+  if (allPaid) paymentStatus = 'pago';
+  else if (somePaid) paymentStatus = 'parcialmente_pago';
 
-    return (
-        <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
-                {participants.length > 0 && (
-                    <thead className="bg-brand-gray-50 dark:bg-brand-gray-700/50">
-                        <tr>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase tracking-wider">Nome</th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase tracking-wider">Ranking</th>
-                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase tracking-wider">Pagamento</th>
-                            <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-brand-gray-500 dark:text-brand-gray-300 uppercase tracking-wider">Check-in</th>
-                            <th scope="col" className="relative px-6 py-3"><span className="sr-only">Ações</span></th>
-                        </tr>
-                    </thead>
-                )}
-                <tbody className="bg-white dark:bg-brand-gray-800 divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
-                    {participants.map((participant, index) => {
-                        const isTeam = torneio.modality === 'equipes';
-                        const isDuo = torneio.modality === 'duplas';
-                        const requiredSize = isTeam ? torneio.team_size || 0 : isDuo ? 2 : 1;
-                        const currentSize = participant.players.filter(p => p && p.name).length;
-                        const isIncomplete = currentSize < requiredSize && requiredSize > 1;
-                        const isOnWaitlist = participant.on_waitlist === true;
-                        const newPlayer = participant.players.find(p => !p.aluno_id && p.phone);
+  const paymentStatusProps = {
+    pago: { label: 'Pago', color: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300', icon: CheckCircle },
+    parcialmente_pago: { label: 'Parcial', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300', icon: DollarSign },
+    pendente: { label: 'Pendente', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300', icon: AlertTriangle },
+  }[paymentStatus];
 
-                        return (
-                            <motion.tr key={participant.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05 }} className="hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                    <div>
-                                        <div className="font-semibold text-brand-gray-900 dark:text-white">{participant.name}</div>
-                                        {torneio.modality !== 'individual' && participant.players.some(p => p.name) && (
-                                            <div className="text-xs text-brand-gray-500 dark:text-brand-gray-400">
-                                                {participant.players.map(p => p.name).filter(Boolean).join(', ')}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        {isIncomplete && (
-                                            <span className="flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/50 px-2 py-0.5 rounded-full">
-                                                <AlertTriangle className="h-3 w-3" /> Vaga Aberta {isTeam && `(${currentSize}/${requiredSize})`}
-                                            </span>
-                                        )}
-                                        {isOnWaitlist && (
-                                            <span className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/50 px-2 py-0.5 rounded-full">
-                                                <Clock className="h-3 w-3" /> Lista de Espera
-                                            </span>
-                                        )}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <Input
-                                        type="number"
-                                        className="w-20 text-sm"
-                                        value={participant.ranking_points || ''}
-                                        placeholder="0"
-                                        onClick={(e) => e.stopPropagation()}
-                                        onChange={(e) => {
-                                            onParticipantDetailChange(participant.id, 'ranking_points', e.target.value === '' ? undefined : parseInt(e.target.value, 10));
-                                        }}
-                                    />
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    {!isOnWaitlist && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onPaymentStatusClick(participant); }}
-                                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
-                                                participant.payment_status === 'pago'
-                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                                                    : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
-                                            }`}
-                                        >
-                                            {participant.payment_status === 'pago' ? 
-                                                <>{getPaymentMethodIcon(participant.payment_method)} <span className="ml-1.5 capitalize">{participant.payment_method || 'Pago'}</span></> : 
-                                                <><DollarSign className="h-3 w-3 mr-1" />Pendente</>
-                                            }
-                                        </button>
-                                    )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-center">
-                                    {!isOnWaitlist && (
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${participant.checked_in ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
-                                            {participant.checked_in ? <Check className="h-3 w-3 mr-1" /> : <X className="h-3 w-3 mr-1" />}
-                                            {participant.checked_in ? 'Feito' : 'Pendente'}
-                                        </span>
-                                    )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-1">
-                                    {isOnWaitlist && onPromote && (
-                                        <Button size="sm" variant="outline" onClick={() => onPromote(participant)} disabled={isMainListFull} title={isMainListFull ? "A lista de inscritos está cheia." : "Promover para a lista de inscritos"}>
-                                            <ArrowUpCircle className="h-4 w-4" />
-                                        </Button>
-                                    )}
-                                    {!isOnWaitlist && (
-                                        <Button size="sm" variant={participant.checked_in ? 'outline' : 'primary'} onClick={() => onToggleCheckIn(participant.id)} disabled={isIncomplete} title={isIncomplete ? "Complete a equipe/dupla para fazer o check-in" : ""}>
-                                            {participant.checked_in ? 'Desfazer' : 'Check-in'}
-                                        </Button>
-                                    )}
-                                    {newPlayer && (
-                                        <Button variant="ghost" size="sm" onClick={() => handleInvite(newPlayer.phone!, newPlayer.name)} className="text-green-500 hover:text-green-600" title="Convidar jogador via WhatsApp">
-                                            <MessageSquare className="h-4 w-4" />
-                                        </Button>
-                                    )}
-                                    <Button variant="ghost" size="sm" onClick={() => onEdit(participant, participant.categoryId)} className="text-brand-gray-500 hover:text-brand-blue-500"><Edit className="h-4 w-4" /></Button>
-                                    <Button variant="ghost" size="sm" onClick={() => onDelete(participant)} className="text-brand-gray-500 hover:text-red-500"><Trash2 className="h-4 w-4" /></Button>
-                                </td>
-                            </motion.tr>
-                        );
-                    })}
-                </tbody>
-            </table>
-            {participants.length === 0 && <p className="text-center py-4 text-sm text-brand-gray-500">Nenhum inscrito {onPromote ? 'na lista de espera' : 'nesta categoria'}.</p>}
+  return (
+    <div className="border border-brand-gray-200 dark:border-brand-gray-700 rounded-lg">
+      <div className="p-3 flex items-center justify-between cursor-pointer hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50" onClick={() => setIsExpanded(!isExpanded)}>
+        <div className="flex-1 font-semibold text-brand-gray-900 dark:text-white">{participant.name}</div>
+        <div className="flex-1 text-center">
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusProps.color}`}>
+            <paymentStatusProps.icon className="h-3 w-3 mr-1" />
+            {paymentStatusProps.label}
+          </span>
         </div>
-    );
-}
+        <div className="flex-1 text-center">
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${allCheckedIn ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
+            {allCheckedIn ? <Check className="h-3 w-3 mr-1" /> : <X className="h-3 w-3 mr-1" />}
+            {allCheckedIn ? 'Check-in OK' : 'Check-in Pendente'}
+          </span>
+        </div>
+        <div className="flex-1 text-right flex justify-end items-center gap-1">
+          {onPromote && <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onPromote(participant); }} disabled={isMainListFull} title={isMainListFull ? "Lista principal está cheia" : "Promover para lista de inscritos"}><ArrowUpCircle className="h-4 w-4"/></Button>}
+          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(participant, participant.categoryId); }}><Edit className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(participant); }} className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+          <ChevronDown className={`h-5 w-5 text-brand-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+        </div>
+      </div>
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            <div className="p-4 bg-brand-gray-50 dark:bg-brand-gray-900/50 border-t border-brand-gray-200 dark:border-brand-gray-700 space-y-2">
+              {participant.players.map((player, index) => (
+                <div key={player.profile_id || index} className="flex items-center justify-between p-2 rounded-md">
+                  <span className="text-sm font-medium">{player.name || `Jogador ${index + 1}`}</span>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => onPlayerDetailChange(participant.id, index, 'payment_status', null)}>
+                      <DollarSign className={`h-4 w-4 ${player.payment_status === 'pago' ? 'text-green-500' : ''}`} />
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => onPlayerDetailChange(participant.id, index, 'checked_in', null)}>
+                      <Check className={`h-4 w-4 ${player.checked_in ? 'text-green-500' : ''}`} />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const ParticipantTable: React.FC<Omit<ParticipantRowProps, 'participant' | 'onPlayerDetailChange'> & { participants: Participant[], onPlayerDetailChange: (participantId: string, playerIndex: number, field: 'payment_status' | 'checked_in', value: any) => void; }> = ({ participants, ...props }) => {
+  if (participants.length === 0) {
+    return <p className="text-center py-4 text-sm text-brand-gray-500">Nenhum inscrito.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="hidden md:grid grid-cols-4 gap-4 px-3 py-2 border-b border-brand-gray-200 dark:border-brand-gray-700 text-xs font-semibold text-brand-gray-500 uppercase">
+        <div className="">Nome</div>
+        <div className="text-center">Pagamento</div>
+        <div className="text-center">Check-in</div>
+        <div className="text-right">Ações</div>
+      </div>
+      {participants.map((participant) => (
+        <ParticipantRow key={participant.id} participant={participant} {...props} />
+      ))}
+    </div>
+  );
+};
 
 export default ParticipantsTab;

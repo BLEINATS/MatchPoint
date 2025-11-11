@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Professor, Turma } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
-import { DollarSign, TrendingUp, Clock, Hash, ChevronDown, Calendar } from 'lucide-react';
+import { DollarSign, TrendingUp, Clock, Hash, ChevronDown, Calendar, BookOpen } from 'lucide-react';
 import { differenceInMinutes, parse, getDay, startOfMonth, endOfMonth, eachDayOfInterval, format, subMonths, isSameMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -37,11 +37,24 @@ const ProfessorFinancialTab: React.FC<{ professor: Professor; turmas: Turma[] }>
       const daysInPeriod = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
       let totalValue = 0;
+      let totalClassesInMonth = 0;
+      let totalHoursInMonth = 0;
       let breakdownItems: { id: string, name: string, detail: string, value: number }[] = [];
 
       switch (professor.payment_type) {
         case 'mensal':
-          totalValue = professor.salario_mensal || 0;
+          let hasClassesThisMonth = false;
+          professorTurmas.forEach(turma => {
+            if (hasClassesThisMonth) return;
+            daysInPeriod.forEach(day => {
+              if (turma.schedule?.some(s => s.day === getDay(day))) {
+                hasClassesThisMonth = true;
+              }
+            });
+          });
+          if(hasClassesThisMonth) {
+            totalValue = professor.salario_mensal || 0;
+          }
           breakdownItems = professorTurmas.map(turma => ({
             id: turma.id,
             name: turma.name,
@@ -52,15 +65,25 @@ const ProfessorFinancialTab: React.FC<{ professor: Professor; turmas: Turma[] }>
 
         case 'por_aula':
           professorTurmas.forEach(turma => {
-            const schedule = turma.schedule || [];
             let classesGivenForTurma = 0;
+            const schedule = turma.schedule || [];
             daysInPeriod.forEach(day => {
-              if (schedule.some(s => s.day === getDay(day))) {
-                classesGivenForTurma++;
+              const scheduleForDay = schedule.find(s => s.day === getDay(day));
+              if (scheduleForDay) {
+                try {
+                  const startTime = parse(scheduleForDay.start_time, 'HH:mm', new Date());
+                  const endTime = parse(scheduleForDay.end_time, 'HH:mm', new Date());
+                  if (!isNaN(startTime.valueOf()) && !isNaN(endTime.valueOf()) && endTime > startTime) {
+                      const durationMinutes = differenceInMinutes(endTime, startTime);
+                      const numberOfSlots = Math.floor(durationMinutes / 60);
+                      classesGivenForTurma += numberOfSlots;
+                  }
+                } catch(e) { console.error("Error parsing time for 'por_aula' calculation:", e); }
               }
             });
             const monthlyValueForTurma = classesGivenForTurma * (professor.valor_por_aula || 0);
             totalValue += monthlyValueForTurma;
+            totalClassesInMonth += classesGivenForTurma;
             if (classesGivenForTurma > 0) {
               breakdownItems.push({
                 id: turma.id,
@@ -91,6 +114,7 @@ const ProfessorFinancialTab: React.FC<{ professor: Professor; turmas: Turma[] }>
             });
             const monthlyValueForTurma = hoursWorkedForTurma * (professor.valor_hora_aula || 0);
             totalValue += monthlyValueForTurma;
+            totalHoursInMonth += hoursWorkedForTurma;
             if (hoursWorkedForTurma > 0) {
               breakdownItems.push({
                 id: turma.id,
@@ -103,7 +127,7 @@ const ProfessorFinancialTab: React.FC<{ professor: Professor; turmas: Turma[] }>
           break;
       }
       
-      return { monthKey, monthLabel, totalValue, breakdownItems };
+      return { monthKey, monthLabel, totalValue, breakdownItems, totalClassesInMonth, totalHoursInMonth };
     });
   }, [professor, turmas]);
 
@@ -122,9 +146,19 @@ const ProfessorFinancialTab: React.FC<{ professor: Professor; turmas: Turma[] }>
     }
   };
 
+  const getMetricCard = () => {
+    if (professor.payment_type === 'por_aula') {
+        return <StatCard label="Aulas Dadas (Mês)" value={currentMonthData.totalClassesInMonth} icon={BookOpen} color="text-purple-500" />;
+    }
+    if (professor.payment_type === 'por_hora') {
+        return <StatCard label="Horas Trabalhadas (Mês)" value={`${currentMonthData.totalHoursInMonth.toFixed(1)}h`} icon={Clock} color="text-orange-500" />;
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard 
           label="Ganhos Realizados (Mês Atual)" 
           value={formatCurrency(currentMonthData.totalValue)} 
@@ -132,6 +166,7 @@ const ProfessorFinancialTab: React.FC<{ professor: Professor; turmas: Turma[] }>
           color="text-green-500" 
         />
         {getPaymentTypeCard()}
+        {getMetricCard()}
       </div>
 
       <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">

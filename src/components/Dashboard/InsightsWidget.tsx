@@ -4,14 +4,16 @@ import { Sparkles, TrendingUp, Star, TrendingDown, Lightbulb } from 'lucide-reac
 import { Reserva, Aluno, Quadra } from '../../types';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { getDay, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { cn } from '../../lib/utils';
 
 interface InsightsWidgetProps {
   reservas: Reserva[];
   alunos: Aluno[];
   quadras: Quadra[];
+  className?: string;
 }
 
-const InsightsWidget: React.FC<InsightsWidgetProps> = ({ reservas, alunos, quadras }) => {
+const InsightsWidget: React.FC<InsightsWidgetProps> = ({ reservas, alunos, quadras, className }) => {
   const peakTimeInsight = useMemo(() => {
     if (reservas.length < 15) return null;
 
@@ -152,14 +154,14 @@ const InsightsWidget: React.FC<InsightsWidgetProps> = ({ reservas, alunos, quadr
       initial={{ opacity: 0, y: 20 }} 
       animate={{ opacity: 1, y: 0 }} 
       transition={{ delay: 0.3 }} 
-      className="bg-gradient-to-br from-brand-blue-500 to-brand-blue-700 dark:from-brand-blue-600 dark:to-brand-blue-800 rounded-xl shadow-lg p-6 text-white flex flex-col justify-between min-h-[230px]"
+      className={cn("bg-gradient-to-br from-brand-blue-500 to-brand-blue-700 dark:from-brand-blue-600 dark:to-brand-blue-800 rounded-xl shadow-lg p-6 text-white flex flex-col h-full", className)}
     >
-      <div>
+      <div className="flex-grow">
         <h3 className="font-bold text-xl mb-4 flex items-center">
           <Sparkles className="h-5 w-5 mr-2 text-yellow-300" /> 
           Insights & Oportunidades
         </h3>
-        <div className="mt-4">
+        <div className="mt-4 min-h-[100px]">
           <AnimatePresence mode="wait">
             {insight ? (
               <motion.div

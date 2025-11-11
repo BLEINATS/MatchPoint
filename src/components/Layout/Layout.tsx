@@ -27,7 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children, showHeader = true }) => {
     <div className="min-h-screen bg-brand-gray-50 dark:bg-brand-gray-950 flex flex-col">
       {showHeader && <Header />}
       
-      <main className={`relative z-0 flex-1 flex flex-col overflow-hidden ${showHeader ? "pt-16" : ""}`}>
+      <main className={`relative z-0 flex-1 flex flex-col ${showHeader ? "pt-16" : ""}`}>
         {showLockOverlay && <SubscriptionLockOverlay />}
         {showBanner && <PlanStatusBanner arena={selectedArenaContext!} profile={profile!} />}
         {children}
