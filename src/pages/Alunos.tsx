@@ -485,7 +485,7 @@ const Alunos: React.FC = () => {
   
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="px-4 sm:px-6 lg:px-8 py-8">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <Link to="/dashboard" className="inline-flex items-center text-sm font-medium text-brand-gray-600 dark:text-brand-gray-400 hover:text-brand-blue-500 dark:hover:text-brand-blue-400 transition-colors mb-4"><ArrowLeft className="h-4 w-4 mr-2" />Voltar</Link>
           <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Gerenciamento da Arena</h1>

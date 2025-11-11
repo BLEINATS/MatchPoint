@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, Link, useNavigate, useBlocker } from 'react-router-dom';
 import { ArrowLeft, Save, Trash2, CheckCircle, Trophy, Users, BarChart3, Image as ImageIcon, Edit, AlertTriangle, Share2, X, Send, CreditCard } from 'lucide-react';
@@ -325,7 +325,7 @@ const TorneioDetail: React.FC = () => {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="px-4 sm:px-6 lg:px-8 py-8">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <Link to="/torneios" className="inline-flex items-center text-sm font-medium text-brand-gray-600 dark:text-brand-gray-400 hover:text-brand-blue-500 dark:hover:text-brand-blue-400 transition-colors mb-4">
             <ArrowLeft className="h-4 w-4 mr-2" />

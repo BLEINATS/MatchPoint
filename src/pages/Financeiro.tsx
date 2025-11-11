@@ -13,6 +13,9 @@ import { formatCurrency } from '../utils/formatters';
 import FinancialChart from '../components/Financeiro/FinancialChart';
 import TransactionModal from '../components/Financeiro/TransactionModal';
 import AtletaPaymentsTab from '../components/Financeiro/AtletaPaymentsTab';
+import ProfessorPaymentsTab from '../components/Financeiro/ProfessorPaymentsTab';
+
+type TabType = 'overview' | 'transactions' | 'athlete_payments' | 'professor_payments';
 
 const TransactionCard: React.FC<{ transaction: FinanceTransaction, onEdit: (t: FinanceTransaction) => void, onDelete: (id: string) => void }> = ({ transaction, onEdit, onDelete }) => (
   <div className="p-4 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg space-y-3 border border-brand-gray-200 dark:border-brand-gray-700">
@@ -91,25 +94,28 @@ const Financeiro: React.FC = () => {
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
   const [professores, setProfessores] = useState<Professor[]>([]);
   const [atletas, setAtletas] = useState<AtletaAluguel[]>([]);
+  const [turmas, setTurmas] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<FinanceTransaction | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'athlete_payments'>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
 
   const loadData = useCallback(async () => {
     if (!arena) return;
     setIsLoading(true);
     try {
-      const [reservasRes, transactionsRes, profsRes, atletasRes] = await Promise.all([
+      const [reservasRes, transactionsRes, profsRes, atletasRes, turmasRes] = await Promise.all([
         localApi.select<Reserva>('reservas', arena.id),
         localApi.select<FinanceTransaction>('finance_transactions', arena.id),
         localApi.select<Professor>('professores', arena.id),
         localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
+        localApi.select<any>('turmas', arena.id),
       ]);
       setReservas(reservasRes.data || []);
       setTransactions(transactionsRes.data || []);
       setProfessores(profsRes.data || []);
       setAtletas(atletasRes.data || []);
+      setTurmas(turmasRes.data || []);
     } catch (error: any) {
       addToast({ message: `Erro ao carregar dados financeiros: ${error.message}`, type: 'error' });
     } finally {
@@ -184,6 +190,7 @@ const Financeiro: React.FC = () => {
     { id: 'overview', label: 'Visão Geral', icon: BarChart2 },
     { id: 'transactions', label: 'Transações', icon: List },
     { id: 'athlete_payments', label: 'Pagamentos de Atletas', icon: Handshake },
+    { id: 'professor_payments', label: 'Pagamentos de Professores', icon: Handshake },
   ];
 
   const renderContent = () => {
@@ -220,13 +227,20 @@ const Financeiro: React.FC = () => {
                   profissionais={[...professores, ...atletas]} 
                   onDataChange={loadData} 
                 />;
+      case 'professor_payments':
+        return <ProfessorPaymentsTab
+                  professores={professores}
+                  turmas={turmas}
+                  transactions={transactions}
+                  onDataChange={loadData}
+                />;
       default: return null;
     }
   };
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="px-4 sm:px-6 lg:px-8 py-8">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <Link to="/dashboard" className="inline-flex items-center text-sm font-medium text-brand-gray-600 dark:text-brand-gray-400 hover:text-brand-blue-500 dark:hover:text-brand-blue-400 transition-colors mb-4">
             <ArrowLeft className="h-4 w-4 mr-2" />
