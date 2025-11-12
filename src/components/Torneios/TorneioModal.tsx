@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, Trophy, Calendar, Clock, Info, Users, DollarSign, Users2, AlertTriangle } from 'lucide-react';
+import { X, Save, Trophy, Info, AlertTriangle } from 'lucide-react';
 import { Torneio, Quadra, TorneioTipo, TorneioStatus, TorneioModality, TorneioCategory, Reserva } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
-import { format, eachDayOfInterval, isSameDay, isBefore } from 'date-fns';
 import CategoryManager from './CategoryManager';
 import { v4 as uuidv4 } from 'uuid';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
-import { expandRecurringReservations } from '../../utils/reservationUtils';
+import { eachDayOfInterval, isSameDay, isBefore, getDay, isAfter } from 'date-fns';
+import { format } from 'date-fns';
 
 interface TorneioModalProps {
   isOpen: boolean;
@@ -19,6 +19,17 @@ interface TorneioModalProps {
   reservas: Reserva[];
 }
 
+const timeToMinutes = (timeStr: string): number => {
+    if (!timeStr || !timeStr.includes(':')) return -1;
+    try {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        if (isNaN(hours) || isNaN(minutes)) return -1;
+        return hours * 60 + minutes;
+    } catch (e) {
+        return -1;
+    }
+};
+
 const TorneioModal: React.FC<TorneioModalProps> = ({ isOpen, onClose, onSave, initialData, quadras, reservas }) => {
   const [formData, setFormData] = useState({
     name: '',
@@ -26,15 +37,8 @@ const TorneioModal: React.FC<TorneioModalProps> = ({ isOpen, onClose, onSave, in
     status: 'planejado' as TorneioStatus,
     modality: 'individual' as TorneioModality,
     team_size: 2,
-    start_date: format(new Date(), 'yyyy-MM-dd'),
-    end_date: format(new Date(), 'yyyy-MM-dd'),
     description: '',
-    quadras_ids: [] as string[],
-    start_time: '08:00',
-    end_time: '18:00',
     categories: [] as TorneioCategory[],
-    max_participants: 8,
-    registration_fee: 0,
     expenses: [] as { id: string; description: string; amount: number }[],
     sponsors: [] as { id: string; name: string; amount: number }[],
   });
@@ -48,13 +52,10 @@ const TorneioModal: React.FC<TorneioModalProps> = ({ isOpen, onClose, onSave, in
     if (initialData) {
       const categoriesWithIds = (initialData.categories.length > 0
         ? initialData.categories
-        : [{ group: 'Mista', level: 'Iniciante', prize_1st: '', prize_2nd: '', prize_3rd: '' } as TorneioCategory]
+        : [{ id: uuidv4(), group: 'Mista', level: 'Iniciante', prize_1st: '', prize_2nd: '', prize_3rd: '', max_participants: 8, registration_fee: 50, start_date: new Date().toISOString().split('T')[0], end_date: new Date().toISOString().split('T')[0], start_time: '09:00', end_time: '18:00', quadras_ids: [] }]
       ).map(cat => ({
         ...cat,
         id: cat.id || uuidv4(),
-        prize_1st: cat.prize_1st || '',
-        prize_2nd: cat.prize_2nd || '',
-        prize_3rd: cat.prize_3rd || '',
       }));
 
       setFormData({
@@ -63,15 +64,8 @@ const TorneioModal: React.FC<TorneioModalProps> = ({ isOpen, onClose, onSave, in
         status: initialData.status,
         modality: initialData.modality || 'individual',
         team_size: initialData.team_size || 2,
-        start_date: initialData.start_date,
-        end_date: initialData.end_date,
         description: initialData.description,
-        quadras_ids: initialData.quadras_ids,
-        start_time: initialData.start_time,
-        end_time: initialData.end_time,
         categories: categoriesWithIds,
-        max_participants: initialData.max_participants,
-        registration_fee: initialData.registration_fee,
         expenses: initialData.expenses || [],
         sponsors: initialData.sponsors || [],
       });
@@ -79,63 +73,83 @@ const TorneioModal: React.FC<TorneioModalProps> = ({ isOpen, onClose, onSave, in
       setFormData({
         name: '', type: 'torneio', status: 'planejado',
         modality: 'individual', team_size: 2,
-        start_date: format(new Date(), 'yyyy-MM-dd'),
-        end_date: format(new Date(), 'yyyy-MM-dd'),
-        description: '', quadras_ids: [],
-        start_time: '08:00', end_time: '18:00',
-        categories: [{ id: uuidv4(), group: 'Mista', level: 'Iniciante', prize_1st: '', prize_2nd: '', prize_3rd: '' }],
-        max_participants: 8, registration_fee: 0,
+        description: '',
+        categories: [{ id: uuidv4(), group: 'Mista', level: 'Iniciante', prize_1st: '', prize_2nd: '', prize_3rd: '', max_participants: 8, registration_fee: 50, start_date: new Date().toISOString().split('T')[0], end_date: new Date().toISOString().split('T')[0], start_time: '09:00', end_time: '18:00', quadras_ids: [] }],
         expenses: [], sponsors: [],
       });
     }
   }, [initialData, isOpen]);
   
   useEffect(() => {
-    if (!isOpen || !formData.quadras_ids.length || !formData.start_date || !formData.end_date || !formData.start_time || !formData.end_time) {
+    if (!isOpen) {
       setConflictWarning(null);
       return;
     }
 
     const checkConflicts = () => {
-      const eventStartDate = parseDateStringAsLocal(formData.start_date);
-      const eventEndDate = parseDateStringAsLocal(formData.end_date);
+      for (const category of formData.categories) {
+        const { start_date, end_date, start_time, end_time, quadras_ids } = category;
 
-      if (isBefore(eventEndDate, eventStartDate)) {
-        setConflictWarning("A data de fim não pode ser anterior à data de início.");
-        return;
-      }
+        if (!start_date || !end_date || !start_time || !end_time || !quadras_ids || quadras_ids.length === 0) {
+            continue;
+        }
+        
+        const startDate = parseDateStringAsLocal(start_date);
+        const endDate = parseDateStringAsLocal(end_date);
 
-      const allExpandedReservations = expandRecurringReservations(reservas, eventStartDate, eventEndDate, quadras);
-      const eventDays = eachDayOfInterval({ start: eventStartDate, end: eventEndDate });
+        if (isBefore(endDate, startDate)) {
+          setConflictWarning(`Categoria "${category.group} - ${category.level}": A data de fim não pode ser anterior à data de início.`);
+          return;
+        }
 
-      for (const day of eventDays) {
-        for (const quadraId of formData.quadras_ids) {
-          const conflictingReserva = allExpandedReservations.find(r => {
-            if (isEditing && (r.torneio_id === initialData?.id)) return false;
-            if (r.quadra_id !== quadraId || !isSameDay(parseDateStringAsLocal(r.date), day) || r.status === 'cancelada') {
-              return false;
+        const newEventStartMinutes = timeToMinutes(start_time);
+        const newEventEndMinutes = timeToMinutes(end_time);
+        if (newEventStartMinutes === -1 || newEventEndMinutes === -1 || newEventStartMinutes >= newEventEndMinutes) continue;
+
+        const eventDays = eachDayOfInterval({ start: startDate, end: endDate });
+
+        for (const day of eventDays) {
+          const dayOfWeek = getDay(day);
+
+          for (const existingReserva of reservas) {
+            if (isEditing && (existingReserva.torneio_id === initialData?.id)) continue;
+            if (existingReserva.status === 'cancelada') continue;
+
+            let isConflictDay = false;
+            if (existingReserva.isRecurring) {
+              const masterDate = parseDateStringAsLocal(existingReserva.date);
+              const recurrenceEndDate = existingReserva.recurringEndDate ? parseDateStringAsLocal(existingReserva.recurringEndDate) : null;
+              if ((getDay(masterDate) === dayOfWeek) && !isBefore(day, masterDate) && (!recurrenceEndDate || !isAfter(day, recurrenceEndDate))) {
+                isConflictDay = true;
+              }
+            } else {
+              if (isSameDay(parseDateStringAsLocal(existingReserva.date), day)) {
+                isConflictDay = true;
+              }
             }
 
-            const eventStartTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${formData.start_time}`);
-            const eventEndTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${formData.end_time}`);
-            const reservaStartTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${r.start_time}`);
-            const reservaEndTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${r.end_time}`);
-            
-            return eventStartTime < reservaEndTime && eventEndTime > reservaStartTime;
-          });
+            if (isConflictDay) {
+              const overlapsQuadra = quadras_ids.includes(existingReserva.quadra_id);
+              if (overlapsQuadra) {
+                const existingStartMinutes = timeToMinutes(existingReserva.start_time);
+                const existingEndMinutes = timeToMinutes(existingReserva.end_time);
 
-          if (conflictingReserva) {
-            const quadra = quadras.find(q => q.id === quadraId);
-            setConflictWarning(`Conflito em ${format(day, 'dd/MM')}: A quadra "${quadra?.name}" já tem uma reserva (${conflictingReserva.clientName}) das ${conflictingReserva.start_time} às ${conflictingReserva.end_time}.`);
-            return;
+                if (existingStartMinutes !== -1 && existingEndMinutes !== -1 && newEventStartMinutes < existingEndMinutes && newEventEndMinutes > existingStartMinutes) {
+                  const quadra = quadras.find(q => q.id === existingReserva.quadra_id);
+                  setConflictWarning(`Conflito em ${format(day, 'dd/MM/yy')} na quadra "${quadra?.name}". Já existe uma reserva (${existingReserva.clientName}) das ${existingReserva.start_time} às ${existingReserva.end_time}.`);
+                  return;
+                }
+              }
+            }
           }
         }
       }
+
       setConflictWarning(null);
     };
 
     checkConflicts();
-  }, [formData.quadras_ids, formData.start_date, formData.end_date, formData.start_time, formData.end_time, reservas, quadras, isEditing, initialData?.id, isOpen]);
+  }, [formData.categories, reservas, quadras, isEditing, initialData?.id, isOpen]);
 
 
   const handleSave = () => {
@@ -145,8 +159,6 @@ const TorneioModal: React.FC<TorneioModalProps> = ({ isOpen, onClose, onSave, in
     }
     const dataToSave = {
       ...formData,
-      max_participants: Number(formData.max_participants),
-      registration_fee: Number(formData.registration_fee),
       team_size: formData.modality === 'equipes' ? Number(formData.team_size) : undefined,
     };
 
@@ -160,15 +172,6 @@ const TorneioModal: React.FC<TorneioModalProps> = ({ isOpen, onClose, onSave, in
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleQuadraToggle = (quadraId: string) => {
-    setFormData(prev => {
-      const quadras_ids = prev.quadras_ids.includes(quadraId)
-        ? prev.quadras_ids.filter(id => id !== quadraId)
-        : [...prev.quadras_ids, quadraId];
-      return { ...prev, quadras_ids };
-    });
   };
 
   return (
@@ -194,6 +197,18 @@ const TorneioModal: React.FC<TorneioModalProps> = ({ isOpen, onClose, onSave, in
             <div className="p-6 space-y-6 overflow-y-auto">
               <Input label="Nome do Torneio" name="name" value={formData.name} onChange={handleChange} icon={<Trophy className="h-4 w-4 text-brand-gray-400"/>} placeholder="Ex: Torneio de Verão" required />
               
+              <div>
+                <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Descrição do Torneio</label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full form-textarea rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500"
+                  placeholder="Descreva as regras, formato, e outros detalhes importantes sobre o torneio..."
+                />
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Tipo de Torneio</label>
@@ -226,40 +241,11 @@ const TorneioModal: React.FC<TorneioModalProps> = ({ isOpen, onClose, onSave, in
                   </select>
                 </div>
                 {formData.modality === 'equipes' && (
-                  <Input label="Jogadores por Equipe" name="team_size" type="number" value={formData.team_size.toString()} onChange={handleChange} icon={<Users2 className="h-4 w-4 text-brand-gray-400"/>} />
+                  <Input label="Jogadores por Equipe" name="team_size" type="number" value={formData.team_size.toString()} onChange={handleChange} icon={<Users className="h-4 w-4 text-brand-gray-400"/>} />
                 )}
               </div>
 
-              <CategoryManager categories={formData.categories} setCategories={(newCategories) => setFormData(p => ({ ...p, categories: newCategories }))} />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <Input label="Máx. de Inscritos (por categoria)" name="max_participants" type="number" value={formData.max_participants.toString()} onChange={handleChange} icon={<Users className="h-4 w-4 text-brand-gray-400"/>} />
-                <Input label="Taxa de Inscrição (por jogador)" name="registration_fee" type="number" value={formData.registration_fee.toString()} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <Input label="Data de Início" name="start_date" type="date" value={formData.start_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
-                <Input label="Data de Fim" name="end_date" type="date" value={formData.end_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
-                <Input label="Horário de Início" name="start_time" type="time" value={formData.start_time} onChange={handleChange} icon={<Clock className="h-4 w-4 text-brand-gray-400"/>} />
-                <Input label="Horário de Fim" name="end_time" type="time" value={formData.end_time} onChange={handleChange} icon={<Clock className="h-4 w-4 text-brand-gray-400"/>} />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-2">Quadras a serem utilizadas</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {quadras.map(quadra => (
-                    <label key={quadra.id} className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${formData.quadras_ids.includes(quadra.id) ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-300 dark:border-blue-700' : 'bg-white dark:bg-brand-gray-800 border-brand-gray-200 dark:border-brand-gray-700'}`}>
-                      <input
-                        type="checkbox"
-                        checked={formData.quadras_ids.includes(quadra.id)}
-                        onChange={() => handleQuadraToggle(quadra.id)}
-                        className="h-4 w-4 rounded text-brand-blue-600 border-brand-gray-300 focus:ring-brand-blue-500"
-                      />
-                      <span className="ml-3 text-sm font-medium text-brand-gray-800 dark:text-brand-gray-200">{quadra.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <CategoryManager categories={formData.categories} setCategories={(newCategories) => setFormData(p => ({ ...p, categories: newCategories }))} tournamentQuadras={quadras} />
               
               {conflictWarning && (
                   <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">

@@ -2,7 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, DollarSign, CreditCard } from 'lucide-react';
 import Button from '../Forms/Button';
-import { Torneio, Participant } from '../../types';
+import { Torneio, Participant, Profile } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 
 interface TournamentPaymentModalProps {
@@ -11,6 +11,7 @@ interface TournamentPaymentModalProps {
   onConfirm: (method: 'pix' | 'cartao' | 'dinheiro') => void;
   torneio: Torneio;
   participant: Participant;
+  playerProfile: Profile;
   isProcessing: boolean;
 }
 
@@ -20,11 +21,13 @@ const TournamentPaymentModal: React.FC<TournamentPaymentModalProps> = ({
   onConfirm,
   torneio,
   participant,
+  playerProfile,
   isProcessing,
 }) => {
   if (!participant) return null;
 
-  const amountToPay = torneio.registration_fee;
+  const category = torneio.categories.find(c => c.id === participant.categoryId);
+  const amountToPay = category?.registration_fee || torneio.registration_fee || 0;
 
   return (
     <AnimatePresence>
@@ -43,7 +46,9 @@ const TournamentPaymentModal: React.FC<TournamentPaymentModalProps> = ({
             </div>
             <div className="p-6 space-y-4 text-center">
               <p className="text-brand-gray-600 dark:text-brand-gray-400">
-                Confirmar pagamento de <strong>{formatCurrency(amountToPay)}</strong> para sua inscrição no torneio <strong>"{torneio.name}"</strong>.
+                Confirmar o pagamento de{' '}
+                <strong className="text-green-600 dark:text-green-400">{formatCurrency(amountToPay)}</strong> para a inscrição de{' '}
+                <strong>{playerProfile.name}</strong> no torneio <strong>"{torneio.name}"</strong>.
               </p>
               <p className="text-sm font-medium mt-4">Selecione o método de pagamento (simulação):</p>
               <div className="flex justify-center gap-4 pt-2">

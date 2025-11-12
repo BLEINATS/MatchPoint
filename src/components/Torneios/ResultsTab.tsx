@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Torneio, Participant } from '../../types';
-import { Trophy, Medal } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import Button from '../Forms/Button';
-import ThirdPlaceModal from './ThirdPlaceModal';
+import WinnerSelectionModal from './WinnerSelectionModal';
 
 interface ResultsTabProps {
   torneio: Torneio;
@@ -10,62 +10,74 @@ interface ResultsTabProps {
 }
 
 const ResultsTab: React.FC<ResultsTabProps> = ({ torneio, setTorneio }) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalData, setModalData] = useState<{ categoryId: string; semifinalLosers: Participant[] } | null>(null);
+  const [isWinnerModalOpen, setIsWinnerModalOpen] = useState(false);
+  const [modalData, setModalData] = useState<{ categoryId: string; position: 1 | 2 | 3; participants: Participant[] } | null>(null);
 
   const resultsByCategory = useMemo(() => {
     return torneio.categories.map(category => {
+      const categoryParticipants = torneio.participants.filter(p => p.categoryId === category.id);
       const categoryMatches = torneio.matches.filter(m => m.categoryId === category.id);
-      if (categoryMatches.length === 0) {
-        return { category, first: null, second: null, third: null, semifinalLosers: [] };
-      }
-
-      const maxRound = Math.max(...categoryMatches.map(m => m.round));
-      const finalMatch = categoryMatches.find(m => m.round === maxRound);
-
+      
       let first: Participant | null = null;
       let second: Participant | null = null;
       let third: Participant | null = null;
-      let semifinalLosers: Participant[] = [];
 
-      if (finalMatch && finalMatch.winner_id) {
-        first = torneio.participants.find(p => p.id === finalMatch.winner_id) || null;
-        const loserId = finalMatch.participant_ids.find(id => id !== finalMatch.winner_id);
-        second = torneio.participants.find(p => p.id === loserId) || null;
-
-        const semiFinalMatches = categoryMatches.filter(m => m.round === maxRound - 1);
-        if (semiFinalMatches.length === 2) {
-          const losers = semiFinalMatches.map(sfMatch => {
-            const loserId = sfMatch.participant_ids.find(id => id !== sfMatch.winner_id);
-            return torneio.participants.find(p => p.id === loserId);
-          }).filter((p): p is Participant => !!p);
-          semifinalLosers = losers;
-        }
+      // Check for manual overrides first
+      if (category.first_place_winner_id) {
+        first = torneio.participants.find(p => p.id === category.first_place_winner_id) || null;
       }
-      
+      if (category.second_place_winner_id) {
+        second = torneio.participants.find(p => p.id === category.second_place_winner_id) || null;
+      }
       if (category.third_place_winner_id) {
         third = torneio.participants.find(p => p.id === category.third_place_winner_id) || null;
       }
 
-      return { category, first, second, third, semifinalLosers };
+      // If no manual override, determine from bracket
+      if (categoryMatches.length > 0) {
+        const maxRound = Math.max(...categoryMatches.map(m => m.round));
+        const finalMatch = categoryMatches.find(m => m.round === maxRound);
+
+        if (finalMatch && finalMatch.winner_id) {
+          if (!first) {
+            first = torneio.participants.find(p => p.id === finalMatch.winner_id) || null;
+          }
+          if (!second) {
+            const loserId = finalMatch.participant_ids.find(id => id !== finalMatch.winner_id);
+            second = torneio.participants.find(p => p.id === loserId) || null;
+          }
+        }
+      }
+
+      return { category, first, second, third, participants: categoryParticipants };
     });
   }, [torneio]);
 
-  const handleOpenThirdPlaceModal = (categoryId: string, semifinalLosers: Participant[]) => {
-    setModalData({ categoryId, semifinalLosers });
-    setIsModalOpen(true);
+  const handleOpenWinnerModal = (categoryId: string, position: 1 | 2 | 3, participants: Participant[]) => {
+    setModalData({ categoryId, position, participants });
+    setIsWinnerModalOpen(true);
   };
 
-  const handleConfirmThirdPlace = (winnerId: string) => {
+  const handleConfirmWinner = (winnerId: string) => {
     if (!modalData) return;
+    
     setTorneio(prev => {
       if (!prev) return null;
-      const newCategories = prev.categories.map(cat => 
-        cat.id === modalData.categoryId ? { ...cat, third_place_winner_id: winnerId } : cat
-      );
+      const newCategories = prev.categories.map(cat => {
+        if (cat.id === modalData.categoryId) {
+          const field = {
+            1: 'first_place_winner_id',
+            2: 'second_place_winner_id',
+            3: 'third_place_winner_id',
+          }[modalData.position] as 'first_place_winner_id' | 'second_place_winner_id' | 'third_place_winner_id';
+          return { ...cat, [field]: winnerId };
+        }
+        return cat;
+      });
       return { ...prev, categories: newCategories };
     });
-    setIsModalOpen(false);
+
+    setIsWinnerModalOpen(false);
     setModalData(null);
   };
 
@@ -77,65 +89,51 @@ const ResultsTab: React.FC<ResultsTabProps> = ({ torneio, setTorneio }) => {
   };
 
   return (
-    <div className="space-y-8">
-      {resultsByCategory.map(result => (
-        <div key={result.category.id} className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
-          <h3 className="text-xl font-semibold mb-4">{result.category.group} - {result.category.level}</h3>
-          <div className="space-y-4">
-            {/* 1st Place */}
-            <PodiumPlace
-              place={1}
-              participant={result.first}
-              prize={result.category.prize_1st}
-              displayName={getParticipantDisplayName(result.first)}
-            />
-            {/* 2nd Place */}
-            <PodiumPlace
-              place={2}
-              participant={result.second}
-              prize={result.category.prize_2nd}
-              displayName={getParticipantDisplayName(result.second)}
-            />
-            {/* 3rd Place */}
-            {result.third ? (
+    <>
+      <div className="space-y-8">
+        {resultsByCategory.map(result => (
+          <div key={result.category.id} className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+            <h3 className="text-xl font-semibold mb-4">{result.category.group} - {result.category.level}</h3>
+            <div className="space-y-4">
+              <PodiumPlace
+                place={1}
+                participant={result.first}
+                prize={result.category.prize_1st}
+                displayName={getParticipantDisplayName(result.first)}
+                onDefine={() => handleOpenWinnerModal(result.category.id, 1, result.participants)}
+              />
+              <PodiumPlace
+                place={2}
+                participant={result.second}
+                prize={result.category.prize_2nd}
+                displayName={getParticipantDisplayName(result.second)}
+                onDefine={() => handleOpenWinnerModal(result.category.id, 2, result.participants)}
+              />
               <PodiumPlace
                 place={3}
                 participant={result.third}
                 prize={result.category.prize_3rd}
                 displayName={getParticipantDisplayName(result.third)}
+                onDefine={() => handleOpenWinnerModal(result.category.id, 3, result.participants)}
               />
-            ) : result.semifinalLosers.length === 2 ? (
-              <div className="flex items-center justify-between p-4 bg-brand-gray-50 dark:bg-brand-gray-700/50 rounded-lg">
-                <div className="flex items-center">
-                  <Medal className="h-8 w-8 text-orange-400 mr-4" />
-                  <div>
-                    <p className="font-semibold">3º Lugar</p>
-                    <p className="text-sm text-brand-gray-500">Defina o vencedor da disputa.</p>
-                  </div>
-                </div>
-                <Button size="sm" onClick={() => handleOpenThirdPlaceModal(result.category.id, result.semifinalLosers)}>
-                  Definir 3º Lugar
-                </Button>
-              </div>
-            ) : (
-              <PodiumPlace place={3} participant={null} prize={result.category.prize_3rd} displayName="A definir" />
-            )}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
       {modalData && (
-        <ThirdPlaceModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          onConfirm={handleConfirmThirdPlace}
-          semifinalists={modalData.semifinalLosers}
+        <WinnerSelectionModal
+          isOpen={isWinnerModalOpen}
+          onClose={() => setIsWinnerModalOpen(false)}
+          onConfirm={handleConfirmWinner}
+          participants={modalData.participants}
+          position={modalData.position}
         />
       )}
-    </div>
+    </>
   );
 };
 
-const PodiumPlace: React.FC<{ place: number, participant: Participant | null, prize?: string, displayName: string }> = ({ place, participant, prize, displayName }) => {
+const PodiumPlace: React.FC<{ place: number, participant: Participant | null, prize?: string, displayName: string, onDefine: () => void }> = ({ place, participant, prize, displayName, onDefine }) => {
   const colors = {
     1: { icon: 'text-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-900/50', border: 'border-yellow-200 dark:border-yellow-800' },
     2: { icon: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-700/50', border: 'border-gray-200 dark:border-gray-600' },
@@ -152,7 +150,12 @@ const PodiumPlace: React.FC<{ place: number, participant: Participant | null, pr
           <p className="text-sm text-brand-gray-500">{place}º Lugar</p>
         </div>
       </div>
-      {prize && <span className="font-semibold text-green-600 dark:text-green-400">{prize}</span>}
+      <div className="flex items-center gap-4">
+        {prize && <span className="font-semibold text-green-600 dark:text-green-400">{prize}</span>}
+        <Button size="sm" onClick={onDefine}>
+          {participant ? 'Editar' : 'Definir'}
+        </Button>
+      </div>
     </div>
   );
 };

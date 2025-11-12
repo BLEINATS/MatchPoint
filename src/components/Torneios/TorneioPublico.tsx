@@ -1,192 +1,23 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import Layout from '../components/Layout/Layout';
-import Button from '../components/Forms/Button';
-import { localApi } from '../lib/localApi';
-import { Torneio, Quadra, Participant, Arena, Profile, Aluno, Friendship, FinanceTransaction } from '../types';
+import Layout from '../Layout/Layout';
+import Button from '../Forms/Button';
+import { localApi } from '../../lib/localApi';
+import { Torneio, Quadra, Participant, Arena, Profile, Aluno, Friendship, FinanceTransaction } from '../../types';
 import { Loader2, Trophy, Users, BarChart3, Info, Calendar, MapPin, DollarSign, Users2, User, CheckCircle } from 'lucide-react';
-import { format, isSameDay } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { parseDateStringAsLocal } from '../utils/dateUtils';
-import { formatCurrency } from '../utils/formatters';
-import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
-import Input from '../components/Forms/Input';
+import { parseDateStringAsLocal } from '../../utils/dateUtils';
+import { formatCurrency } from '../../utils/formatters';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import Input from '../Forms/Input';
 import { v4 as uuidv4 } from 'uuid';
-import RegistrationReceiptModal from '../components/Torneios/RegistrationReceiptModal';
-import TournamentPaymentModal from '../components/Torneios/TournamentPaymentModal';
+import RegistrationReceiptModal from './RegistrationReceiptModal';
+import TournamentPaymentModal from './TournamentPaymentModal';
 
 type TabType = 'overview' | 'participants' | 'bracket' | 'results';
-
-const MyRegistrationCard: React.FC<{ participant: Participant, torneio: Torneio, onPay: (p: Participant) => void, onShowReceipt: (p: Participant) => void }> = ({ participant, torneio, onPay, onShowReceipt }) => {
-  const { profile } = useAuth();
-  const category = torneio.categories.find(c => c.id === participant.categoryId);
-  const myPlayerInfo = participant.players.find(p => p.profile_id === profile?.id);
-  const hasPaid = myPlayerInfo?.payment_status === 'pago';
-
-  return (
-    <div className="bg-white dark:bg-brand-gray-800 p-4 rounded-lg shadow border border-brand-gray-200 dark:border-brand-gray-700">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-        <div>
-          <p className="font-bold">{category?.group} - {category?.level}</p>
-          <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">Equipe: {participant.name}</p>
-        </div>
-        <div className="flex items-center gap-4">
-          {hasPaid ? (
-            <span className="flex items-center text-sm font-semibold text-green-600 dark:text-green-400">
-              <CheckCircle className="h-5 w-5 mr-2" /> Pagamento Confirmado
-            </span>
-          ) : (
-            <span className="flex items-center text-sm font-semibold text-yellow-600 dark:text-yellow-400">
-              <DollarSign className="h-5 w-5 mr-2" /> Pagamento Pendente
-            </span>
-          )}
-          {hasPaid ? (
-            <Button variant="outline" size="sm" onClick={() => onShowReceipt(participant)}>Ver Comprovante</Button>
-          ) : (
-            <Button size="sm" onClick={() => onPay(participant)}>Pagar Agora</Button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-interface RegistrationSectionProps {
-  torneio: Torneio;
-  myRegistrations: Participant[];
-  onRegister: (categoryId: string, teamName: string, partner: Profile | null) => void;
-  isLoading: boolean;
-  friends: Profile[];
-  onShowReceipt: (participant: Participant) => void;
-  onPay: (participant: Participant) => void;
-}
-
-const RegistrationSection: React.FC<RegistrationSectionProps> = ({ torneio, myRegistrations, onRegister, isLoading, friends, onShowReceipt, onPay }) => {
-  const { user, profile } = useAuth();
-  const navigate = useNavigate();
-  
-  const availableCategories = useMemo(() => {
-    const myRegisteredCategoryIds = new Set(myRegistrations.map(r => r.categoryId));
-    return torneio.categories.filter(cat => !myRegisteredCategoryIds.has(cat.id));
-  }, [torneio.categories, myRegistrations]);
-
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(availableCategories[0]?.id || '');
-  const [teamName, setTeamName] = useState('');
-  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
-  const { addToast } = useToast();
-
-  useEffect(() => {
-    if (availableCategories.length > 0 && !selectedCategoryId) {
-      setSelectedCategoryId(availableCategories[0].id);
-    }
-  }, [availableCategories, selectedCategoryId]);
-
-  const selectedCategory = useMemo(() => {
-    return torneio.categories.find(c => c.id === selectedCategoryId);
-  }, [torneio.categories, selectedCategoryId]);
-
-  const registrationFeeToDisplay = useMemo(() => {
-    if (selectedCategory) {
-        return formatCurrency(selectedCategory.registration_fee);
-    }
-    return formatCurrency(0);
-  }, [selectedCategory]);
-
-  if (torneio.status !== 'inscricoes_abertas') {
-    return (
-      <div className="bg-yellow-50 dark:bg-yellow-900/50 p-6 rounded-lg text-center my-6">
-        <h3 className="text-xl font-bold text-yellow-800 dark:text-yellow-200">Inscrições Encerradas</h3>
-        <p className="text-yellow-700 dark:text-yellow-300 mt-2">As inscrições para este torneio não estão abertas no momento.</p>
-      </div>
-    );
-  }
-
-  if (!user || !profile) {
-    return (
-      <div className="bg-blue-50 dark:bg-blue-900/50 p-6 rounded-lg text-center my-6">
-        <h3 className="text-xl font-bold text-blue-800 dark:text-blue-200">Faça parte do torneio!</h3>
-        <p className="text-blue-700 dark:text-blue-300 mt-2">Faça login ou crie sua conta para se inscrever.</p>
-        <Button onClick={() => navigate('/auth')} className="mt-4">Entrar ou Cadastrar</Button>
-      </div>
-    );
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const partner = selectedPartnerId ? friends.find(f => f.id === selectedPartnerId) : null;
-    onRegister(selectedCategoryId, teamName, partner);
-  };
-
-  return (
-    <div className="my-6">
-      {myRegistrations.length > 0 && (
-        <div className="mb-8">
-          <h3 className="text-2xl font-bold mb-4">Minhas Inscrições</h3>
-          <div className="space-y-4">
-            {myRegistrations.map(participant => (
-              <MyRegistrationCard
-                key={participant.id}
-                participant={participant}
-                torneio={torneio}
-                onPay={onPay}
-                onShowReceipt={onShowReceipt}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {availableCategories.length > 0 && (
-        <div className="bg-white dark:bg-brand-gray-800 p-6 rounded-lg shadow-lg border border-brand-gray-200 dark:border-brand-gray-700">
-          <h3 className="text-2xl font-bold mb-1">Inscreva-se em outra Categoria</h3>
-          <p className="text-brand-gray-500 dark:text-brand-gray-400 mb-4">Valor da inscrição: <span className="font-bold text-green-600">{registrationFeeToDisplay}</span> por jogador.</p>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Categoria Disponível</label>
-              <select value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)} className="w-full form-select rounded-md dark:bg-brand-gray-700 dark:border-brand-gray-600">
-                {availableCategories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.group} - {cat.level}</option>
-                ))}
-              </select>
-            </div>
-            
-            {torneio.modality !== 'individual' && (
-              <Input label={`Nome da ${torneio.modality === 'duplas' ? 'Dupla' : 'Equipe'}`} value={teamName} onChange={e => setTeamName(e.target.value)} required />
-            )}
-    
-            <div className="p-3 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-700/50">
-              <p className="font-semibold">Jogador 1 (Você)</p>
-              <p className="text-sm text-brand-gray-500">{profile.name}</p>
-            </div>
-    
-            {torneio.modality === 'duplas' && (
-              <div>
-                  <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Jogador 2 (Parceiro/a)</label>
-                  <select 
-                      value={selectedPartnerId || ''}
-                      onChange={e => setSelectedPartnerId(e.target.value || null)}
-                      className="w-full form-select rounded-md dark:bg-brand-gray-700 dark:border-brand-gray-600"
-                  >
-                      <option value="">Convidar um amigo...</option>
-                      {friends.map(friend => (
-                          <option key={friend.id} value={friend.id}>{friend.name}</option>
-                      ))}
-                  </select>
-                  <p className="text-xs text-brand-gray-500 mt-1">Seu amigo não está na lista? Peça para ele se cadastrar na arena e adicione-o como amigo.</p>
-              </div>
-            )}
-            
-            <div className="pt-2">
-              <Button type="submit" isLoading={isLoading} className="w-full">Inscrever-se</Button>
-            </div>
-          </form>
-        </div>
-      )}
-    </div>
-  );
-};
 
 const getModalityProps = (modality: Torneio['modality']) => {
     switch (modality) {
@@ -364,7 +195,7 @@ const TorneioPublico: React.FC = () => {
             email: profile.email,
             players,
             on_waitlist: false,
-            payment_status: (torneio.categories.find(c => c.id === categoryId)?.registration_fee || 0) > 0 ? 'pendente' : 'pago',
+            payment_status: torneio.registration_fee > 0 ? 'pendente' : 'pago',
         };
 
         const updatedTorneio = {
@@ -435,7 +266,7 @@ const TorneioPublico: React.FC = () => {
         await localApi.upsert('torneios', [updatedTorneio], arena.id);
 
         const category = torneio.categories.find(c => c.id === participantToPay.categoryId);
-        const amount = category?.registration_fee || 0;
+        const amount = category?.registration_fee || torneio.registration_fee || 0;
         
         await localApi.upsert('finance_transactions', [{
             arena_id: arena.id,
@@ -457,39 +288,45 @@ const TorneioPublico: React.FC = () => {
     }
   };
 
-  const { dateString, totalPrizeMoney } = useMemo(() => {
-    if (!torneio || !torneio.categories || torneio.categories.length === 0) {
-      return { dateString: "Data a definir", totalPrizeMoney: 0 };
-    }
-
-    const allDates = torneio.categories.flatMap(c => [
-        parseDateStringAsLocal(`${c.start_date}T${c.start_time}`),
-        parseDateStringAsLocal(`${c.end_date}T${c.end_time}`)
-    ]).filter(d => !isNaN(d.getTime()));
-
-    if (allDates.length === 0) {
-        return { dateString: "Data a definir", totalPrizeMoney: 0 };
-    }
-
-    const overallStartDate = new Date(Math.min(...allDates.map(d => d.getTime())));
-    const overallEndDate = new Date(Math.max(...allDates.map(d => d.getTime())));
-
-    let formattedDateString;
-    if (isSameDay(overallStartDate, overallEndDate)) {
-        formattedDateString = `${format(overallStartDate, 'dd \'de\' MMMM, HH:mm', { locale: ptBR })} - ${format(overallEndDate, 'HH:mm')}`;
-    } else {
-        formattedDateString = `${format(overallStartDate, 'dd/MM, HH:mm', { locale: ptBR })} a ${format(overallEndDate, 'dd/MM, HH:mm')}`;
-    }
-    
-    const prize = torneio.categories.reduce((total, cat) => {
+  const totalPrizeMoney = useMemo(() => {
+    if (!torneio) return 0;
+    return torneio.categories.reduce((total, cat) => {
         const p1 = parseFloat(cat.prize_1st?.replace(/[^0-9,-]+/g, "").replace(",", ".")) || 0;
         const p2 = parseFloat(cat.prize_2nd?.replace(/[^0-9,-]+/g, "").replace(",", ".")) || 0;
         const p3 = parseFloat(cat.prize_3rd?.replace(/[^0-9,-]+/g, "").replace(",", ".")) || 0;
         return total + p1 + p2 + p3;
     }, 0);
-
-    return { dateString: formattedDateString, totalPrizeMoney: prize };
   }, [torneio]);
+
+  const registrationFeeToDisplay = useMemo(() => {
+    if (!torneio) return '-';
+
+    if (selectedCategoryId) {
+        const category = torneio.categories.find(c => c.id === selectedCategoryId);
+        return formatCurrency(category?.registration_fee);
+    }
+    
+    if (!torneio.categories || torneio.categories.length === 0) {
+        return '-';
+    }
+
+    const fees = torneio.categories.map(c => c.registration_fee);
+    const uniqueFees = [...new Set(fees)];
+
+    if (uniqueFees.length === 1) {
+        return formatCurrency(uniqueFees[0]);
+    }
+
+    const minFee = Math.min(...fees);
+    const maxFee = Math.max(...fees);
+    
+    const minFormatted = formatCurrency(minFee);
+    const maxFormatted = formatCurrency(maxFee);
+
+    if (minFormatted === maxFormatted) return minFormatted;
+
+    return `${minFormatted} a ${maxFormatted}`;
+  }, [torneio, selectedCategoryId]);
 
   const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
     { id: 'overview', label: 'Visão Geral', icon: Info },
@@ -518,7 +355,8 @@ const TorneioPublico: React.FC = () => {
   }
 
   const modalityProps = getModalityProps(torneio.modality);
-  
+  const dateString = format(parseDateStringAsLocal(torneio.start_date), 'dd/MM/yyyy') + (torneio.start_date !== torneio.end_date ? ` - ${format(parseDateStringAsLocal(torneio.end_date), 'dd/MM/yyyy')}` : '');
+
   return (
     <Layout>
       <div className="overflow-y-auto flex-1">
@@ -530,8 +368,9 @@ const TorneioPublico: React.FC = () => {
               <p className="text-center text-lg text-blue-200 mt-2">{dateString}</p>
             </motion.div>
             
-            <div className="mt-8 grid grid-cols-2 gap-2 sm:gap-4 text-center">
+            <div className="mt-8 grid grid-cols-3 gap-2 sm:gap-4 text-center">
               <StatCard icon={modalityProps.icon} label="Modalidade" value={modalityProps.label} />
+              <StatCard icon={DollarSign} label="Inscrição" value={registrationFeeToDisplay} />
               <StatCard icon={Trophy} label="Premiação Total" value={formatCurrency(totalPrizeMoney)} />
             </div>
           </div>
@@ -583,6 +422,175 @@ const TorneioPublico: React.FC = () => {
   );
 };
 
+interface RegistrationSectionProps {
+  torneio: Torneio;
+  myRegistrations: Participant[];
+  onRegister: (categoryId: string, teamName: string, partner: Profile | null) => void;
+  isLoading: boolean;
+  friends: Profile[];
+  onShowReceipt: (participant: Participant) => void;
+  onPay: (participant: Participant) => void;
+}
+
+const RegistrationSection: React.FC<RegistrationSectionProps> = ({ torneio, myRegistrations, onRegister, isLoading, friends, onShowReceipt, onPay }) => {
+  const { user, profile } = useAuth();
+  const navigate = useNavigate();
+  
+  const availableCategories = useMemo(() => {
+    const myRegisteredCategoryIds = new Set(myRegistrations.map(r => r.categoryId));
+    return torneio.categories.filter(cat => !myRegisteredCategoryIds.has(cat.id));
+  }, [torneio.categories, myRegistrations]);
+
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(availableCategories[0]?.id || '');
+  const [teamName, setTeamName] = useState('');
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    if (availableCategories.length > 0 && !selectedCategoryId) {
+      setSelectedCategoryId(availableCategories[0].id);
+    }
+  }, [availableCategories, selectedCategoryId]);
+
+  const selectedCategory = useMemo(() => {
+    return torneio.categories.find(c => c.id === selectedCategoryId);
+  }, [torneio.categories, selectedCategoryId]);
+
+  const registrationFeeToDisplay = useMemo(() => {
+    if (selectedCategory) {
+        return formatCurrency(selectedCategory.registration_fee);
+    }
+    return formatCurrency(torneio.registration_fee);
+  }, [torneio, selectedCategory]);
+
+  if (torneio.status !== 'inscricoes_abertas') {
+    return (
+      <div className="bg-yellow-50 dark:bg-yellow-900/50 p-6 rounded-lg text-center my-6">
+        <h3 className="text-xl font-bold text-yellow-800 dark:text-yellow-200">Inscrições Encerradas</h3>
+        <p className="text-yellow-700 dark:text-yellow-300 mt-2">As inscrições para este torneio não estão abertas no momento.</p>
+      </div>
+    );
+  }
+
+  if (!user || !profile) {
+    return (
+      <div className="bg-blue-50 dark:bg-blue-900/50 p-6 rounded-lg text-center my-6">
+        <h3 className="text-xl font-bold text-blue-800 dark:text-blue-200">Faça parte do torneio!</h3>
+        <p className="text-blue-700 dark:text-blue-300 mt-2">Faça login ou crie sua conta para se inscrever.</p>
+        <Button onClick={() => navigate('/auth')} className="mt-4">Entrar ou Cadastrar</Button>
+      </div>
+    );
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const partner = selectedPartnerId ? friends.find(f => f.id === selectedPartnerId) : null;
+    onRegister(selectedCategoryId, teamName, partner);
+  };
+
+  return (
+    <div className="my-6">
+      {myRegistrations.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-2xl font-bold mb-4">Minhas Inscrições</h3>
+          <div className="space-y-4">
+            {myRegistrations.map(participant => (
+              <MyRegistrationCard
+                key={participant.id}
+                participant={participant}
+                torneio={torneio}
+                onPay={onPay}
+                onShowReceipt={onShowReceipt}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {availableCategories.length > 0 && (
+        <div className="bg-white dark:bg-brand-gray-800 p-6 rounded-lg shadow-lg border border-brand-gray-200 dark:border-brand-gray-700">
+          <h3 className="text-2xl font-bold mb-1">Inscreva-se em outra Categoria</h3>
+          <p className="text-brand-gray-500 dark:text-brand-gray-400 mb-4">Valor da inscrição: <span className="font-bold text-green-600">{registrationFeeToDisplay}</span> por jogador.</p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Categoria Disponível</label>
+              <select value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)} className="w-full form-select rounded-md dark:bg-brand-gray-700 dark:border-brand-gray-600">
+                {availableCategories.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.group} - {cat.level}</option>
+                ))}
+              </select>
+            </div>
+            
+            {torneio.modality !== 'individual' && (
+              <Input label={`Nome da ${torneio.modality === 'duplas' ? 'Dupla' : 'Equipe'}`} value={teamName} onChange={e => setTeamName(e.target.value)} required />
+            )}
+    
+            <div className="p-3 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-700/50">
+              <p className="font-semibold">Jogador 1 (Você)</p>
+              <p className="text-sm text-brand-gray-500">{profile.name}</p>
+            </div>
+    
+            {torneio.modality === 'duplas' && (
+              <div>
+                  <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Jogador 2 (Parceiro/a)</label>
+                  <select 
+                      value={selectedPartnerId || ''}
+                      onChange={e => setSelectedPartnerId(e.target.value || null)}
+                      className="w-full form-select rounded-md dark:bg-brand-gray-700 dark:border-brand-gray-600"
+                  >
+                      <option value="">Convidar um amigo...</option>
+                      {friends.map(friend => (
+                          <option key={friend.id} value={friend.id}>{friend.name}</option>
+                      ))}
+                  </select>
+                  <p className="text-xs text-brand-gray-500 mt-1">Seu amigo não está na lista? Peça para ele se cadastrar na arena e adicione-o como amigo.</p>
+              </div>
+            )}
+            
+            <div className="pt-2">
+              <Button type="submit" isLoading={isLoading} className="w-full">Inscrever-se</Button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const MyRegistrationCard: React.FC<{ participant: Participant, torneio: Torneio, onPay: (p: Participant) => void, onShowReceipt: (p: Participant) => void }> = ({ participant, torneio, onPay, onShowReceipt }) => {
+  const { profile } = useAuth();
+  const category = torneio.categories.find(c => c.id === participant.categoryId);
+  const myPlayerInfo = participant.players.find(p => p.profile_id === profile?.id);
+  const hasPaid = myPlayerInfo?.payment_status === 'pago';
+
+  return (
+    <div className="bg-white dark:bg-brand-gray-800 p-4 rounded-lg shadow border border-brand-gray-200 dark:border-brand-gray-700">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+        <div>
+          <p className="font-bold">{category?.group} - {category?.level}</p>
+          <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">Equipe: {participant.name}</p>
+        </div>
+        <div className="flex items-center gap-4">
+          {hasPaid ? (
+            <span className="flex items-center text-sm font-semibold text-green-600 dark:text-green-400">
+              <CheckCircle className="h-5 w-5 mr-2" /> Pagamento Confirmado
+            </span>
+          ) : (
+            <span className="flex items-center text-sm font-semibold text-yellow-600 dark:text-yellow-400">
+              <DollarSign className="h-5 w-5 mr-2" /> Pagamento Pendente
+            </span>
+          )}
+          {hasPaid ? (
+            <Button variant="outline" size="sm" onClick={() => onShowReceipt(participant)}>Ver Comprovante</Button>
+          ) : (
+            <Button size="sm" onClick={() => onPay(participant)}>Pagar Agora</Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PublicOverviewTab: React.FC<{ torneio: Torneio }> = ({ torneio }) => (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-white dark:bg-brand-gray-800 p-6 rounded-lg shadow">
@@ -590,15 +598,15 @@ const PublicOverviewTab: React.FC<{ torneio: Torneio }> = ({ torneio }) => (
             <p className="text-brand-gray-600 dark:text-brand-gray-300 whitespace-pre-wrap">{torneio.description || 'Nenhuma descrição fornecida.'}</p>
         </div>
         <div className="lg:col-span-1 bg-white dark:bg-brand-gray-800 p-6 rounded-lg shadow">
-            <h3 className="text-xl font-bold mb-4">Cronograma e Detalhes</h3>
+            <h3 className="text-xl font-bold mb-4">Premiação</h3>
             <div className="space-y-4">
                 {torneio.categories.map(cat => (
-                    <div key={cat.id} className="border-b border-brand-gray-200 dark:border-brand-gray-700 pb-3 last:border-b-0">
+                    <div key={cat.id}>
                         <p className="font-semibold">{cat.group} - {cat.level}</p>
-                        <ul className="text-sm text-brand-gray-600 dark:text-brand-gray-300 space-y-1 mt-1">
-                            <li><strong>Data:</strong> {format(parseDateStringAsLocal(cat.start_date), 'dd/MM')} a {format(parseDateStringAsLocal(cat.end_date), 'dd/MM')}</li>
-                            <li><strong>Horário:</strong> {cat.start_time} - {cat.end_time}</li>
-                            <li><strong>Inscrição:</strong> {formatCurrency(cat.registration_fee)}</li>
+                        <ul className="list-disc list-inside text-sm text-brand-gray-600 dark:text-brand-gray-300 space-y-1 mt-1">
+                            {cat.prize_1st && <li><strong>1º Lugar:</strong> {cat.prize_1st}</li>}
+                            {cat.prize_2nd && <li><strong>2º Lugar:</strong> {cat.prize_2nd}</li>}
+                            {cat.prize_3rd && <li><strong>3º Lugar:</strong> {cat.prize_3rd}</li>}
                         </ul>
                     </div>
                 ))}

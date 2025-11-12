@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Torneio, Participant, Aluno } from '../../types';
 import Button from '../Forms/Button';
-import { Check, UserPlus, Send, BarChart3, Users, X, Edit, Trash2, AlertTriangle, ArrowUpCircle, Clock, MessageSquare, CheckCircle, DollarSign, ChevronDown } from 'lucide-react';
+import { Check, UserPlus, Send, BarChart3, Users, X, Edit, Trash2, AlertTriangle, ArrowUpCircle, Clock, MessageSquare, CheckCircle, DollarSign, ChevronDown, Info } from 'lucide-react';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import { useToast } from '../../context/ToastContext';
-import Input from '../Forms/Input';
 import PaymentConfirmationModal from './PaymentConfirmationModal';
+import Alert from '../Shared/Alert';
 
 interface ParticipantsTabProps {
   torneio: Torneio;
@@ -27,7 +27,7 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
   const handlePlayerDetailChange = (participantId: string, playerIndex: number, field: 'payment_status' | 'checked_in', value: any) => {
     if (field === 'payment_status') {
       const participant = torneio.participants.find(p => p.id === participantId);
-      if (participant && participant.players[playerIndex]?.payment_status !== 'pago') {
+      if (participant) {
         setPaymentConfirm({ participant, playerIndex });
       }
       return;
@@ -38,7 +38,8 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
       const newParticipants = prev.participants.map(p => {
         if (p.id === participantId) {
           const newPlayers = [...p.players];
-          newPlayers[playerIndex] = { ...newPlayers[playerIndex], [field]: !newPlayers[playerIndex][field] };
+          const currentStatus = newPlayers[playerIndex][field];
+          newPlayers[playerIndex] = { ...newPlayers[playerIndex], [field]: !currentStatus };
           return { ...p, players: newPlayers };
         }
         return p;
@@ -100,7 +101,8 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
 
   const handlePromoteFromWaitlist = (participant: Participant) => {
     const categoryParticipants = torneio.participants.filter(p => p.categoryId === participant.categoryId && !p.on_waitlist);
-    const maxParticipants = torneio.max_participants || 0;
+    const category = torneio.categories.find(c => c.id === participant.categoryId);
+    const maxParticipants = category?.max_participants || 0;
 
     if (categoryParticipants.length >= maxParticipants) {
       addToast({ message: 'A lista de inscritos para esta categoria está cheia.', type: 'error' });
@@ -114,11 +116,16 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
             participants: prev.participants.map(p => p.id === participant.id ? { ...p, on_waitlist: false } : p)
         };
     });
-    addToast({ message: `${participant.name} foi promovido para la lista de inscritos.`, type: 'success' });
+    addToast({ message: `${participant.name} foi promovido para a lista de inscritos.`, type: 'success' });
   };
 
   return (
     <div className="space-y-8">
+      <Alert
+        type="info"
+        title="Como funciona o Check-in?"
+        message="O check-in confirma a presença dos jogadores no dia do torneio. É um passo obrigatório antes que o sistema possa gerar as chaves das partidas, garantindo que o torneio comece apenas com quem realmente compareceu."
+      />
       {torneio.categories.map(category => {
         const categoryParticipants = torneio.participants.filter(p => p.categoryId === category.id && !p.on_waitlist);
         const waitlistParticipants = torneio.participants.filter(p => p.categoryId === category.id && p.on_waitlist);
@@ -136,7 +143,7 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
         else if (!allTeamsComplete) generateBracketTooltip = 'Existem equipes/duplas incompletas.';
         else if (!allCheckedIn) generateBracketTooltip = 'Todos os jogadores devem ter o check-in realizado.';
         
-        const maxParticipants = torneio.max_participants || 0;
+        const maxParticipants = category?.max_participants || 0;
         const currentParticipantsCount = categoryParticipants.length;
         const isFull = currentParticipantsCount >= maxParticipants;
 
@@ -209,6 +216,52 @@ const ParticipantsTab: React.FC<ParticipantsTabProps> = ({ torneio, setTorneio, 
   );
 };
 
+const getParticipantStatus = (participant: Participant, torneio: Torneio) => {
+    const requiredPlayers = torneio.modality === 'individual' ? 1 : torneio.modality === 'duplas' ? 2 : torneio.team_size || 2;
+    const actualPlayers = participant.players.filter(p => p.name && p.name.trim()).length;
+
+    if (actualPlayers < requiredPlayers) {
+        return { 
+            label: 'Inscrição Incompleta', 
+            color: 'bg-red-600 text-white', 
+            icon: AlertTriangle 
+        };
+    }
+
+    const acceptedPlayers = participant.players.filter(p => p.status === 'accepted' && p.name);
+    if (acceptedPlayers.length === 0) {
+        return { 
+            label: 'Pendente', 
+            color: 'bg-yellow-500 text-yellow-900', 
+            icon: Clock 
+        };
+    }
+
+    const allPaid = acceptedPlayers.every(p => p.payment_status === 'pago');
+    if (allPaid) {
+        return { 
+            label: 'Pago', 
+            color: 'bg-green-600 text-white', 
+            icon: CheckCircle 
+        };
+    }
+
+    const somePaid = acceptedPlayers.some(p => p.payment_status === 'pago');
+    if (somePaid) {
+        return { 
+            label: 'Pago Parcial', 
+            color: 'bg-orange-500 text-white', 
+            icon: DollarSign 
+        };
+    }
+
+    return { 
+        label: 'Pendente', 
+        color: 'bg-yellow-500 text-yellow-900', 
+        icon: Clock 
+    };
+};
+
 const ParticipantRow: React.FC<{
   participant: Participant;
   torneio: Torneio;
@@ -220,29 +273,21 @@ const ParticipantRow: React.FC<{
 }> = ({ participant, torneio, onEdit, onDelete, onPromote, isMainListFull, onPlayerDetailChange }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const acceptedPlayers = participant.players.filter(p => p.status === 'accepted' && p.name);
-  const allPaid = acceptedPlayers.length > 0 && acceptedPlayers.every(p => p.payment_status === 'pago');
-  const somePaid = acceptedPlayers.some(p => p.payment_status === 'pago');
-  const allCheckedIn = acceptedPlayers.length > 0 && acceptedPlayers.every(p => p.checked_in);
+  const status = getParticipantStatus(participant, torneio);
 
-  let paymentStatus: 'pago' | 'parcialmente_pago' | 'pendente' = 'pendente';
-  if (allPaid) paymentStatus = 'pago';
-  else if (somePaid) paymentStatus = 'parcialmente_pago';
-
-  const paymentStatusProps = {
-    pago: { label: 'Pago', color: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300', icon: CheckCircle },
-    parcialmente_pago: { label: 'Parcial', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300', icon: DollarSign },
-    pendente: { label: 'Pendente', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300', icon: AlertTriangle },
-  }[paymentStatus];
+  const allCheckedIn = useMemo(() => {
+    const acceptedPlayers = participant.players.filter(p => p.status === 'accepted' && p.name);
+    return acceptedPlayers.length > 0 && acceptedPlayers.every(p => p.checked_in);
+  }, [participant.players]);
 
   return (
     <div className="border border-brand-gray-200 dark:border-brand-gray-700 rounded-lg">
       <div className="p-3 flex items-center justify-between cursor-pointer hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50" onClick={() => setIsExpanded(!isExpanded)}>
         <div className="flex-1 font-semibold text-brand-gray-900 dark:text-white">{participant.name}</div>
         <div className="flex-1 text-center">
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusProps.color}`}>
-            <paymentStatusProps.icon className="h-3 w-3 mr-1" />
-            {paymentStatusProps.label}
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
+            <status.icon className="h-3 w-3 mr-1" />
+            {status.label}
           </span>
         </div>
         <div className="flex-1 text-center">

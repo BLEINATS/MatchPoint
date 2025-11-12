@@ -20,23 +20,18 @@ const FinanceiroTab: React.FC<FinanceiroTabProps> = ({ torneio, setTorneio }) =>
   const [modalType, setModalType] = useState<'expense' | 'sponsor'>('expense');
 
   const financialData = useMemo(() => {
-    const paidParticipants = torneio.participants?.filter(p => p.payment_status === 'pago') || [];
-    
-    const getPlayersPerEntry = (participant: Torneio['participants'][0]): number => {
-        if (torneio.modality === 'individual') return 1;
-        const playerCount = participant.players.filter(p => p.name && p.name.trim()).length;
-        if (playerCount === 0) {
-            return torneio.modality === 'duplas' ? 2 : (torneio.team_size || 1);
-        }
-        return playerCount;
-    };
-
+    let registrationRevenue = 0;
     let paidPlayersCount = 0;
-    const registrationRevenue = paidParticipants.reduce((total, participant) => {
-      const playerCount = getPlayersPerEntry(participant);
-      paidPlayersCount += playerCount;
-      return total + (playerCount * torneio.registration_fee);
-    }, 0);
+
+    (torneio.participants || []).forEach(participant => {
+        const category = torneio.categories.find(c => c.id === participant.categoryId);
+        const fee = category?.registration_fee || 0;
+
+        const paidPlayersInEntry = participant.players.filter(player => player.payment_status === 'pago').length;
+        
+        registrationRevenue += paidPlayersInEntry * fee;
+        paidPlayersCount += paidPlayersInEntry;
+    });
 
     const sponsorshipRevenue = torneio.sponsors?.reduce((sum, s) => sum + s.amount, 0) || 0;
     const totalRevenue = registrationRevenue + sponsorshipRevenue;

@@ -94,7 +94,7 @@ const RenewPlanModal: React.FC<RenewPlanModalProps> = ({ isOpen, onClose, aluno,
               </p>
               <div className="p-3 bg-blue-50 dark:bg-blue-900/50 rounded-lg flex items-start gap-3 text-sm text-blue-800 dark:text-blue-300">
                 <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <p>O plano é uma mensalidade pré-paga, renovada automaticamente todo mês, sempre no mesmo dia da sua assinatura.</p>
+                <p>O plano é uma mensalidade pré-paga. A renovação é automática todo mês, sempre no mesmo dia da sua assinatura.</p>
               </div>
               <div className="space-y-3">
                 {activePlanos.map(plano => {

@@ -6,7 +6,6 @@ import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { format, parse, isSameDay, isBefore, eachDayOfInterval, getDay, addDays } from 'date-fns';
 import { maskPhone } from '../../utils/masks';
-import { expandRecurringReservations } from '../../utils/reservationUtils';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '../../utils/formatters';
@@ -150,49 +149,77 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
   }, [subtotal, formData.discount, depositAmount]);
 
   useEffect(() => {
-    if (!isOpen || !formData.quadras_ids.length || !formData.startDate || !formData.endDate || !formData.startTime || !formData.endTime) {
+    if (!isOpen) {
       setConflictWarning(null);
       return;
     }
-
+  
     const checkConflicts = () => {
-      const eventStartDate = parseDateStringAsLocal(formData.startDate);
-      const eventEndDate = parseDateStringAsLocal(formData.endDate);
-
-      if (isBefore(eventEndDate, eventStartDate)) {
+      const { quadras_ids, startDate: startDateStr, endDate: endDateStr } = formData;
+      const startTime = formData.courtStartTime || formData.startTime;
+      const endTime = formData.courtEndTime || formData.endTime;
+  
+      if (!quadras_ids.length || !startDateStr || !endDateStr || !startTime || !endTime) {
+        setConflictWarning(null);
+        return;
+      }
+  
+      const startDate = parseDateStringAsLocal(startDateStr);
+      const endDate = parseDateStringAsLocal(endDateStr);
+  
+      if (isBefore(endDate, startDate)) {
         setConflictWarning("A data de fim não pode ser anterior à data de início.");
         return;
       }
-
-      const allExpandedReservations = expandRecurringReservations(reservas, eventStartDate, eventEndDate, quadras);
-      const eventDays = eachDayOfInterval({ start: eventStartDate, end: eventEndDate });
-
+  
+      const newEventStartMinutes = timeToMinutes(startTime);
+      const newEventEndMinutes = timeToMinutes(endTime);
+      if (newEventStartMinutes === -1 || newEventEndMinutes === -1 || newEventStartMinutes >= newEventEndMinutes) {
+        setConflictWarning(null);
+        return;
+      }
+  
+      const eventDays = eachDayOfInterval({ start: startDate, end: endDate });
+  
       for (const day of eventDays) {
-        for (const quadraId of formData.quadras_ids) {
-          const conflictingReserva = allExpandedReservations.find(r => {
-            if (isEditing && (r.evento_id === initialData?.id)) return false;
-            if (r.quadra_id !== quadraId || !isSameDay(parseDateStringAsLocal(r.date), day) || r.status === 'cancelada') {
-              return false;
+        const dayOfWeek = getDay(day);
+  
+        for (const existingReserva of reservas) {
+          if (isEditing && existingReserva.evento_id === initialData?.id) continue;
+          if (existingReserva.status === 'cancelada') continue;
+  
+          let isConflictDay = false;
+          if (existingReserva.isRecurring) {
+            const masterDate = parseDateStringAsLocal(existingReserva.date);
+            const recurrenceEndDate = existingReserva.recurringEndDate ? parseDateStringAsLocal(existingReserva.recurringEndDate) : null;
+            if ((getDay(masterDate) === dayOfWeek) && !isBefore(day, masterDate) && (!recurrenceEndDate || !isAfter(day, recurrenceEndDate))) {
+              isConflictDay = true;
             }
-
-            const eventStartTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${formData.courtStartTime || formData.startTime}`);
-            const eventEndTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${formData.courtEndTime || formData.endTime}`);
-            const reservaStartTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${r.start_time}`);
-            const reservaEndTime = parseDateStringAsLocal(`${format(day, 'yyyy-MM-dd')}T${r.end_time}`);
-            
-            return eventStartTime < reservaEndTime && eventEndTime > reservaStartTime;
-          });
-
-          if (conflictingReserva) {
-            const quadra = quadras.find(q => q.id === quadraId);
-            setConflictWarning(`Conflito em ${format(day, 'dd/MM')}: A quadra "${quadra?.name}" já tem uma reserva (${conflictingReserva.clientName}) das ${conflictingReserva.start_time} às ${conflictingReserva.end_time}.`);
-            return;
+          } else {
+            if (isSameDay(parseDateStringAsLocal(existingReserva.date), day)) {
+              isConflictDay = true;
+            }
+          }
+  
+          if (isConflictDay) {
+            const overlapsQuadra = quadraIds.includes(existingReserva.quadra_id);
+            if (overlapsQuadra) {
+              const existingStartMinutes = timeToMinutes(existingReserva.start_time);
+              const existingEndMinutes = timeToMinutes(existingReserva.end_time);
+  
+              if (existingStartMinutes !== -1 && existingEndMinutes !== -1 && newEventStartMinutes < existingEndMinutes && newEventEndMinutes > existingStartMinutes) {
+                const quadra = quadras.find(q => q.id === existingReserva.quadra_id);
+                setConflictWarning(`Conflito em ${format(day, 'dd/MM')}: A quadra "${quadra?.name}" já tem uma reserva (${existingReserva.clientName}) das ${existingReserva.start_time} às ${existingReserva.end_time}.`);
+                return;
+              }
+            }
           }
         }
       }
+  
       setConflictWarning(null);
     };
-
+  
     checkConflicts();
   }, [formData.quadras_ids, formData.startDate, formData.endDate, formData.startTime, formData.endTime, formData.courtStartTime, formData.courtEndTime, reservas, quadras, isEditing, initialData?.id, isOpen]);
 

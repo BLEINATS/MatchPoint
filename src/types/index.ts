@@ -121,11 +121,6 @@ export interface Arena {
   athlete_payment_window_minutes?: number | null;
 }
 
-export interface ArenaMembership {
-  profile_id: string;
-  arena_id: string;
-}
-
 export interface Quadra {
   id: string;
   arena_id: string;
@@ -403,7 +398,16 @@ export interface TorneioCategory {
   prize_1st?: string;
   prize_2nd?: string;
   prize_3rd?: string;
+  first_place_winner_id?: string | null;
+  second_place_winner_id?: string | null;
   third_place_winner_id?: string | null;
+  max_participants: number;
+  registration_fee: number;
+  start_date: string;
+  end_date: string;
+  start_time: string;
+  end_time: string;
+  quadras_ids: string[];
 }
 
 export interface Torneio {
@@ -414,15 +418,8 @@ export interface Torneio {
   status: TorneioStatus;
   modality: TorneioModality;
   team_size?: number;
-  start_date: string;
-  end_date: string;
   description: string;
-  quadras_ids: string[];
-  start_time: string;
-  end_time: string;
   categories: TorneioCategory[];
-  max_participants: number;
-  registration_fee: number;
   participants: Participant[];
   matches: Match[];
   expenses?: { id: string; description: string; amount: number }[];

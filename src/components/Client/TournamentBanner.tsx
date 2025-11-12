@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Torneio } from '../../types';
 import { Trophy, ArrowRight } from 'lucide-react';
 import Button from '../Forms/Button';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 
 interface TournamentBannerProps {
@@ -18,7 +18,24 @@ const TournamentBanner: React.FC<TournamentBannerProps> = ({ torneio }) => {
     navigate(`/torneios/publico/${torneio.id}`);
   };
 
-  const dateString = format(parseDateStringAsLocal(torneio.start_date), 'dd/MM');
+  const dateString = useMemo(() => {
+    if (!torneio.categories || torneio.categories.length === 0) {
+      return "Data a definir";
+    }
+    const allStartDates = torneio.categories.map(c => parseDateStringAsLocal(c.start_date)).filter(d => !isNaN(d.getTime()));
+    const allEndDates = torneio.categories.map(c => parseDateStringAsLocal(c.end_date)).filter(d => !isNaN(d.getTime()));
+    
+    const overallStartDate = allStartDates.length > 0 ? new Date(Math.min(...allStartDates.map(d => d.getTime()))) : null;
+    const overallEndDate = allEndDates.length > 0 ? new Date(Math.max(...allEndDates.map(d => d.getTime()))) : null;
+
+    if (!overallStartDate) return "Data a definir";
+
+    if (overallEndDate && !isSameDay(overallStartDate, overallEndDate)) {
+        return `${format(overallStartDate, 'dd/MM')} a ${format(overallEndDate, 'dd/MM')}`;
+    }
+    
+    return format(overallStartDate, 'dd/MM');
+  }, [torneio.categories]);
 
   return (
     <motion.div

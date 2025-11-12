@@ -53,12 +53,12 @@ const PaymentConfirmationModal: React.FC<PaymentConfirmationModalProps> = ({ isO
                       onClick={() => setSelectedMethod(id)}
                       className={`w-full p-4 border-2 rounded-lg text-left flex items-center gap-3 transition-all ${
                         isSelected
-                          ? 'border-brand-blue-500 bg-white'
+                          ? 'border-brand-blue-500 bg-blue-100 dark:bg-brand-blue-500/20'
                           : 'border-transparent bg-brand-gray-50 dark:bg-brand-gray-800 hover:border-brand-gray-300 dark:hover:border-brand-gray-600'
                       }`}
                     >
                       <Icon className={`h-5 w-5 ${isSelected ? 'text-brand-blue-500' : 'text-brand-gray-500'}`} />
-                      <span className={`font-semibold ${isSelected ? 'text-brand-gray-900' : 'text-brand-gray-700 dark:text-brand-gray-300'}`}>
+                      <span className={`font-semibold ${isSelected ? 'text-brand-blue-800 dark:text-brand-blue-200' : 'text-brand-gray-700 dark:text-brand-gray-300'}`}>
                         {label}
                       </span>
                     </button>

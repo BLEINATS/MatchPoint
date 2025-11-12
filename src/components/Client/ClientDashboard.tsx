@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
-import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, PlanoAula, Friendship, GamificationPointTransaction, FinanceTransaction, Torneio } from '../../types';
+import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, PlanoAula, Friendship, GamificationPointTransaction, FinanceTransaction, Torneio, Participant } from '../../types';
 import { Calendar, Compass, Search, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star, User, Users, Banknote, FileText, MessageSquare, Briefcase, Repeat, XCircle, LifeBuoy, Lock, Unlock, Bell, Trash2, Edit, Hourglass } from 'lucide-react';
 import { isAfter, startOfDay, isSameDay, format, parse, getDay, addDays, isBefore, endOfDay, addMinutes, subDays, isWithinInterval, formatDistanceToNow, isPast, differenceInHours, differenceInWeeks, endOfWeek, startOfWeek, addWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -51,6 +51,7 @@ import ClassAttendanceModal from '../Alunos/ClassAttendanceModal';
 import TournamentBanner from './TournamentBanner';
 import TournamentInvitesWidget from './TournamentInvitesWidget';
 import MyTournamentsWidget from './MyTournamentsWidget';
+import InvitePartnerModal from './InvitePartnerModal';
 
 type View = 'inicio' | 'aulas' | 'reservas' | 'loja' | 'amigos' | 'perfil' | 'atleta_painel' | 'professor_painel' | 'documentos' | 'seguranca' | 'notificacoes' | 'suporte';
 
@@ -170,27 +171,59 @@ const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras
     );
 };
 
-const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], levels: GamificationLevel[], rewards: GamificationReward[], onOpenProfileModal: (tab: 'credits' | 'gamification' | 'payments') => void, nextReservation?: Reserva, pendingReservations: Reserva[], onDetail: (reserva: Reserva) => void, onDataChange: () => void, nextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, selectedArena: Arena | null, onOpenAttendanceModal: () => void, creditHistory: CreditTransaction[], nextProfessorClass: any, onOpenClassAttendanceModal: (classData: any) => void }> = ({ alunoProfile, planos, levels, rewards, onOpenProfileModal, nextReservation, pendingReservations, onDetail, onDataChange, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, selectedArena, onOpenAttendanceModal, creditHistory, nextProfessorClass, onOpenClassAttendanceModal }) => { 
+const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], levels: GamificationLevel[], rewards: GamificationReward[], onOpenProfileModal: (tab: 'credits' | 'gamification' | 'payments') => void, nextReservation?: Reserva, pendingReservations: Reserva[], onDetail: (reserva: Reserva) => void, onDataChange: () => void, nextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, selectedArena: Arena | null, onOpenAttendanceModal: () => void, creditHistory: CreditTransaction[], nextProfessorClass: any, onOpenClassAttendanceModal: (classData: any) => void, tournaments: Torneio[], onUpdateTournamentInvite: (torneioId: string, participantId: string, status: 'accepted' | 'declined') => void, onInvitePartner: (torneio: Torneio, participant: Participant) => void }> = ({ alunoProfile, planos, levels, rewards, onOpenProfileModal, nextReservation, pendingReservations, onDetail, onDataChange, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, selectedArena, onOpenAttendanceModal, creditHistory, nextProfessorClass, onOpenClassAttendanceModal, tournaments, onUpdateTournamentInvite, onInvitePartner }) => { 
     const [favoriteQuadras, setFavoriteQuadras] = useState<string[]>([]);
     const [timeUntilNext, setTimeUntilNext] = useState<string | null>(null);
   
     const expiringCredits = useMemo(() => {
-      if (!alunoProfile || !selectedArena?.credit_expiration_days || !creditHistory) {
-          return [];
-      }
-      const now = new Date();
-      const expirationDays = selectedArena.credit_expiration_days;
-  
-      return creditHistory
-          .filter(tx => tx.amount > 0)
-          .map(tx => {
-              const creationDate = new Date(tx.created_at!);
-              const expirationDate = addDays(creationDate, expirationDays);
-              const daysUntilExpiry = differenceInHours(expirationDate, now) / 24;
-              return { ...tx, expirationDate, daysUntilExpiry };
-          })
-          .filter(tx => isAfter(tx.expirationDate, now) && tx.daysUntilExpiry <= 7)
-          .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
+        if (!alunoProfile || !selectedArena?.credit_expiration_days || !creditHistory) {
+            return [];
+        }
+    
+        // 1. Separate deposits and calculate total withdrawals
+        const deposits = creditHistory
+            .filter(tx => tx.amount > 0)
+            .sort((a, b) => new Date(a.created_at!).getTime() - new Date(b.created_at!).getTime()); // Oldest first
+    
+        const totalWithdrawals = creditHistory
+            .filter(tx => tx.amount < 0)
+            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    
+        // 2. Apply FIFO logic to find unspent deposits
+        let remainingWithdrawals = totalWithdrawals;
+        const unspentDeposits: CreditTransaction[] = [];
+    
+        for (const deposit of deposits) {
+            if (remainingWithdrawals <= 0) {
+                unspentDeposits.push(deposit);
+                continue;
+            }
+    
+            if (remainingWithdrawals >= deposit.amount) {
+                // This entire deposit has been spent
+                remainingWithdrawals -= deposit.amount;
+            } else {
+                // Part of this deposit has been spent
+                const remainingAmount = deposit.amount - remainingWithdrawals;
+                unspentDeposits.push({ ...deposit, amount: remainingAmount });
+                remainingWithdrawals = 0;
+            }
+        }
+    
+        // 3. Now, check which of the unspent deposits are expiring soon
+        const now = new Date();
+        const expirationDays = selectedArena.credit_expiration_days;
+    
+        return unspentDeposits
+            .map(tx => {
+                const creationDate = new Date(tx.created_at!);
+                const expirationDate = addDays(creationDate, expirationDays);
+                const daysUntilExpiry = differenceInHours(expirationDate, now) / 24;
+                return { ...tx, expirationDate, daysUntilExpiry };
+            })
+            .filter(tx => isAfter(tx.expirationDate, now) && tx.daysUntilExpiry <= 7)
+            .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
+    
     }, [alunoProfile, selectedArena, creditHistory]);
   
     const currentLevel = useMemo(() => {
@@ -292,6 +325,27 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
     const sortedQuadras = useMemo(() => { return [...quadras].sort((a, b) => { const aIsFav = favoriteQuadras.includes(a.id); const bIsFav = favoriteQuadras.includes(b.id); if (aIsFav && !bIsFav) return -1; if (!aIsFav && bIsFav) return 1; return a.name.localeCompare(b.name); }); }, [quadras, favoriteQuadras]); 
     const quadraName = nextReservation ? quadras.find(q => q.id === nextReservation.quadra_id)?.name : '';
     
+    const upcomingTournaments = useMemo(() => {
+        if (!tournaments) return [];
+        const today = startOfDay(new Date());
+        return tournaments.filter(t => {
+            if (t.status !== 'inscricoes_abertas') return false;
+            // Check if ANY category has a start date in the future or today
+            return t.categories.some(cat => {
+                try {
+                    const startDate = parseDateStringAsLocal(cat.start_date);
+                    return !isBefore(startDate, today);
+                } catch (e) {
+                    return false;
+                }
+            });
+        }).sort((a, b) => {
+            const aDate = Math.min(...a.categories.map(c => parseDateStringAsLocal(c.start_date).getTime()));
+            const bDate = Math.min(...b.categories.map(c => parseDateStringAsLocal(c.start_date).getTime()));
+            return aDate - bDate;
+        });
+    }, [tournaments]);
+
     const renderFirstCard = () => {
       if (nextProfessorClass) {
         return <ProfessorNextClassCard nextClass={nextProfessorClass} onClick={() => onOpenClassAttendanceModal(nextProfessorClass)} />;
@@ -364,6 +418,10 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
               }
           />
         )}
+        
+        {upcomingTournaments.length > 0 && <TournamentBanner torneio={upcomingTournaments[0]} />}
+        <TournamentInvitesWidget tournaments={tournaments} profile={profile!} onUpdateInvite={onUpdateTournamentInvite} />
+        <MyTournamentsWidget tournaments={tournaments} profile={profile!} onInvitePartner={onInvitePartner} />
     
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
@@ -408,7 +466,7 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
           </button>
           <button onClick={() => onOpenProfileModal('credits')} className="w-full text-left bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700 hover:shadow-lg hover:border-brand-blue-500 transition-all">
               <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><CreditCard className="h-5 w-5 mr-2 text-green-500" /> Meus Créditos</h4>
-              <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCurrency(alunoProfile?.credit_balance || 0)}</p>
+              <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCurrency(alunoProfile?.credit_balance)}</p>
               <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 mt-1">Seu saldo para usar em reservas.</p>
           </button>
           {alunoProfile?.plan_id && (
@@ -455,6 +513,7 @@ const ClientDashboard: React.FC = () => {
     const [planos, setPlanos] = useState<PlanoAula[]>([]);
     const [friends, setFriends] = useState<Profile[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [tournaments, setTournaments] = useState<Torneio[]>([]);
     
     const [levels, setLevels] = useState<GamificationLevel[]>([]);
     const [rewards, setRewards] = useState<GamificationReward[]>([]);
@@ -503,6 +562,11 @@ const ClientDashboard: React.FC = () => {
     const [isAvaliarProfessorModalOpen, setIsAvaliarProfessorModalOpen] = useState(false);
     const [classToEvaluate, setClassToEvaluate] = useState<any | null>(null);
 
+    const [isInvitePartnerModalOpen, setIsInvitePartnerModalOpen] = useState(false);
+    const [tournamentToInvite, setTournamentToInvite] = useState<Torneio | null>(null);
+    const [participantToUpdate, setParticipantToUpdate] = useState<Participant | null>(null);
+    const [isInviting, setIsInviting] = useState(false);
+
     const isStudent = useMemo(() => !!alunoProfileForSelectedArena?.plan_id, [alunoProfileForSelectedArena]);
 
     const myArenas = useMemo(() => {
@@ -520,12 +584,13 @@ const ClientDashboard: React.FC = () => {
         setQuadras([]); setAllArenaReservations([]); setTurmas([]); setProfessores([]);
         setAtletas([]); setPlanos([]); setAllArenaAlunos([]);
         setReservas([]); setCreditHistory([]); setGamificationHistory([]); setPaymentHistory([]);
+        setTournaments([]);
         return;
         }
 
         setIsLoading(true);
         try {
-        const [quadrasRes, allReservasRes, turmasRes, profsRes, atletasRes, creditRes, gamificationHistoryRes, gamificationSettingsRes, levelsRes, rewardsRes, achievementsRes, unlockedAchievementsRes, planosRes, allAlunosRes, friendshipsRes, profilesRes, financeTransactionsRes] = await Promise.all([
+        const [quadrasRes, allReservasRes, turmasRes, profsRes, atletasRes, creditRes, gamificationHistoryRes, gamificationSettingsRes, levelsRes, rewardsRes, achievementsRes, unlockedAchievementsRes, planosRes, allAlunosRes, friendshipsRes, profilesRes, financeTransactionsRes, tournamentsRes] = await Promise.all([
             localApi.select<Quadra>('quadras', selectedArenaContext.id),
             localApi.select<Reserva>('reservas', selectedArenaContext.id),
             localApi.select<Turma>('turmas', selectedArenaContext.id),
@@ -543,6 +608,7 @@ const ClientDashboard: React.FC = () => {
             localApi.select<Friendship>('friendships', 'all'),
             localApi.select<Profile>('profiles', 'all'),
             localApi.select<FinanceTransaction>('finance_transactions', selectedArenaContext.id),
+            localApi.select<Torneio>('torneios', selectedArenaContext.id),
         ]);
         
         const now = new Date();
@@ -580,6 +646,7 @@ const ClientDashboard: React.FC = () => {
         setAtletas(atletasRes.data || []);
         setPlanos(planosRes.data || []);
         setAllArenaAlunos(allAlunosRes.data || []);
+        setTournaments(tournamentsRes.data || []);
 
         const userFriendships = (friendshipsRes.data || []).filter(f => f.status === 'accepted' && (f.user1_id === profile.id || f.user2_id === profile.id));
         const friendIds = userFriendships.map(f => f.user1_id === profile.id ? f.user2_id : f.user1_id);
@@ -1214,6 +1281,93 @@ const ClientDashboard: React.FC = () => {
         setIsDetailModalOpen(false);
     };
 
+    const handleUpdateTournamentInvite = async (torneioId: string, participantId: string, status: 'accepted' | 'declined') => {
+        if (!selectedArenaContext || !profile) return;
+    
+        const torneioToUpdate = tournaments.find(t => t.id === torneioId);
+        if (!torneioToUpdate) return;
+    
+        const updatedParticipants = torneioToUpdate.participants.map(p => {
+          if (p.id === participantId) {
+            const updatedPlayers = p.players.map(player => {
+              if (player.profile_id === profile.id) {
+                return { ...player, status };
+              }
+              return player;
+            });
+            return { ...p, players: updatedPlayers };
+          }
+          return p;
+        });
+    
+        const updatedTorneio = { ...torneioToUpdate, participants: updatedParticipants };
+    
+        try {
+          await localApi.upsert('torneios', [updatedTorneio], selectedArenaContext.id);
+          addToast({ message: `Convite ${status === 'accepted' ? 'aceito' : 'recusado'}!`, type: 'success' });
+          loadData();
+        } catch (error: any) {
+          addToast({ message: `Erro ao responder convite: ${error.message}`, type: 'error' });
+        }
+    };
+
+    const handleOpenInvitePartnerModal = (torneio: Torneio, participant: Participant) => {
+        setTournamentToInvite(torneio);
+        setParticipantToUpdate(participant);
+        setIsInvitePartnerModalOpen(true);
+    };
+
+    const handleConfirmInvite = async (partnerId: string) => {
+        if (!tournamentToInvite || !participantToUpdate || !selectedArenaContext || !profile) return;
+        setIsInviting(true);
+        try {
+            const partnerProfile = friends.find(f => f.id === partnerId);
+            if (!partnerProfile) throw new Error("Amigo não encontrado.");
+
+            const newPlayerEntry = {
+                profile_id: partnerProfile.id,
+                aluno_id: null,
+                name: partnerProfile.name,
+                phone: partnerProfile.phone || null,
+                status: 'pending' as 'pending',
+                payment_status: 'pendente' as 'pendente',
+                checked_in: false,
+            };
+
+            const updatedParticipant = {
+                ...participantToUpdate,
+                players: [...participantToUpdate.players, newPlayerEntry]
+            };
+
+            const updatedParticipants = tournamentToInvite.participants.map(p => 
+                p.id === updatedParticipant.id ? updatedParticipant : p
+            );
+
+            const updatedTorneio = { ...tournamentToInvite, participants: updatedParticipants };
+            
+            await localApi.upsert('torneios', [updatedTorneio], selectedArenaContext.id);
+
+            await localApi.upsert('notificacoes', [{
+                profile_id: partnerId,
+                arena_id: selectedArenaContext.id,
+                message: `${profile.name} convidou você para formar uma dupla no torneio "${tournamentToInvite.name}".`,
+                type: 'tournament_invite',
+                link_to: '/perfil',
+                sender_id: profile.id,
+                sender_name: profile.name,
+                sender_avatar_url: profile.avatar_url,
+            }], selectedArenaContext.id);
+
+            addToast({ message: `Convite enviado para ${partnerProfile.name}!`, type: 'success' });
+            loadData();
+        } catch (error: any) {
+            addToast({ message: `Erro ao convidar parceiro: ${error.message}`, type: 'error' });
+        } finally {
+            setIsInviting(false);
+            setIsInvitePartnerModalOpen(false);
+        }
+    };
+
     const upcomingReservations = useMemo(() => {
         const now = new Date();
         return reservas
@@ -1374,7 +1528,7 @@ const ClientDashboard: React.FC = () => {
     const renderContent = () => {
         if (isLoading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>;
         switch (activeView) {
-        case 'inicio': return <InicioView alunoProfile={alunoProfileForSelectedArena} planos={planos} levels={levels} rewards={rewards} onOpenProfileModal={handleOpenProfileModal} nextReservation={upcomingReservations[0]} pendingReservations={pendingPaymentReservations} onDetail={handleOpenDetailModal} onDataChange={handleDataChange} nextClass={nextClass} quadras={quadras} reservas={allArenaReservations} onSlotClick={handleSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} arenaName={selectedArenaContext?.name} selectedArena={selectedArenaContext} onOpenAttendanceModal={() => setIsAttendanceModalOpen(true)} creditHistory={creditHistory} />;
+        case 'inicio': return <InicioView alunoProfile={alunoProfileForSelectedArena} planos={planos} levels={levels} rewards={rewards} onOpenProfileModal={handleOpenProfileModal} nextReservation={upcomingReservations[0]} pendingReservations={pendingPaymentReservations} onDetail={handleOpenDetailModal} onDataChange={handleDataChange} nextClass={nextClass} quadras={quadras} reservas={allArenaReservations} onSlotClick={handleSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} arenaName={selectedArenaContext?.name} selectedArena={selectedArenaContext} onOpenAttendanceModal={() => setIsAttendanceModalOpen(true)} creditHistory={creditHistory} tournaments={tournaments} onUpdateTournamentInvite={handleUpdateTournamentInvite} onInvitePartner={handleOpenInvitePartnerModal} />;
         case 'reservas': return <ReservationsTab upcoming={upcomingReservations} past={pastReservations} quadras={quadras} atletas={atletas} arenaName={selectedArenaContext?.name} onCancel={handleOpenCancelModal} onDetail={handleOpenDetailModal} onHirePlayer={(res) => { setReservationToHireFor(res); setIsHirePlayerModalOpen(true); }} profileId={profile.id} onAvaliarAtleta={handleAvaliarAtleta} arenaSettings={selectedArenaContext} />;
         case 'aulas': return <AulasTab aluno={alunoProfileForSelectedArena!} allAlunos={allArenaAlunos} turmas={studentTurmas} professores={professores} quadras={quadras} planos={planos} onDataChange={handleDataChange} onAvaliarProfessor={handleAvaliarProfessor} />;
         case 'loja': return <LojaView />;
@@ -1433,6 +1587,7 @@ const ClientDashboard: React.FC = () => {
             <AnimatePresence>{isCancelAtletaConfirmOpen && (<ConfirmationModal isOpen={isCancelAtletaConfirmOpen} onClose={() => setIsCancelAtletaConfirmOpen(false)} onConfirm={handleConfirmCancelAtleta} title="Cancelar Contratação?" message="Tem certeza que deseja cancelar a contratação deste atleta? Ele será notificado." confirmText="Sim, Cancelar" />)}</AnimatePresence>
             <AnimatePresence>{isPayAtletaModalOpen && atletaToPay && reservaForAtletaPayment && (<PayAtletaModal isOpen={isPayAtletaModalOpen} onClose={() => setIsPayAtletaModalOpen(false)} onConfirm={handleConfirmPayAtleta} atleta={atletaToPay} isProcessing={isPaymentProcessing} />)}</AnimatePresence>
             <AtletaPublicProfileModal isOpen={!!viewingAtletaProfile} onClose={() => setViewingAtletaProfile(null)} atleta={viewingAtletaProfile?.atleta || null} completedGames={viewingAtletaProfile?.completedGames} onHire={handleHireFromProfile} />
+            <InvitePartnerModal isOpen={isInvitePartnerModalOpen} onClose={() => setIsInvitePartnerModalOpen(false)} onConfirm={handleConfirmInvite} friends={friends} isLoading={isInviting} />
         </div>
     );
 };

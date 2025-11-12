@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -38,15 +38,37 @@ const getTypeLabel = (type: TorneioTipo): string => {
 
 const TorneioCard: React.FC<TorneioCardProps> = ({ torneio, onEdit, onDelete, index }) => {
   const statusProps = getStatusProps(torneio.status);
-  const startDate = parseDateStringAsLocal(torneio.start_date);
-  const endDate = parseDateStringAsLocal(torneio.end_date);
 
-  const dateString = isNaN(startDate.getTime()) ? "Data a definir" : 
-    format(startDate, 'dd/MM') + (
-      !isNaN(endDate.getTime()) && startDate.getTime() !== endDate.getTime() 
-      ? ` - ${format(endDate, 'dd/MM')}` 
-      : ''
-    );
+  const { dateString, startTime, endTime, totalMaxParticipants } = useMemo(() => {
+    if (!torneio.categories || torneio.categories.length === 0) {
+      return { dateString: "A definir", startTime: "N/A", endTime: "N/A", totalMaxParticipants: 0 };
+    }
+
+    const allStartDates = torneio.categories.map(c => parseDateStringAsLocal(c.start_date)).filter(d => !isNaN(d.getTime()));
+    const allEndDates = torneio.categories.map(c => parseDateStringAsLocal(c.end_date)).filter(d => !isNaN(d.getTime()));
+    
+    const overallStartDate = allStartDates.length > 0 ? new Date(Math.min(...allStartDates.map(d => d.getTime()))) : null;
+    const overallEndDate = allEndDates.length > 0 ? new Date(Math.max(...allEndDates.map(d => d.getTime()))) : null;
+
+    const formattedDateString = overallStartDate
+      ? format(overallStartDate, 'dd/MM') + (overallEndDate && overallStartDate.getTime() !== overallEndDate.getTime() ? ` - ${format(overallEndDate, 'dd/MM')}` : '')
+      : "Data a definir";
+
+    const allStartTimes = torneio.categories.map(c => c.start_time).filter(Boolean);
+    const allEndTimes = torneio.categories.map(c => c.end_time).filter(Boolean);
+
+    const earliestStartTime = allStartTimes.length > 0 ? allStartTimes.reduce((min, t) => t < min ? t : min) : "N/A";
+    const latestEndTime = allEndTimes.length > 0 ? allEndTimes.reduce((max, t) => t > max ? t : max) : "N/A";
+    
+    const totalCapacity = torneio.categories.reduce((sum, cat) => sum + (cat.max_participants || 0), 0);
+
+    return {
+      dateString: formattedDateString,
+      startTime: earliestStartTime,
+      endTime: latestEndTime,
+      totalMaxParticipants: totalCapacity,
+    };
+  }, [torneio.categories]);
 
   return (
     <motion.div
@@ -75,7 +97,7 @@ const TorneioCard: React.FC<TorneioCardProps> = ({ torneio, onEdit, onDelete, in
           </div>
           <div className="flex items-center text-brand-gray-700 dark:text-brand-gray-300">
             <Clock className="h-4 w-4 mr-2 text-brand-blue-500" />
-            <span>{torneio.start_time} - {torneio.end_time}</span>
+            <span>{startTime} - {endTime}</span>
           </div>
         </div>
       </div>
@@ -84,7 +106,7 @@ const TorneioCard: React.FC<TorneioCardProps> = ({ torneio, onEdit, onDelete, in
         <div className="flex justify-between items-center">
             <div className="flex items-center text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300">
                 <Users className="h-4 w-4 mr-2" />
-                <span>{torneio.participants?.length || 0} / {torneio.max_participants} inscritos</span>
+                <span>{torneio.participants?.length || 0} / {totalMaxParticipants} inscritos</span>
             </div>
             <Link to={`/torneios/${torneio.id}`}>
                 <Button size="sm">

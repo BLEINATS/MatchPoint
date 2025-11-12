@@ -85,7 +85,11 @@ const CreditsTab: React.FC<{balance: number, history: CreditTransaction[]}> = ({
                     <h3 className="font-semibold">Saldo de Crédito</h3>
                     <CreditCard className="h-6 w-6" />
                 </div>
-                <p className="text-4xl font-bold mt-2">{formatCurrency(balance)}</p>
+                {(balance ?? 0) > 0 ? (
+                    <p className="text-4xl font-bold mt-2">{formatCurrency(balance)}</p>
+                ) : (
+                    <p className="text-4xl font-bold mt-2">0 créditos</p>
+                )}
                 <p className="text-sm opacity-80 mt-1">Use seu crédito para abater o valor de novas reservas.</p>
             </div>
             <div>

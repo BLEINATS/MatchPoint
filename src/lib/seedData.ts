@@ -1,5 +1,5 @@
 import { localApi } from './localApi';
-import { Arena, Profile, Quadra, PricingRule, PlanoAula, Aluno, Friendship, Reserva, GamificationSettings, GamificationLevel, GamificationReward, GamificationAchievement, Professor, Turma, Plan, Subscription, Product } from '../types';
+import { Arena, Profile, Quadra, PricingRule, PlanoAula, Aluno, Friendship, Reserva, GamificationSettings, GamificationLevel, GamificationReward, GamificationAchievement, Professor, Turma, Plan, Subscription, Product, Torneio } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { subDays, format, addDays } from 'date-fns';
 
@@ -26,7 +26,7 @@ const seedDefaultProducts = async (arenaId: string) => {
             name: 'Raquete de Beach Tennis Profissional',
             description: 'Raquete de alta performance para jogadores avançados, feita com carbono 3K.',
             price: 799.90,
-            photo_urls: ['https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/400x400/3b82f6/ffffff?text=Raquete'],
+            photo_urls: ['https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/400x400/3b82f6/ffffff?text=Raquete'],
             stock: 15,
             is_active: true,
         },
@@ -34,7 +34,7 @@ const seedDefaultProducts = async (arenaId: string) => {
             name: 'Bola de Beach Tennis (Tubo com 3)',
             description: 'Bolas oficiais aprovadas pela ITF, ideais para treinos e competições.',
             price: 49.90,
-            photo_urls: ['https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/400x400/16a34a/ffffff?text=Bolas'],
+            photo_urls: ['https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/400x400/16a34a/ffffff?text=Bolas'],
             stock: 50,
             is_active: true,
         },
@@ -42,7 +42,7 @@ const seedDefaultProducts = async (arenaId: string) => {
             name: 'Camiseta UV MatchPlay',
             description: 'Camiseta com proteção UV50+, perfeita para jogos sob o sol. Tecido leve e respirável.',
             price: 129.90,
-            photo_urls: ['https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/400x400/f97316/ffffff?text=Camiseta'],
+            photo_urls: ['https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/400x400/f97316/ffffff?text=Camiseta'],
             is_active: true,
             variants: [
                 { id: uuidv4(), name: 'Tamanho P', stock: 10 },
@@ -72,7 +72,7 @@ export const seedInitialData = async () => {
   const proPlan: Plan = { id: 'plan_pro_01', name: 'Pro', price: 99.90, billing_cycle: 'monthly', features: ['Quadras ilimitadas', 'Relatórios avançados', 'Gestão de clientes (CRM)', 'Gamificação', 'Suporte prioritário', 'Funcionários ilimitados'], is_active: true };
   const proAnualPlan: Plan = { id: 'plan_pro_anual_01', name: 'Pro Anual', price: 999.00, billing_cycle: 'annual', features: ['Tudo do plano Pro', 'Desconto de ~15%'], is_active: true };
   
-  await localApi.upsert('plans', [basicPlan, proPlan, proAnualPlan], 'all', true);
+  await localApi.upsert('plans', [proPlan, basicPlan, proAnualPlan], 'all', true);
 
   // 3. Arena
   const arenaId = `arena_${uuidv4()}`;
@@ -274,9 +274,36 @@ export const seedInitialData = async () => {
       localStorage.setItem(seedKeyProducts, 'true');
   }
 
+  // 17. Torneio
+  const torneioId = `torneio_${uuidv4()}`;
+  const torneio: Omit<Torneio, 'id' | 'created_at'> = {
+    arena_id: arenaId,
+    name: 'Torneio de Verão MatchPlay',
+    type: 'torneio',
+    status: 'inscricoes_abertas',
+    modality: 'duplas',
+    start_date: format(addDays(new Date(), 14), 'yyyy-MM-dd'),
+    end_date: format(addDays(new Date(), 15), 'yyyy-MM-dd'),
+    description: 'O maior torneio de beach tennis do verão! Inscreva-se já e participe.',
+    quadras_ids: [quadraId],
+    start_time: '09:00',
+    end_time: '18:00',
+    categories: [
+      { id: uuidv4(), group: 'Mista', level: 'Iniciante', prize_1st: 'R$ 500 + Troféu', prize_2nd: 'R$ 250 + Medalha', prize_3rd: 'Medalha' },
+      { id: uuidv4(), group: 'Masculino', level: 'Avançado', prize_1st: 'R$ 1000 + Troféu', prize_2nd: 'R$ 500 + Medalha', prize_3rd: 'Medalha' },
+    ],
+    max_participants: 16, // per category
+    registration_fee: 50, // per player
+    participants: [],
+    matches: [],
+    expenses: [],
+    sponsors: [],
+  };
+  await localApi.upsert('torneios', [torneio], arenaId, true);
+
   // Clear other tables
   await localApi.upsert('atletas_aluguel', [], arenaId, true);
   await localApi.upsert('finance_transactions', [], arenaId, true);
   
-  console.log("Seeding with test users and gamification complete.");
+  console.log("Seeding with test users, gamification, and tournament complete.");
 };

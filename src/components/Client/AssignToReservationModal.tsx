@@ -56,10 +56,10 @@ const AssignToReservationModal: React.FC<AssignToReservationModalProps> = ({ isO
                     <button 
                       key={reserva.id} 
                       onClick={() => setSelectedReservaId(reserva.id)}
-                      className={`w-full p-4 border-2 rounded-lg text-left transition-all ${selectedReservaId === reserva.id ? 'border-brand-blue-500 bg-blue-50 dark:bg-brand-blue-900/50' : 'border-brand-gray-200 dark:border-brand-gray-700 hover:border-brand-blue-400'}`}
+                      className={`w-full p-4 border-2 rounded-lg text-left transition-all ${selectedReservaId === reserva.id ? 'border-brand-blue-500 bg-blue-100 dark:bg-brand-blue-500/20' : 'border-brand-gray-200 dark:border-brand-gray-700 hover:border-brand-blue-400'}`}
                     >
-                      <p className="font-semibold">{getQuadraName(reserva.quadra_id)}</p>
-                      <div className="text-sm text-brand-gray-600 dark:text-brand-gray-400 flex items-center gap-4 mt-1">
+                      <p className={`font-semibold ${selectedReservaId === reserva.id ? 'text-brand-blue-800 dark:text-brand-blue-200' : 'text-brand-gray-900 dark:text-white'}`}>{getQuadraName(reserva.quadra_id)}</p>
+                      <div className={`text-sm flex items-center gap-4 mt-1 ${selectedReservaId === reserva.id ? 'text-brand-blue-700 dark:text-brand-blue-300' : 'text-brand-gray-600 dark:text-brand-gray-400'}`}>
                         <span className="flex items-center"><Calendar className="h-4 w-4 mr-1.5"/>{format(parseDateStringAsLocal(reserva.date), 'dd/MM/yyyy')}</span>
                         <span className="flex items-center"><Clock className="h-4 w-4 mr-1.5"/>{reserva.start_time.slice(0,5)} - {reserva.end_time.slice(0,5)}</span>
                       </div>
