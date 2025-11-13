@@ -61,37 +61,45 @@ const Torneios: React.FC = () => {
       const { data: currentReservas } = await localApi.select<Reserva>('reservas', arena.id);
       const otherReservas = currentReservas.filter(r => r.torneio_id !== torneioId);
       
-      const tournamentBlockReservations: Reserva[] = [];
-      if (newTorneio.quadras_ids.length > 0) {
-        const tournamentDays = eachDayOfInterval({
-          start: parseDateStringAsLocal(newTorneio.start_date),
-          end: parseDateStringAsLocal(newTorneio.end_date)
-        });
+      let finalReservas = [...otherReservas];
 
-        for (const day of tournamentDays) {
-          for (const quadraId of newTorneio.quadras_ids) {
-            tournamentBlockReservations.push({
-              id: `reserva_torneio_${torneioId}_${quadraId}_${format(day, 'yyyy-MM-dd')}`,
-              arena_id: arena.id,
-              quadra_id: quadraId,
-              torneio_id: torneioId,
-              date: format(day, 'yyyy-MM-dd'),
-              start_time: newTorneio.start_time,
-              end_time: newTorneio.end_time,
-              type: 'torneio',
-              status: 'confirmada',
-              clientName: `Torneio: ${newTorneio.name}`,
-              isRecurring: false,
-              profile_id: '',
-              created_at: new Date().toISOString(),
-            } as Reserva);
+      if (newTorneio.status === 'inscricoes_abertas' || newTorneio.status === 'em_andamento' || newTorneio.status === 'concluido') {
+        const tournamentBlockReservations: Reserva[] = [];
+        
+        newTorneio.categories.forEach(category => {
+          if (category.quadras_ids && category.quadras_ids.length > 0 && category.start_date && category.end_date && category.start_time && category.end_time) {
+            const categoryDays = eachDayOfInterval({
+              start: parseDateStringAsLocal(category.start_date),
+              end: parseDateStringAsLocal(category.end_date)
+            });
+
+            for (const day of categoryDays) {
+              for (const quadraId of category.quadras_ids) {
+                tournamentBlockReservations.push({
+                  id: `reserva_torneio_${torneioId}_cat_${category.id}_${quadraId}_${format(day, 'yyyyMMdd')}`,
+                  arena_id: arena.id,
+                  quadra_id: quadraId,
+                  torneio_id: torneioId,
+                  date: format(day, 'yyyy-MM-dd'),
+                  start_time: category.start_time,
+                  end_time: category.end_time,
+                  type: 'torneio',
+                  status: 'confirmada',
+                  clientName: `Torneio: ${newTorneio.name}`,
+                  isRecurring: false,
+                  profile_id: '',
+                  created_at: new Date().toISOString(),
+                } as Reserva);
+              }
+            }
           }
-        }
+        });
+        finalReservas = [...otherReservas, ...tournamentBlockReservations];
       }
-
-      await localApi.upsert('reservas', [...otherReservas, ...tournamentBlockReservations], arena.id, true);
       
-      addToast({ message: 'Torneio salvo com sucesso!', type: 'success' });
+      await localApi.upsert('reservas', finalReservas, arena.id, true);
+      
+      addToast({ message: 'Torneio salvo e agenda sincronizada com sucesso!', type: 'success' });
       await loadData();
       setIsModalOpen(false);
       setEditingTorneio(null);

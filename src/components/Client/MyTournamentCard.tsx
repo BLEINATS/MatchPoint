@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Torneio, Participant, Profile } from '../../types';
 import { Trophy, CheckCircle, ArrowRight, DollarSign, Calendar, AlertCircle, UserPlus } from 'lucide-react';
@@ -27,7 +27,20 @@ const MyTournamentCard: React.FC<MyTournamentCardProps> = ({ torneio, participan
   const registrationFee = category?.registration_fee || 0;
   const dateString = category ? format(parseDateStringAsLocal(category.start_date), 'dd/MM/yyyy') : 'A definir';
 
-  const canInvite = torneio.modality === 'duplas' && participant.players.length < 2;
+  const requiredPlayers = useMemo(() => {
+    if (torneio.modality === 'individual') return 1;
+    if (torneio.modality === 'duplas') return 2;
+    if (torneio.modality === 'equipes') return torneio.team_size || 2;
+    return 1;
+  }, [torneio.modality, torneio.team_size]);
+
+  const canInvite = torneio.modality !== 'individual' && participant.players.length < requiredPlayers;
+
+  const buttonText = useMemo(() => {
+    if (torneio.modality === 'duplas') return 'Convidar Parceiro(a)';
+    if (torneio.modality === 'equipes') return 'Convidar Jogador(es)';
+    return 'Convidar';
+  }, [torneio.modality]);
 
   return (
     <motion.div
@@ -77,7 +90,7 @@ const MyTournamentCard: React.FC<MyTournamentCardProps> = ({ torneio, participan
             onClick={() => onInvitePartner(torneio, participant)}
           >
             <UserPlus className="h-4 w-4 mr-2" />
-            Convidar Parceiro(a)
+            {buttonText}
           </Button>
         )}
         <Button 

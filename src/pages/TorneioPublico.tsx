@@ -19,175 +19,6 @@ import TournamentPaymentModal from '../components/Torneios/TournamentPaymentModa
 
 type TabType = 'overview' | 'participants' | 'bracket' | 'results';
 
-const MyRegistrationCard: React.FC<{ participant: Participant, torneio: Torneio, onPay: (p: Participant) => void, onShowReceipt: (p: Participant) => void }> = ({ participant, torneio, onPay, onShowReceipt }) => {
-  const { profile } = useAuth();
-  const category = torneio.categories.find(c => c.id === participant.categoryId);
-  const myPlayerInfo = participant.players.find(p => p.profile_id === profile?.id);
-  const hasPaid = myPlayerInfo?.payment_status === 'pago';
-
-  return (
-    <div className="bg-white dark:bg-brand-gray-800 p-4 rounded-lg shadow border border-brand-gray-200 dark:border-brand-gray-700">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-        <div>
-          <p className="font-bold">{category?.group} - {category?.level}</p>
-          <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">Equipe: {participant.name}</p>
-        </div>
-        <div className="flex items-center gap-4">
-          {hasPaid ? (
-            <span className="flex items-center text-sm font-semibold text-green-600 dark:text-green-400">
-              <CheckCircle className="h-5 w-5 mr-2" /> Pagamento Confirmado
-            </span>
-          ) : (
-            <span className="flex items-center text-sm font-semibold text-yellow-600 dark:text-yellow-400">
-              <DollarSign className="h-5 w-5 mr-2" /> Pagamento Pendente
-            </span>
-          )}
-          {hasPaid ? (
-            <Button variant="outline" size="sm" onClick={() => onShowReceipt(participant)}>Ver Comprovante</Button>
-          ) : (
-            <Button size="sm" onClick={() => onPay(participant)}>Pagar Agora</Button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-interface RegistrationSectionProps {
-  torneio: Torneio;
-  myRegistrations: Participant[];
-  onRegister: (categoryId: string, teamName: string, partner: Profile | null) => void;
-  isLoading: boolean;
-  friends: Profile[];
-  onShowReceipt: (participant: Participant) => void;
-  onPay: (participant: Participant) => void;
-}
-
-const RegistrationSection: React.FC<RegistrationSectionProps> = ({ torneio, myRegistrations, onRegister, isLoading, friends, onShowReceipt, onPay }) => {
-  const { user, profile } = useAuth();
-  const navigate = useNavigate();
-  
-  const availableCategories = useMemo(() => {
-    const myRegisteredCategoryIds = new Set(myRegistrations.map(r => r.categoryId));
-    return torneio.categories.filter(cat => !myRegisteredCategoryIds.has(cat.id));
-  }, [torneio.categories, myRegistrations]);
-
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(availableCategories[0]?.id || '');
-  const [teamName, setTeamName] = useState('');
-  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
-  const { addToast } = useToast();
-
-  useEffect(() => {
-    if (availableCategories.length > 0 && !selectedCategoryId) {
-      setSelectedCategoryId(availableCategories[0].id);
-    }
-  }, [availableCategories, selectedCategoryId]);
-
-  const selectedCategory = useMemo(() => {
-    return torneio.categories.find(c => c.id === selectedCategoryId);
-  }, [torneio.categories, selectedCategoryId]);
-
-  const registrationFeeToDisplay = useMemo(() => {
-    if (selectedCategory) {
-        return formatCurrency(selectedCategory.registration_fee);
-    }
-    return formatCurrency(0);
-  }, [selectedCategory]);
-
-  if (torneio.status !== 'inscricoes_abertas') {
-    return (
-      <div className="bg-yellow-50 dark:bg-yellow-900/50 p-6 rounded-lg text-center my-6">
-        <h3 className="text-xl font-bold text-yellow-800 dark:text-yellow-200">Inscrições Encerradas</h3>
-        <p className="text-yellow-700 dark:text-yellow-300 mt-2">As inscrições para este torneio não estão abertas no momento.</p>
-      </div>
-    );
-  }
-
-  if (!user || !profile) {
-    return (
-      <div className="bg-blue-50 dark:bg-blue-900/50 p-6 rounded-lg text-center my-6">
-        <h3 className="text-xl font-bold text-blue-800 dark:text-blue-200">Faça parte do torneio!</h3>
-        <p className="text-blue-700 dark:text-blue-300 mt-2">Faça login ou crie sua conta para se inscrever.</p>
-        <Button onClick={() => navigate('/auth')} className="mt-4">Entrar ou Cadastrar</Button>
-      </div>
-    );
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const partner = selectedPartnerId ? friends.find(f => f.id === selectedPartnerId) : null;
-    onRegister(selectedCategoryId, teamName, partner);
-  };
-
-  return (
-    <div className="my-6">
-      {myRegistrations.length > 0 && (
-        <div className="mb-8">
-          <h3 className="text-2xl font-bold mb-4">Minhas Inscrições</h3>
-          <div className="space-y-4">
-            {myRegistrations.map(participant => (
-              <MyRegistrationCard
-                key={participant.id}
-                participant={participant}
-                torneio={torneio}
-                onPay={onPay}
-                onShowReceipt={onShowReceipt}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {availableCategories.length > 0 && (
-        <div className="bg-white dark:bg-brand-gray-800 p-6 rounded-lg shadow-lg border border-brand-gray-200 dark:border-brand-gray-700">
-          <h3 className="text-2xl font-bold mb-1">Inscreva-se em outra Categoria</h3>
-          <p className="text-brand-gray-500 dark:text-brand-gray-400 mb-4">Valor da inscrição: <span className="font-bold text-green-600">{registrationFeeToDisplay}</span> por jogador.</p>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Categoria Disponível</label>
-              <select value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)} className="w-full form-select rounded-md dark:bg-brand-gray-700 dark:border-brand-gray-600">
-                {availableCategories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.group} - {cat.level}</option>
-                ))}
-              </select>
-            </div>
-            
-            {torneio.modality !== 'individual' && (
-              <Input label={`Nome da ${torneio.modality === 'duplas' ? 'Dupla' : 'Equipe'}`} value={teamName} onChange={e => setTeamName(e.target.value)} required />
-            )}
-    
-            <div className="p-3 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-700/50">
-              <p className="font-semibold">Jogador 1 (Você)</p>
-              <p className="text-sm text-brand-gray-500">{profile.name}</p>
-            </div>
-    
-            {torneio.modality === 'duplas' && (
-              <div>
-                  <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Jogador 2 (Parceiro/a)</label>
-                  <select 
-                      value={selectedPartnerId || ''}
-                      onChange={e => setSelectedPartnerId(e.target.value || null)}
-                      className="w-full form-select rounded-md dark:bg-brand-gray-700 dark:border-brand-gray-600"
-                  >
-                      <option value="">Convidar um amigo...</option>
-                      {friends.map(friend => (
-                          <option key={friend.id} value={friend.id}>{friend.name}</option>
-                      ))}
-                  </select>
-                  <p className="text-xs text-brand-gray-500 mt-1">Seu amigo não está na lista? Peça para ele se cadastrar na arena e adicione-o como amigo.</p>
-              </div>
-            )}
-            
-            <div className="pt-2">
-              <Button type="submit" isLoading={isLoading} className="w-full">Inscrever-se</Button>
-            </div>
-          </form>
-        </div>
-      )}
-    </div>
-  );
-};
-
 const getModalityProps = (modality: Torneio['modality']) => {
     switch (modality) {
         case 'individual': return { icon: User, label: 'Individual' };
@@ -204,6 +35,173 @@ const StatCard: React.FC<{ icon: React.ElementType, label: string, value: string
         <p className="text-xs sm:text-sm text-blue-200 dark:text-brand-gray-400 truncate">{label}</p>
     </motion.div>
 );
+
+const MyRegistrationCard: React.FC<{ participant: Participant, torneio: Torneio, onPay: (p: Participant) => void, onShowReceipt: (p: Participant) => void }> = ({ participant, torneio, onPay, onShowReceipt }) => {
+    const { profile } = useAuth();
+    const category = torneio.categories.find(c => c.id === participant.categoryId);
+    const myPlayerInfo = participant.players.find(p => p.profile_id === profile?.id);
+    const hasPaid = myPlayerInfo?.payment_status === 'pago';
+  
+    return (
+      <div className="bg-white dark:bg-brand-gray-800 p-4 rounded-lg shadow border border-brand-gray-200 dark:border-brand-gray-700">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+          <div>
+            <p className="font-bold">{category?.group} - {category?.level}</p>
+            <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">Equipe: {participant.name}</p>
+          </div>
+          <div className="flex items-center gap-4">
+            {hasPaid ? (
+              <span className="flex items-center text-sm font-semibold text-green-600 dark:text-green-400">
+                <CheckCircle className="h-5 w-5 mr-2" /> Pagamento Confirmado
+              </span>
+            ) : (
+              <span className="flex items-center text-sm font-semibold text-yellow-600 dark:text-yellow-400">
+                <DollarSign className="h-5 w-5 mr-2" /> Pagamento Pendente
+              </span>
+            )}
+            {hasPaid ? (
+              <Button variant="outline" size="sm" onClick={() => onShowReceipt(participant)}>Ver Comprovante</Button>
+            ) : (
+              <Button size="sm" onClick={() => onPay(participant)}>Pagar Agora</Button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+};
+  
+const RegistrationSection: React.FC<{
+    torneio: Torneio;
+    myRegistrations: Participant[];
+    onRegister: (categoryId: string, teamName: string, partner: Profile | null) => void;
+    isLoading: boolean;
+    friends: Profile[];
+    onShowReceipt: (participant: Participant) => void;
+    onPay: (participant: Participant) => void;
+}> = ({ torneio, myRegistrations, onRegister, isLoading, friends, onShowReceipt, onPay }) => {
+    const { user, profile } = useAuth();
+    const navigate = useNavigate();
+    
+    const availableCategories = useMemo(() => {
+      const myRegisteredCategoryIds = new Set(myRegistrations.map(r => r.categoryId));
+      return torneio.categories.filter(cat => !myRegisteredCategoryIds.has(cat.id));
+    }, [torneio.categories, myRegistrations]);
+  
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string>(availableCategories[0]?.id || '');
+    const [teamName, setTeamName] = useState('');
+    const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+    const { addToast } = useToast();
+  
+    useEffect(() => {
+      if (availableCategories.length > 0 && !selectedCategoryId) {
+        setSelectedCategoryId(availableCategories[0].id);
+      }
+    }, [availableCategories, selectedCategoryId]);
+  
+    const selectedCategory = useMemo(() => {
+      return torneio.categories.find(c => c.id === selectedCategoryId);
+    }, [torneio.categories, selectedCategoryId]);
+  
+    const registrationFeeToDisplay = useMemo(() => {
+      if (selectedCategory) {
+          return formatCurrency(selectedCategory.registration_fee);
+      }
+      return '-';
+    }, [selectedCategory]);
+  
+    if (torneio.status !== 'inscricoes_abertas') {
+      return (
+        <div className="bg-yellow-50 dark:bg-yellow-900/50 p-6 rounded-lg text-center my-6">
+          <h3 className="text-xl font-bold text-yellow-800 dark:text-yellow-200">Inscrições Encerradas</h3>
+          <p className="text-yellow-700 dark:text-yellow-300 mt-2">As inscrições para este torneio não estão abertas no momento.</p>
+        </div>
+      );
+    }
+  
+    if (!user || !profile) {
+      return (
+        <div className="bg-blue-50 dark:bg-blue-900/50 p-6 rounded-lg text-center my-6">
+          <h3 className="text-xl font-bold text-blue-800 dark:text-blue-200">Faça parte do torneio!</h3>
+          <p className="text-blue-700 dark:text-blue-300 mt-2">Faça login ou crie sua conta para se inscrever.</p>
+          <Button onClick={() => navigate('/auth')} className="mt-4">Entrar ou Cadastrar</Button>
+        </div>
+      );
+    }
+  
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      const partner = selectedPartnerId ? friends.find(f => f.id === selectedPartnerId) : null;
+      onRegister(selectedCategoryId, teamName, partner);
+    };
+  
+    return (
+      <div className="my-6">
+        {myRegistrations.length > 0 && (
+          <div className="mb-8">
+            <h3 className="text-2xl font-bold mb-4">Minhas Inscrições</h3>
+            <div className="space-y-4">
+              {myRegistrations.map(participant => (
+                <MyRegistrationCard
+                  key={participant.id}
+                  participant={participant}
+                  torneio={torneio}
+                  onPay={onPay}
+                  onShowReceipt={onShowReceipt}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+  
+        {availableCategories.length > 0 && (
+          <div className="bg-white dark:bg-brand-gray-800 p-6 rounded-lg shadow-lg border border-brand-gray-200 dark:border-brand-gray-700">
+            <h3 className="text-2xl font-bold mb-1">Inscreva-se em outra Categoria</h3>
+            <p className="text-brand-gray-500 dark:text-brand-gray-400 mb-4">Valor da inscrição: <span className="font-bold text-green-600">{registrationFeeToDisplay}</span> por jogador.</p>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Categoria Disponível</label>
+                <select value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)} className="w-full form-select rounded-md dark:bg-brand-gray-700 dark:border-brand-gray-600">
+                  {availableCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.group} - {cat.level}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {torneio.modality !== 'individual' && (
+                <Input label={`Nome da ${torneio.modality === 'duplas' ? 'Dupla' : 'Equipe'}`} value={teamName} onChange={e => setTeamName(e.target.value)} required />
+              )}
+      
+              <div className="p-3 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-700/50">
+                <p className="font-semibold">Jogador 1 (Você)</p>
+                <p className="text-sm text-brand-gray-500">{profile.name}</p>
+              </div>
+      
+              {torneio.modality === 'duplas' && (
+                <div>
+                    <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Jogador 2 (Parceiro/a)</label>
+                    <select 
+                        value={selectedPartnerId || ''}
+                        onChange={e => setSelectedPartnerId(e.target.value || null)}
+                        className="w-full form-select rounded-md dark:bg-brand-gray-700 dark:border-brand-gray-600"
+                    >
+                        <option value="">Convidar um amigo...</option>
+                        {friends.map(friend => (
+                            <option key={friend.id} value={friend.id}>{friend.name}</option>
+                        ))}
+                    </select>
+                    <p className="text-xs text-brand-gray-500 mt-1">Seu amigo não está na lista? Peça para ele se cadastrar na arena e adicione-o como amigo.</p>
+                </div>
+              )}
+              
+              <div className="pt-2">
+                <Button type="submit" isLoading={isLoading} className="w-full">Inscrever-se</Button>
+              </div>
+            </form>
+          </div>
+        )}
+      </div>
+    );
+};
 
 const TorneioPublico: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -547,12 +545,33 @@ const TorneioPublico: React.FC = () => {
             onShowReceipt={(p) => { setReceiptParticipant(p); setIsReceiptModalOpen(true); }}
             onPay={handleOpenPaymentModal}
           />
-          <div className="border-b border-brand-gray-200 dark:border-brand-gray-700 my-8">
-            <nav className="-mb-px flex space-x-6 overflow-x-auto" aria-label="Tabs">
+          <div className="my-8">
+            <nav className="flex justify-center items-center p-2 rounded-xl bg-brand-gray-100 dark:bg-brand-gray-900/50 max-w-sm mx-auto" aria-label="Tabs">
               {tabs.map(tab => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${activeTab === tab.id ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400'}`}>
-                  <tab.icon className="mr-2 h-5 w-5" />{tab.label}
-                </button>
+                <div key={tab.id} className="relative flex-grow">
+                  <button
+                    onClick={() => setActiveTab(tab.id)}
+                    className="w-full group p-3 rounded-lg transition-colors relative flex justify-center"
+                  >
+                    <tab.icon className={`h-6 w-6 transition-colors ${
+                      activeTab === tab.id
+                        ? 'text-brand-blue-600 dark:text-brand-blue-400'
+                        : 'text-brand-gray-500 group-hover:text-brand-gray-800 dark:text-brand-gray-400 dark:group-hover:text-white'
+                    }`} />
+                    <div className="absolute bottom-full mb-2 px-2 py-1 bg-brand-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                      {tab.label}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-brand-gray-900"></div>
+                    </div>
+                    {activeTab === tab.id && (
+                      <motion.div
+                        layoutId="public-torneio-active-tab"
+                        className="absolute inset-0 bg-white dark:bg-brand-gray-700 rounded-lg shadow-md"
+                        style={{ zIndex: -1 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                      />
+                    )}
+                  </button>
+                </div>
               ))}
             </nav>
           </div>
@@ -703,21 +722,33 @@ const PublicResultsTab: React.FC<{ torneio: Torneio }> = ({ torneio }) => {
     const resultsByCategory = useMemo(() => {
         return torneio.categories.map(category => {
           const categoryMatches = torneio.matches.filter(m => m.categoryId === category.id);
-          if (categoryMatches.length === 0) return { category, first: null, second: null, third: null };
-    
-          const maxRound = Math.max(...categoryMatches.map(m => m.round));
-          const finalMatch = categoryMatches.find(m => m.round === maxRound);
-    
-          let first: any = null, second: any = null, third: any = null;
-    
-          if (finalMatch && finalMatch.winner_id) {
-            first = torneio.participants.find(p => p.id === finalMatch.winner_id) || null;
-            const loserId = finalMatch.participant_ids.find(id => id !== finalMatch.winner_id);
-            second = torneio.participants.find(p => p.id === loserId) || null;
-          }
           
+          let first: Participant | null = null;
+          let second: Participant | null = null;
+          let third: Participant | null = null;
+
+          if (category.first_place_winner_id) {
+            first = torneio.participants.find(p => p.id === category.first_place_winner_id) || null;
+          }
+          if (category.second_place_winner_id) {
+            second = torneio.participants.find(p => p.id === category.second_place_winner_id) || null;
+          }
           if (category.third_place_winner_id) {
             third = torneio.participants.find(p => p.id === category.third_place_winner_id) || null;
+          }
+
+          if (!first || !second) {
+            if (categoryMatches.length > 0) {
+              const maxRound = Math.max(...categoryMatches.map(m => m.round));
+              const finalMatch = categoryMatches.find(m => m.round === maxRound);
+              if (finalMatch && finalMatch.winner_id) {
+                if (!first) first = torneio.participants.find(p => p.id === finalMatch.winner_id) || null;
+                if (!second) {
+                  const loserId = finalMatch.participant_ids.find(id => id !== finalMatch.winner_id);
+                  if (loserId) second = torneio.participants.find(p => p.id === loserId) || null;
+                }
+              }
+            }
           }
     
           return { category, first, second, third };

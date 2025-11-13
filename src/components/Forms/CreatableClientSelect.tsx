@@ -11,21 +11,24 @@ interface ClientValue {
 interface CreatableClientSelectProps {
   alunos: Aluno[];
   value: ClientValue;
-  onChange: (selection: { id: string | null; name: string; phone?: string | null }) => void;
+  onChange: (selection: { id: string | null; profile_id: string | null; name: string; phone?: string | null }) => void;
   placeholder?: string;
+  excludeIds?: string[];
 }
 
-const CreatableClientSelect: React.FC<CreatableClientSelectProps> = ({ alunos, value, onChange, placeholder }) => {
+const CreatableClientSelect: React.FC<CreatableClientSelectProps> = ({ alunos, value, onChange, placeholder, excludeIds = [] }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const filteredAlunos = useMemo(() => {
-    if (!searchTerm) return alunos;
-    return alunos.filter(aluno =>
-      aluno.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [alunos, searchTerm]);
+    const lowerCaseSearch = searchTerm.toLowerCase();
+    return alunos
+      .filter(aluno =>
+        (!excludeIds || !aluno.id || !excludeIds.includes(aluno.id)) &&
+        aluno.name.toLowerCase().includes(lowerCaseSearch)
+      );
+  }, [alunos, searchTerm, excludeIds]);
 
   const canCreate = useMemo(() => {
     return searchTerm.length > 0 && !alunos.some(opt => opt.name.toLowerCase() === searchTerm.toLowerCase());
@@ -43,13 +46,13 @@ const CreatableClientSelect: React.FC<CreatableClientSelectProps> = ({ alunos, v
   }, []);
 
   const handleSelect = (aluno: Aluno) => {
-    onChange({ id: aluno.id, name: aluno.name, phone: aluno.phone });
+    onChange({ id: aluno.id, profile_id: aluno.profile_id, name: aluno.name, phone: aluno.phone });
     setIsOpen(false);
     setSearchTerm('');
   };
 
   const handleCreate = () => {
-    onChange({ id: null, name: searchTerm, phone: '' });
+    onChange({ id: null, profile_id: null, name: searchTerm, phone: '' });
     setIsOpen(false);
     setSearchTerm('');
   };

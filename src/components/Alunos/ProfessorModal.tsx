@@ -37,6 +37,8 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
     valor_hora_aula: 0 as number | null,
     salario_mensal: 0 as number | null,
     valor_por_aula: 0 as number | null,
+    valor_por_aluno: 0 as number | null,
+    percentual_por_aula: 0 as number | null,
   });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -60,12 +62,14 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
         valor_hora_aula: initialData.valor_hora_aula || 0,
         salario_mensal: initialData.salario_mensal || 0,
         valor_por_aula: initialData.valor_por_aula || 0,
+        valor_por_aluno: initialData.valor_por_aluno || 0,
+        percentual_por_aula: initialData.percentual_por_aula || 0,
       });
     } else {
       setFormData({
         name: '', email: '', phone: '', specialties: [], profile_id: null, avatar_url: null, status: 'ativo',
         nivel_experiencia: null, metodologia: '', portfolio_url: '', pix_key: '',
-        payment_type: 'por_hora', valor_hora_aula: 0, salario_mensal: 0, valor_por_aula: 0,
+        payment_type: 'por_hora', valor_hora_aula: 0, salario_mensal: 0, valor_por_aula: 0, valor_por_aluno: 0, percentual_por_aula: 0,
       });
     }
     setPhotoFile(null);
@@ -74,16 +78,22 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
   const handleSave = () => {
     let dataToSave: Partial<Professor> = { ...formData };
     
-    // Nullify unused payment fields
+    dataToSave.valor_hora_aula = null;
+    dataToSave.salario_mensal = null;
+    dataToSave.valor_por_aula = null;
+    dataToSave.valor_por_aluno = null;
+    dataToSave.percentual_por_aula = null;
+
     if (formData.payment_type === 'por_hora') {
-      dataToSave.salario_mensal = null;
-      dataToSave.valor_por_aula = null;
+      dataToSave.valor_hora_aula = formData.valor_hora_aula;
     } else if (formData.payment_type === 'mensal') {
-      dataToSave.valor_hora_aula = null;
-      dataToSave.valor_por_aula = null;
+      dataToSave.salario_mensal = formData.salario_mensal;
     } else if (formData.payment_type === 'por_aula') {
-      dataToSave.valor_hora_aula = null;
-      dataToSave.salario_mensal = null;
+      dataToSave.valor_por_aula = formData.valor_por_aula;
+    } else if (formData.payment_type === 'por_aluno') {
+      dataToSave.valor_por_aluno = formData.valor_por_aluno;
+    } else if (formData.payment_type === 'percentual_aula') {
+      dataToSave.percentual_por_aula = formData.percentual_por_aula;
     }
 
     if (isEditing && initialData) {
@@ -99,7 +109,7 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
     const { name, value } = e.target;
     let finalValue: string | number | null = value;
     if (name === 'phone') finalValue = maskPhone(value);
-    if (['valor_hora_aula', 'salario_mensal', 'valor_por_aula'].includes(name)) {
+    if (['valor_hora_aula', 'salario_mensal', 'valor_por_aula', 'valor_por_aluno', 'percentual_por_aula'].includes(name)) {
         finalValue = value === '' ? null : Number(value);
     }
     setFormData(prev => ({ ...prev, [name]: finalValue }));
@@ -210,6 +220,8 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
                         <option value="por_hora">Por Hora/Aula</option>
                         <option value="mensal">Salário Fixo Mensal</option>
                         <option value="por_aula">Valor Fixo por Aula</option>
+                        <option value="por_aluno">Valor por Aluno</option>
+                        <option value="percentual_aula">Porcentagem por Aula</option>
                     </select>
                 </div>
                 <AnimatePresence mode="wait">
@@ -227,6 +239,12 @@ const ProfessorModal: React.FC<ProfessorModalProps> = ({ isOpen, onClose, onSave
                     )}
                     {formData.payment_type === 'por_aula' && (
                       <Input label="Valor Fixo por Aula (R$)" name="valor_por_aula" type="number" value={String(formData.valor_por_aula ?? '')} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} />
+                    )}
+                    {formData.payment_type === 'por_aluno' && (
+                      <Input label="Valor por Aluno (R$)" name="valor_por_aluno" type="number" value={String(formData.valor_por_aluno ?? '')} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} />
+                    )}
+                    {formData.payment_type === 'percentual_aula' && (
+                      <Input label="Porcentagem por Aula (%)" name="percentual_por_aula" type="number" value={String(formData.percentual_por_aula ?? '')} onChange={handleChange} icon={<Percent className="h-4 w-4 text-brand-gray-400"/>} />
                     )}
                   </motion.div>
                 </AnimatePresence>

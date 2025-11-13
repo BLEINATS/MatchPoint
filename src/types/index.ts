@@ -213,10 +213,12 @@ export interface Professor {
   comissao?: number;
   pix_key?: string | null;
   created_at: string;
-  payment_type?: 'por_hora' | 'mensal' | 'por_aula';
+  payment_type?: 'por_hora' | 'mensal' | 'por_aula' | 'por_aluno' | 'percentual_aula';
   valor_hora_aula?: number | null;
   salario_mensal?: number | null;
   valor_por_aula?: number | null;
+  valor_por_aluno?: number | null;
+  percentual_por_aula?: number | null;
   ratings?: {
     aluno_id: string;
     rating: number;

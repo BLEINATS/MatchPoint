@@ -20,8 +20,7 @@ import { v4 as uuidv4 } from 'uuid';
 import Input from '../components/Forms/Input';
 import CommunicationModal from '../components/Torneios/CommunicationModal';
 import { isWithinInterval, parseDateStringAsLocal, endOfDay } from '../utils/dateUtils';
-import { syncTournamentReservations } from '../utils/bookingSyncUtils';
-import { format } from 'date-fns';
+import { format, eachDayOfInterval, isBefore, isAfter } from 'date-fns';
 import FinanceiroTab from '../components/Torneios/FinanceiroTab';
 
 type TabType = 'overview' | 'participants' | 'bracket' | 'financial' | 'results';
@@ -29,7 +28,7 @@ type TabType = 'overview' | 'participants' | 'bracket' | 'financial' | 'results'
 const TorneioDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { arena } = useAuth();
+  const { selectedArenaContext: arena, profile } = useAuth();
   const { addToast } = useToast();
   const [torneio, setTorneio] = useState<Torneio | null>(null);
   const [quadras, setQuadras] = useState<Quadra[]>([]);
@@ -45,6 +44,7 @@ const TorneioDetail: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [categoryToDeleteBracket, setCategoryToDeleteBracket] = useState<string | null>(null);
   const [isAddingToWaitlist, setIsAddingToWaitlist] = useState(false);
+  const [excludeIdsForModal, setExcludeIdsForModal] = useState<string[]>([]);
   
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const blocker = useBlocker(hasUnsavedChanges);
@@ -100,40 +100,53 @@ const TorneioDetail: React.FC = () => {
   };
 
   const handleSendCommunication = async (target: 'all' | string, message: string) => {
-    if (!torneio || !arena) return;
+    if (!torneio || !arena || !profile) return;
 
     let targetParticipants = torneio.participants;
     if (target !== 'all') {
         targetParticipants = targetParticipants.filter(p => p.categoryId === target);
     }
 
-    const notifications = targetParticipants
-        .map(p => p.players.map(player => player.aluno_id))
-        .flat()
-        .filter((alunoId, index, self) => alunoId && self.indexOf(alunoId) === index) // Unique aluno_ids
-        .map(alunoId => {
-            const aluno = alunos.find(a => a.id === alunoId);
-            if (aluno && aluno.profile_id) {
+    const targetProfileIds = new Set(targetParticipants.flatMap(p => p.players.map(player => player.profile_id)).filter(Boolean));
+
+    if (targetProfileIds.size === 0) {
+      addToast({ message: 'Nenhum destinatário com conta encontrada para este público.', type: 'info' });
+      return;
+    }
+
+    const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+    const profilesMap = new Map((allProfiles || []).map(p => [p.id, p]));
+
+    const newNotifications: Omit<Notificacao, 'id' | 'created_at'>[] = Array.from(targetProfileIds)
+        .map(pId => {
+            const recipientProfile = profilesMap.get(pId);
+            const wantsNews = recipientProfile?.notification_preferences?.arena_news ?? true;
+            if (wantsNews) {
                 return {
-                    profile_id: aluno.profile_id,
                     arena_id: arena.id,
+                    profile_id: pId,
                     message: `Anúncio do Torneio "${torneio.name}": ${message}`,
                     type: 'tournament_announcement',
+                    read: false,
+                    sender_id: profile.id,
+                    sender_name: profile.name,
+                    sender_avatar_url: profile.avatar_url,
                 };
             }
             return null;
         })
         .filter((n): n is NonNullable<typeof n> => n !== null);
 
-    if (notifications.length > 0) {
-        try {
-            await localApi.upsert('notificacoes', notifications, arena.id);
-            addToast({ message: `Comunicado enviado para ${notifications.length} participante(s) com conta.`, type: 'success' });
-        } catch (error: any) {
-            addToast({ message: `Erro ao enviar comunicado: ${error.message}`, type: 'error' });
-        }
-    } else {
-        addToast({ message: 'Nenhum participante com conta encontrada para receber o comunicado.', type: 'info' });
+    if (newNotifications.length === 0) {
+        addToast({ message: 'Nenhum destinatário com notificações de novidades ativadas foi encontrado.', type: 'info' });
+        return;
+    }
+
+    try {
+      await localApi.upsert('notificacoes', newNotifications, arena.id);
+      addToast({ message: `Comunicado enviado para ${newNotifications.length} participante(s) com conta.`, type: 'success' });
+    } catch (error: any) {
+      addToast({ message: `Erro ao enviar comunicado: ${error.message}`, type: 'error' });
     }
     setIsComModalOpen(false);
   };
@@ -149,8 +162,8 @@ const TorneioDetail: React.FC = () => {
         
         torneioToSave.participants.forEach(participant => {
             participant.players.forEach(player => {
-                if (player.aluno_id === null && player.name) {
-                    const existingPlayerIndex = newPlayersToCreate.findIndex(p => p.name === player.name);
+                if (player.aluno_id === null && player.name.trim() !== '') {
+                    const existingPlayerIndex = newPlayersToCreate.findIndex(p => p.name.toLowerCase() === player.name.toLowerCase());
                     const alreadyInDb = allExistingAlunos.some(a => a.name.toLowerCase() === player.name.toLowerCase());
                     if (existingPlayerIndex === -1 && !alreadyInDb) {
                         newPlayersToCreate.push({ name: player.name, phone: player.phone });
@@ -166,37 +179,62 @@ const TorneioDetail: React.FC = () => {
             }));
             const { data: createdAlunos } = await localApi.upsert('alunos', newAlunosPayload, arena.id);
             if (createdAlunos) {
-                const createdAlunosMap = new Map(createdAlunos.map(a => [a.name, a.id]));
+                const createdAlunosMap = new Map(createdAlunos.map(a => [a.name.toLowerCase(), a]));
                 torneioToSave.participants.forEach(participant => {
                     participant.players.forEach(player => {
                         if (player.aluno_id === null && player.name) {
-                            const newId = createdAlunosMap.get(player.name);
-                            if (newId) player.aluno_id = newId;
+                            const newAluno = createdAlunosMap.get(player.name.toLowerCase());
+                            if (newAluno) {
+                                player.aluno_id = newAluno.id;
+                                player.profile_id = newAluno.profile_id || null;
+                            }
                         }
                     });
                 });
             }
         }
         
-        const tournamentStartDate = parseDateStringAsLocal(torneioToSave.start_date);
-        const tournamentEndDate = endOfDay(parseDateStringAsLocal(torneioToSave.end_date));
-
-        const cleanedMatches = torneioToSave.matches.map(match => {
-            if (match.date) {
-                const matchDate = parseDateStringAsLocal(match.date);
-                if (!isWithinInterval(matchDate, { start: tournamentStartDate, end: tournamentEndDate })) {
-                    return { ...match, date: null, start_time: null, quadra_id: null };
-                }
-            }
-            return match;
-        });
-        torneioToSave.matches = cleanedMatches;
-        
-        await localApi.upsert('torneios', [torneioToSave], arena.id);
-
         const { data: currentReservas } = await localApi.select<Reserva>('reservas', arena.id);
-        const updatedReservas = syncTournamentReservations(torneioToSave, currentReservas, quadras);
-        await localApi.upsert('reservas', updatedReservas, arena.id, true);
+        const otherReservas = currentReservas.filter(r => r.torneio_id !== torneio.id);
+        let finalReservas = [...otherReservas];
+
+        if (torneioToSave.status === 'inscricoes_abertas' || torneioToSave.status === 'em_andamento' || torneioToSave.status === 'concluido') {
+            const tournamentBlockReservations: Reserva[] = [];
+            
+            torneioToSave.categories.forEach(category => {
+              if (category.quadras_ids && category.quadras_ids.length > 0 && category.start_date && category.end_date && category.start_time && category.end_time) {
+                const categoryDays = eachDayOfInterval({
+                  start: parseDateStringAsLocal(category.start_date),
+                  end: parseDateStringAsLocal(category.end_date)
+                });
+
+                for (const day of categoryDays) {
+                  for (const quadraId of category.quadras_ids) {
+                    tournamentBlockReservations.push({
+                      id: `reserva_torneio_${torneio.id}_cat_${category.id}_${quadraId}_${format(day, 'yyyyMMdd')}`,
+                      arena_id: arena.id,
+                      quadra_id: quadraId,
+                      torneio_id: torneio.id,
+                      date: format(day, 'yyyy-MM-dd'),
+                      start_time: category.start_time,
+                      end_time: category.end_time,
+                      type: 'torneio',
+                      status: 'confirmada',
+                      clientName: `Torneio: ${torneioToSave.name}`,
+                      isRecurring: false,
+                      profile_id: '',
+                      created_at: new Date().toISOString(),
+                    } as Reserva);
+                  }
+                }
+              }
+            });
+            finalReservas = [...otherReservas, ...tournamentBlockReservations];
+        }
+        
+        await localApi.upsert('reservas', finalReservas, arena.id, true);
+
+        await localApi.upsert('torneios', [torneioToSave], arena.id);
 
         setHasUnsavedChanges(false);
         setShowSuccess(true);
@@ -243,6 +281,13 @@ const TorneioDetail: React.FC = () => {
   };
   
   const handleOpenParticipantModal = (participant: Participant | null, categoryId: string, onWaitlist: boolean = false) => {
+    if (!torneio) return;
+    const existingPlayerAlunoIds = torneio.participants
+        .filter(p => p.categoryId === categoryId && (!participant || p.id !== participant.id))
+        .flatMap(p => p.players.map(player => player.aluno_id))
+        .filter((id): id is string => !!id);
+        
+    setExcludeIdsForModal(existingPlayerAlunoIds);
     setEditingParticipant(participant);
     setSelectedCategoryForModal(categoryId);
     setIsAddingToWaitlist(onWaitlist);
@@ -253,6 +298,7 @@ const TorneioDetail: React.FC = () => {
     setIsParticipantModalOpen(false);
     setEditingParticipant(null);
     setSelectedCategoryForModal(null);
+    setExcludeIdsForModal([]);
   };
 
   const handleSaveParticipant = (participant: Participant) => {
@@ -398,6 +444,7 @@ const TorneioDetail: React.FC = () => {
         alunos={alunos}
         categoryId={selectedCategoryForModal}
         onWaitlist={isAddingToWaitlist}
+        excludePlayerIds={excludeIdsForModal}
       />
       <ConfirmationModal
         isOpen={isDeleteModalOpen}

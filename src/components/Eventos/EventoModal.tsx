@@ -4,7 +4,7 @@ import { X, Save, User, Calendar, Clock, Users, DollarSign, Plus, Trash2, Info, 
 import { Evento, Quadra, EventoTipoPrivado, EventoStatus, Reserva, PricingRule } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
-import { format, parse, isSameDay, isBefore, eachDayOfInterval, getDay, addDays } from 'date-fns';
+import { format, parse, isSameDay, isBefore, eachDayOfInterval, getDay, addDays, isAfter } from 'date-fns';
 import { maskPhone } from '../../utils/masks';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { Link } from 'react-router-dom';
@@ -202,7 +202,7 @@ const EventoModal: React.FC<EventoModalProps> = ({ isOpen, onClose, onSave, init
           }
   
           if (isConflictDay) {
-            const overlapsQuadra = quadraIds.includes(existingReserva.quadra_id);
+            const overlapsQuadra = quadras_ids.includes(existingReserva.quadra_id);
             if (overlapsQuadra) {
               const existingStartMinutes = timeToMinutes(existingReserva.start_time);
               const existingEndMinutes = timeToMinutes(existingReserva.end_time);

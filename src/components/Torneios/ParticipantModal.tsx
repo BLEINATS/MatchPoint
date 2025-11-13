@@ -19,13 +19,14 @@ import React, { useState, useEffect } from 'react';
       alunos: Aluno[];
       categoryId: string | null;
       onWaitlist?: boolean;
+      excludePlayerIds?: string[];
     }
 
-    const ParticipantModal: React.FC<ParticipantModalProps> = ({ isOpen, onClose, onSave, modality, teamSize = 2, initialData, alunos, categoryId, onWaitlist = false }) => {
+    const ParticipantModal: React.FC<ParticipantModalProps> = ({ isOpen, onClose, onSave, modality, teamSize = 2, initialData, alunos, categoryId, onWaitlist = false, excludePlayerIds = [] }) => {
       const [name, setName] = useState('');
       const [email, setEmail] = useState('');
-      const [players, setPlayers] = useState<{ aluno_id: string | null; name: string; phone: string; payment_status?: 'pendente' | 'pago'; checked_in: boolean }>([
-        { aluno_id: null, name: '', phone: '', payment_status: 'pendente', checked_in: false },
+      const [players, setPlayers] = useState<{ aluno_id: string | null; profile_id: string | null; name: string; phone: string; payment_status?: 'pendente' | 'pago'; checked_in: boolean }>([
+        { aluno_id: null, profile_id: null, name: '', phone: '', payment_status: 'pendente', checked_in: false },
       ]);
       const { addToast } = useToast();
 
@@ -37,28 +38,30 @@ import React, { useState, useEffect } from 'react';
             setEmail(initialData.email);
             const initialPlayers = initialData.players.map(player => ({
               aluno_id: player.aluno_id,
+              profile_id: player.profile_id,
               name: player.name,
               phone: player.phone || '',
               payment_status: player.payment_status || 'pendente',
               checked_in: player.checked_in || false,
             }));
             while (initialPlayers.length < requiredPlayers) {
-              initialPlayers.push({ aluno_id: null, name: '', phone: '', payment_status: 'pendente', checked_in: false });
+              initialPlayers.push({ aluno_id: null, profile_id: null, name: '', phone: '', payment_status: 'pendente', checked_in: false });
             }
             setPlayers(initialPlayers.slice(0, requiredPlayers));
           } else {
             setName('');
             setEmail('');
-            setPlayers(Array(requiredPlayers).fill(null).map(() => ({ aluno_id: null, name: '', phone: '', payment_status: 'pendente', checked_in: false })));
+            setPlayers(Array(requiredPlayers).fill(null).map(() => ({ aluno_id: null, profile_id: null, name: '', phone: '', payment_status: 'pendente', checked_in: false })));
           }
         }
       }, [isOpen, initialData, modality, teamSize]);
 
-      const handlePlayerChange = (index: number, selection: { id: string | null; name: string; phone?: string | null }) => {
+      const handlePlayerChange = (index: number, selection: { id: string | null; profile_id: string | null; name: string; phone?: string | null }) => {
         const newPlayers = [...players];
         newPlayers[index] = { 
           ...newPlayers[index],
           aluno_id: selection.id, 
+          profile_id: selection.profile_id,
           name: selection.name, 
           phone: selection.phone || ''
         };
@@ -79,8 +82,8 @@ import React, { useState, useEffect } from 'react';
           return;
         }
 
-        if (filledPlayers.length === 0 && modality === 'individual') {
-            addToast({ message: 'É necessário adicionar o nome do jogador.', type: 'error' });
+        if (filledPlayers.length === 0) {
+            addToast({ message: 'É necessário adicionar pelo menos um jogador.', type: 'error' });
             return;
         }
 
@@ -89,15 +92,18 @@ import React, { useState, useEffect } from 'react';
           return;
         }
 
-        const participantName = modality === 'individual' ? (players[0]?.name || 'Participante') : name;
+        const participantName = modality === 'individual' ? (filledPlayers[0]?.name || 'Participante') : name;
 
         onSave({
           id: initialData?.id || `participant_${uuidv4()}`,
           categoryId: initialData?.categoryId || categoryId!,
           name: participantName,
           email,
-          players: players.map(p => ({
-            ...p,
+          players: filledPlayers.map(p => ({
+            aluno_id: p.aluno_id,
+            profile_id: p.profile_id,
+            name: p.name,
+            phone: p.phone,
             status: 'accepted',
             payment_status: p.payment_status || 'pendente',
             checked_in: p.checked_in || false,
@@ -146,6 +152,7 @@ import React, { useState, useEffect } from 'react';
                           value={{ id: player.aluno_id, name: player.name }}
                           onChange={(selection) => handlePlayerChange(index, selection)}
                           placeholder={`Jogador ${index + 1}`}
+                          excludeIds={excludePlayerIds}
                         />
                         {!player.aluno_id && player.name && (
                            <Input

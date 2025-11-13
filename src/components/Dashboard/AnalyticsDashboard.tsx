@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
     DollarSign, Users, Plus, Lock, Send, Calendar, Clock, 
@@ -27,6 +27,8 @@ import AcquisitionCard from './AcquisitionCard';
 import SimpleStatCard from './SimpleStatCard';
 import AtletasPendentesWidget from './AtletasPendentesWidget';
 import TodaysAgenda from './TodaysAgenda';
+import MensalistaDetailModal from '../Reservations/MensalistaDetailModal';
+import ConfirmationModal from '../Shared/ConfirmationModal';
 
 interface AnalyticsDashboardProps {
   onReopenOnboarding: () => void;
@@ -47,6 +49,11 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [isMensalistaModalOpen, setIsMensalistaModalOpen] = useState(false);
+  const [selectedMensalista, setSelectedMensalista] = useState<Reserva | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'reserva' } | null>(null);
+
   const loadData = useCallback(async () => {
     if (!arena) {
         setIsLoading(false);
@@ -65,8 +72,25 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
         localApi.select<Turma>('turmas', arena.id),
       ]);
       
+      const now = new Date();
+      let reservationsData = reservasRes.data || [];
+      let updated = false;
+
+      reservationsData = reservationsData.map(r => {
+          if (r.status === 'aguardando_pagamento' && r.payment_deadline && isBefore(new Date(r.payment_deadline), now)) {
+          updated = true;
+          return { ...r, status: 'cancelada', notes: (r.notes || '') + ' [Cancelado automaticamente por falta de pagamento]', updated_at: new Date().toISOString() };
+          }
+          return r;
+      });
+
+      if (updated) {
+          await localApi.upsert('reservas', reservationsData, arena.id, true);
+          addToast({ message: 'Algumas reservas pendentes expiraram e foram canceladas.', type: 'info' });
+      }
+
       setQuadras(quadrasRes.data || []);
-      setReservas(reservasRes.data || []);
+      setReservas(reservationsData);
       setAlunos(alunosRes.data || []);
       setFinanceTransactions(financeRes.data || []);
       setTorneios(torneiosRes.data || []);
@@ -211,17 +235,30 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
       .sort((a, b) => a.start_time.localeCompare(b.start_time));
   }, [reservas, quadras]);
 
-  const proximoEvento = useMemo(() => {
-    const now = new Date();
-    const allEvents = [...torneios, ...eventos]
-      .filter(e => isAfter(parseDateStringAsLocal(isTorneio(e) ? e.start_date : e.startDate), now))
-      .sort((a, b) => new Date(isTorneio(a) ? a.start_date : a.startDate).getTime() - new Date(isTorneio(b) ? b.start_date : b.startDate).getTime());
-    return allEvents[0] || null;
-  }, [torneios, eventos]);
+  const proximosEventos = useMemo(() => {
+    const today = startOfDay(new Date());
 
-  function isTorneio(event: Torneio | Evento): event is Torneio {
-    return 'max_participants' in event;
-  }
+    const allEvents = [
+        ...eventos.map(e => ({
+            ...e,
+            effectiveDate: parseDateStringAsLocal(e.startDate),
+            isTorneio: false
+        })),
+        ...torneios.map(t => {
+            if (!t.categories || t.categories.length === 0) {
+                return { ...t, effectiveDate: null, isTorneio: true };
+            }
+            const earliestCategoryDate = new Date(Math.min(
+                ...t.categories.map(c => parseDateStringAsLocal(c.start_date).getTime()).filter(time => !isNaN(time))
+            ));
+            return { ...t, effectiveDate: isNaN(earliestCategoryDate.getTime()) ? null : earliestCategoryDate, isTorneio: true };
+        })
+    ];
+    
+    return allEvents
+      .filter(e => e.effectiveDate && !isBefore(e.effectiveDate, today))
+      .sort((a, b) => a.effectiveDate!.getTime() - b.effectiveDate!.getTime());
+  }, [torneios, eventos]);
 
   const handleActionClick = (action: string) => {
     switch (action) {
@@ -230,6 +267,44 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
       case 'Novo Cliente': navigate('/alunos', { state: { openModal: true } }); break;
       case 'Notificação': navigate('/notificacoes'); break;
       default: break;
+    }
+  };
+
+  const handleOpenMensalistaModal = (reserva: Reserva) => {
+    setSelectedMensalista(reserva);
+    setIsMensalistaModalOpen(true);
+  };
+
+  const handleUpdateMasterReserva = async (updatedReserva: Reserva) => {
+    if (!arena) return;
+    try {
+      await localApi.upsert('reservas', [updatedReserva], arena.id);
+      addToast({ message: 'Dados do mensalista atualizados!', type: 'success' });
+      loadData();
+    } catch (error: any) {
+      addToast({ message: `Erro ao salvar: ${error.message}`, type: 'error' });
+    } finally {
+      setIsMensalistaModalOpen(false);
+    }
+  };
+
+  const handleDeleteRequest = (reserva: Reserva) => {
+    setItemToDelete({ id: reserva.id, name: reserva.clientName, type: 'reserva' });
+    setIsDeleteModalOpen(true);
+    setIsMensalistaModalOpen(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete || !arena) return;
+    try {
+      await localApi.delete('reservas', [itemToDelete.id], arena.id);
+      addToast({ message: 'Reserva recorrente excluída com sucesso.', type: 'success' });
+      loadData();
+    } catch (error: any) {
+      addToast({ message: `Erro ao excluir: ${error.message}`, type: 'error' });
+    } finally {
+      setIsDeleteModalOpen(false);
+      setItemToDelete(null);
     }
   };
 
@@ -317,17 +392,42 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
             professores={professores}
             turmas={turmas}
             arena={arena}
-            onCardClick={() => {}}
+            onCardClick={handleOpenMensalistaModal}
             className="lg:col-span-1"
         />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
         <AtletasPendentesWidget atletas={atletas} reservas={reservas} onCardClick={() => {}} />
-        <ProximoEventoWidget evento={proximoEvento} />
+        <ProximoEventoWidget eventos={proximosEventos} />
         <TopQuadrasWidget reservas={reservas} quadras={quadras} />
         <InsightsWidget reservas={reservas} alunos={alunos} quadras={quadras} />
       </div>
+
+      <AnimatePresence>
+        {isMensalistaModalOpen && selectedMensalista && (
+          <MensalistaDetailModal
+            isOpen={isMensalistaModalOpen}
+            onClose={() => setIsMensalistaModalOpen(false)}
+            reserva={selectedMensalista}
+            aluno={alunos.find(a => a.id === selectedMensalista.aluno_id)}
+            onSave={handleUpdateMasterReserva}
+            onEdit={() => {
+              setIsMensalistaModalOpen(false);
+              navigate('/reservas', { state: { editReservaId: selectedMensalista.id, forceEdit: true } });
+            }}
+            onDelete={() => handleDeleteRequest(selectedMensalista)}
+          />
+        )}
+      </AnimatePresence>
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Confirmar Exclusão"
+        message={<><p>Tem certeza que deseja excluir a reserva recorrente de <strong>{itemToDelete?.name}</strong>?</p><p className="mt-2 text-xs text-red-500 dark:text-red-400">Todas as futuras ocorrências serão removidas.</p></>}
+        confirmText="Sim, Excluir"
+      />
     </div>
   );
 };

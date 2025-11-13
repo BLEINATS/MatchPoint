@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, GraduationCap, BookOpen, Plus, Search, BadgeCheck, BadgeX, Briefcase, Loader2, MessageSquare, MoreVertical, Handshake, UserCheck, Star, Edit, Trash2, Phone, Calendar, List, Mail, Percent, FileText, DollarSign, BadgeHelp, UserPlus, Repeat, Trophy } from 'lucide-react';
+import { ArrowLeft, Users, GraduationCap, BookOpen, Plus, Search, BadgeCheck, BadgeX, Briefcase, Loader2, MessageSquare, MoreVertical, Handshake, UserCheck, Star, Edit, Trash2, Phone, Calendar, List, Mail, Percent, FileText, DollarSign, BadgeHelp, UserPlus, Repeat, Trophy, XCircle } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -26,6 +26,7 @@ import { awardPointsForCompletedReservation } from '../utils/gamificationUtils';
 import MensalistasTab from '../components/Alunos/MensalistasTab';
 import MensalistaDetailModal from '../components/Reservations/MensalistaDetailModal';
 import AtletaPublicProfileModal from '../components/Client/AtletaPublicProfileModal';
+import ClassAttendanceModal from '../components/Alunos/ClassAttendanceModal';
 
 type TabType = 'clientes' | 'alunos' | 'mensalistas' | 'professores' | 'atletas' | 'turmas';
 type ProfessoresViewMode = 'list' | 'agenda';
@@ -67,6 +68,9 @@ const Alunos: React.FC = () => {
   const [selectedMensalista, setSelectedMensalista] = useState<Reserva | null>(null);
 
   const [viewingAtletaProfile, setViewingAtletaProfile] = useState<{ atleta: AtletaAluguel; completedGames: number } | null>(null);
+  
+  const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
+  const [selectedClassForAttendance, setSelectedClassForAttendance] = useState<any | null>(null);
 
   const canEdit = useMemo(() => profile?.role === 'admin_arena' || profile?.permissions?.gerenciamento_arena === 'edit', [profile]);
 
@@ -319,6 +323,59 @@ const Alunos: React.FC = () => {
     }
   };
 
+  const handleOpenAttendanceModal = (classData: any) => {
+    setSelectedClassForAttendance(classData);
+    setIsAttendanceModalOpen(true);
+  };
+
+  const handleSaveAttendance = async (
+    updatedAttendance: { [alunoId: string]: 'presente' | 'falta' },
+    classDetails: { turma_id: string; date: string; time: string }
+  ) => {
+    if (!arena) return;
+    
+    try {
+      const { data: allAlunos } = await localApi.select<Aluno>('alunos', arena.id);
+      const updatedAlunos: Aluno[] = [];
+
+      allAlunos.forEach(aluno => {
+        if (updatedAttendance[aluno.id]) {
+          const newStatus = updatedAttendance[aluno.id];
+          const historyEntry = {
+            turma_id: classDetails.turma_id,
+            date: classDetails.date,
+            time: classDetails.time,
+            status: newStatus,
+          };
+          
+          const existingHistory = aluno.attendance_history || [];
+          const entryIndex = existingHistory.findIndex(
+            h => h.turma_id === classDetails.turma_id && h.date === classDetails.date && h.time === classDetails.time
+          );
+
+          let newHistory = [...existingHistory];
+          if (entryIndex > -1) {
+            newHistory[entryIndex] = historyEntry;
+          } else {
+            newHistory.push(historyEntry);
+          }
+          
+          updatedAlunos.push({ ...aluno, attendance_history: newHistory });
+        }
+      });
+      
+      if (updatedAlunos.length > 0) {
+        await localApi.upsert('alunos', updatedAlunos, arena.id);
+      }
+      
+      addToast({ message: 'Frequência salva com sucesso!', type: 'success' });
+      setIsAttendanceModalOpen(false);
+      loadData();
+    } catch (error: any) {
+      addToast({ message: `Erro ao salvar frequência: ${error.message}`, type: 'error' });
+    }
+  };
+
   const isAluno = (aluno: Aluno): boolean => !!(aluno.plan_name && aluno.plan_name.trim() !== '' && aluno.plan_name.toLowerCase() !== 'avulso');
 
   const filteredClientes = useMemo(() => 
@@ -440,7 +497,7 @@ const Alunos: React.FC = () => {
             {professoresViewMode === 'list' ? (
               <ProfessoresList professores={filteredProfessores} onEdit={setEditingProfessor} onDelete={(id, name) => handleDeleteRequest(id, name, 'professor')} canEdit={canEdit} />
             ) : (
-              <ProfessorAgendaView professores={professores} turmas={turmas} quadras={quadras} isGeneralView={true} />
+              <ProfessorAgendaView professores={professores} turmas={turmas} quadras={quadras} isGeneralView={true} onClassClick={handleOpenAttendanceModal} />
             )}
           </div>
         );
@@ -529,6 +586,17 @@ const Alunos: React.FC = () => {
       </AnimatePresence>
       <ConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleConfirmDelete} title="Confirmar Exclusão" message={<><p>Tem certeza que deseja excluir <strong>{itemToDelete?.name}</strong>?</p><p className="mt-2 text-xs text-red-500 dark:text-red-400">Esta ação é irreversível.</p></>} confirmText="Sim, Excluir" />
       <AtletaPublicProfileModal isOpen={!!viewingAtletaProfile} onClose={() => setViewingAtletaProfile(null)} atleta={viewingAtletaProfile?.atleta || null} completedGames={viewingAtletaProfile?.completedGames} />
+      <AnimatePresence>
+        {isAttendanceModalOpen && selectedClassForAttendance && (
+          <ClassAttendanceModal
+            isOpen={isAttendanceModalOpen}
+            onClose={() => setIsAttendanceModalOpen(false)}
+            onSave={handleSaveAttendance}
+            classData={selectedClassForAttendance}
+            allAlunos={alunos}
+          />
+        )}
+      </AnimatePresence>
     </Layout>
   );
 };
@@ -545,6 +613,18 @@ const AlunosList: React.FC<{ alunos: Aluno[], onEdit: (aluno: Aluno) => void, on
   const handleInvite = (phone: string, name: string) => {
     const message = encodeURIComponent(`Olá ${name}, para acompanhar suas reservas, pontos e receber notificações da nossa arena, crie sua conta em nossa plataforma: ${window.location.origin}/auth`);
     window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${message}`, '_blank');
+  };
+  
+  const getRemunerationDisplay = (prof: Professor) => {
+    switch (prof.payment_type) {
+        case 'mensal': return { label: 'Salário Mensal', value: formatCurrency(prof.salario_mensal) };
+        case 'por_aula': return { label: 'Valor por Aula', value: formatCurrency(prof.valor_por_aula) };
+        case 'por_aluno': return { label: 'Valor por Aluno', value: formatCurrency(prof.valor_por_aluno) };
+        case 'percentual_aula': return { label: '% por Aula', value: `${prof.percentual_por_aula || 0}%` };
+        case 'por_hora':
+        default:
+            return { label: 'Valor Hora/Aula', value: formatCurrency(prof.valor_hora_aula) };
+    }
   };
 
   return (
@@ -648,46 +728,62 @@ const ActionMenu: React.FC<{ aluno: Aluno, onPromoteToProfessor: () => void, onP
 
 const ProfessoresList: React.FC<{ professores: Professor[], onEdit: (prof: Professor) => void, onDelete: (id: string, name: string) => void, canEdit: boolean }> = ({ professores, onEdit, onDelete, canEdit }) => {
   if (professores.length === 0) return <PlaceholderTab title="Nenhum professor encontrado" description="Cadastre novos professores para vê-los aqui." />;
+  
+  const getRemunerationDisplay = (prof: Professor) => {
+    switch (prof.payment_type) {
+        case 'mensal': return { label: 'Salário Mensal', value: formatCurrency(prof.salario_mensal) };
+        case 'por_aula': return { label: 'Valor por Aula', value: formatCurrency(prof.valor_por_aula) };
+        case 'por_aluno': return { label: 'Valor por Aluno', value: formatCurrency(prof.valor_por_aluno) };
+        case 'percentual_aula': return { label: '% por Aula', value: `${prof.percentual_por_aula || 0}%` };
+        case 'por_hora':
+        default:
+            return { label: 'Valor Hora/Aula', value: formatCurrency(prof.valor_hora_aula) };
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {professores.map((prof, index) => (
-        <motion.div key={prof.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-green-500">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex items-center gap-4">
-              <div className="flex-shrink-0 h-16 w-16">
-                {prof.avatar_url ? (<img src={prof.avatar_url} alt={prof.name} className="w-16 h-16 rounded-full object-cover border-2 border-brand-gray-200 dark:border-brand-gray-600" />) : (<div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600"><span className="text-2xl text-brand-gray-500 font-bold">{prof.name ? prof.name.charAt(0).toUpperCase() : '?'}</span></div>)}
+      {professores.map((prof, index) => {
+        const remuneration = getRemunerationDisplay(prof);
+        return (
+          <motion.div key={prof.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-5 flex flex-col border-l-4 border-green-500">
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center gap-4">
+                <div className="flex-shrink-0 h-16 w-16">
+                  {prof.avatar_url ? (<img src={prof.avatar_url} alt={prof.name} className="w-16 h-16 rounded-full object-cover border-2 border-brand-gray-200 dark:border-brand-gray-600" />) : (<div className="w-16 h-16 rounded-full bg-brand-gray-200 dark:bg-brand-gray-700 flex items-center justify-center border-2 border-brand-gray-200 dark:border-brand-gray-600"><span className="text-2xl text-brand-gray-500 font-bold">{prof.name ? prof.name.charAt(0).toUpperCase() : '?'}</span></div>)}
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-brand-gray-900 dark:text-white">{prof.name}</h3>
+                  <p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{prof.phone}</p>
+                </div>
+              </div>
+              {canEdit && (
+                <div className="flex space-x-1">
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(prof); }} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(prof.id, prof.name); }} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              )}
+            </div>
+            <div className="mb-4 flex-grow">
+              <h4 className="text-xs font-medium text-brand-gray-500 dark:text-brand-gray-400 mb-1">Especialidades</h4>
+              <p className="text-sm text-brand-gray-800 dark:text-brand-gray-200">{prof.specialties.join(', ')}</p>
+            </div>
+            <div className="mt-auto pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 space-y-3">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-brand-gray-500 dark:text-brand-gray-400">{remuneration.label}</span>
+                <span className="font-semibold text-brand-gray-800 dark:text-white">{remuneration.value}</span>
               </div>
               <div>
-                <h3 className="font-bold text-lg text-brand-gray-900 dark:text-white">{prof.name}</h3>
-                <p className="text-sm text-brand-gray-600 dark:text-brand-gray-400">{prof.phone}</p>
+                <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Status</p>
+                <p className={`font-semibold text-sm flex items-center ${prof.status === 'ativo' ? 'text-green-500' : 'text-red-500'}`}>
+                  {prof.status === 'ativo' ? <BadgeCheck className="h-4 w-4 mr-1.5" /> : <BadgeX className="h-4 w-4 mr-1.5" />}
+                  {prof.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                </p>
               </div>
             </div>
-            {canEdit && (
-              <div className="flex space-x-1">
-                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(prof); }} className="p-2" title="Editar"><Edit className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(prof.id, prof.name); }} className="p-2 hover:text-red-500" title="Excluir"><Trash2 className="h-4 w-4" /></Button>
-              </div>
-            )}
-          </div>
-          <div className="mb-4 flex-grow">
-            <h4 className="text-xs font-medium text-brand-gray-500 dark:text-brand-gray-400 mb-1">Especialidades</h4>
-            <p className="text-sm text-brand-gray-800 dark:text-brand-gray-200">{prof.specialties.join(', ')}</p>
-          </div>
-          <div className="mt-auto pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 space-y-3">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-brand-gray-500 dark:text-brand-gray-400">Valor Hora/Aula</span>
-              <span className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(prof.valor_hora_aula)}</span>
-            </div>
-            <div>
-              <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Status</p>
-              <p className={`font-semibold text-sm flex items-center ${prof.status === 'ativo' ? 'text-green-500' : 'text-red-500'}`}>
-                {prof.status === 'ativo' ? <BadgeCheck className="h-4 w-4 mr-1.5" /> : <BadgeX className="h-4 w-4 mr-1.5" />}
-                {prof.status === 'ativo' ? 'Ativo' : 'Inativo'}
-              </p>
-            </div>
-          </div>
-        </motion.div>
-      ))}
+          </motion.div>
+        );
+      })}
     </div>
   );
 };

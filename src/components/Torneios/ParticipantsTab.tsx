@@ -2,11 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Torneio, Participant, Aluno } from '../../types';
 import Button from '../Forms/Button';
-import { Check, UserPlus, Send, BarChart3, Users, X, Edit, Trash2, AlertTriangle, ArrowUpCircle, Clock, MessageSquare, CheckCircle, DollarSign, ChevronDown, Info } from 'lucide-react';
+import { Check, UserPlus, Send, BarChart3, Users, X, Edit, Trash2, AlertTriangle, ArrowUpCircle, Clock, MessageSquare, CheckCircle, DollarSign, ChevronDown, Info, User } from 'lucide-react';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import { useToast } from '../../context/ToastContext';
 import PaymentConfirmationModal from './PaymentConfirmationModal';
 import Alert from '../Shared/Alert';
+import { formatCurrency } from '../../utils/formatters';
 
 interface ParticipantsTabProps {
   torneio: Torneio;
@@ -279,6 +280,9 @@ const ParticipantRow: React.FC<{
     const acceptedPlayers = participant.players.filter(p => p.status === 'accepted' && p.name);
     return acceptedPlayers.length > 0 && acceptedPlayers.every(p => p.checked_in);
   }, [participant.players]);
+  
+  const category = torneio.categories.find(c => c.id === participant.categoryId);
+  const registrationFee = category?.registration_fee || 0;
 
   return (
     <div className="border border-brand-gray-200 dark:border-brand-gray-700 rounded-lg">
@@ -309,13 +313,19 @@ const ParticipantRow: React.FC<{
             <div className="p-4 bg-brand-gray-50 dark:bg-brand-gray-900/50 border-t border-brand-gray-200 dark:border-brand-gray-700 space-y-2">
               {participant.players.map((player, index) => (
                 <div key={player.profile_id || index} className="flex items-center justify-between p-2 rounded-md">
-                  <span className="text-sm font-medium">{player.name || `Jogador ${index + 1}`}</span>
+                  <div className="flex items-center gap-3">
+                    <User className="h-4 w-4 text-brand-gray-500" />
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-sm font-medium">{player.name || `Jogador ${index + 1}`}</p>
+                      <p className="text-xs font-semibold text-green-600 dark:text-green-400">({formatCurrency(registrationFee)})</p>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" onClick={() => onPlayerDetailChange(participant.id, index, 'payment_status', null)}>
-                      <DollarSign className={`h-4 w-4 ${player.payment_status === 'pago' ? 'text-green-500' : ''}`} />
+                    <Button size="sm" variant="outline" onClick={() => onPlayerDetailChange(participant.id, index, 'payment_status', null)} title="Marcar Pagamento">
+                      <DollarSign className={`h-4 w-4 ${player.payment_status === 'pago' ? 'text-green-500' : 'text-brand-gray-500'}`} />
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => onPlayerDetailChange(participant.id, index, 'checked_in', null)}>
-                      <Check className={`h-4 w-4 ${player.checked_in ? 'text-green-500' : ''}`} />
+                    <Button size="sm" variant="outline" onClick={() => onPlayerDetailChange(participant.id, index, 'checked_in', null)} title="Marcar Check-in">
+                      <Check className={`h-4 w-4 ${player.checked_in ? 'text-green-500' : 'text-brand-gray-500'}`} />
                     </Button>
                   </div>
                 </div>
