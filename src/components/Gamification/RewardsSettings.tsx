@@ -1,5 +1,5 @@
 import React from 'react';
-import { GamificationReward } from '../../types';
+import { GamificationReward, Product } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { Plus, Trash2, Gift } from 'lucide-react';
@@ -9,11 +9,29 @@ import { ToggleSwitch } from './ToggleSwitch';
 interface RewardsSettingsProps {
   rewards: GamificationReward[];
   setRewards: React.Dispatch<React.SetStateAction<GamificationReward[]>>;
+  products: Product[];
 }
 
-const RewardsSettings: React.FC<RewardsSettingsProps> = ({ rewards, setRewards }) => {
+const RewardsSettings: React.FC<RewardsSettingsProps> = ({ rewards, setRewards, products }) => {
   const handleRewardChange = (id: string, field: keyof GamificationReward, value: any) => {
-    setRewards(prev => prev.map(reward => reward.id === id ? { ...reward, [field]: value } : reward));
+    setRewards(prev => prev.map(reward => {
+      if (reward.id === id) {
+        const updatedReward = { ...reward, [field]: value };
+        // Logic to handle exclusivity of product_id and item_description
+        if (field === 'type' && value !== 'free_item') {
+          updatedReward.product_id = null;
+          updatedReward.item_description = null;
+        }
+        if (field === 'product_id' && value) {
+          updatedReward.item_description = null;
+        }
+        if (field === 'item_description' && value) {
+          updatedReward.product_id = null;
+        }
+        return updatedReward;
+      }
+      return reward;
+    }));
   };
 
   const addReward = () => {
@@ -89,8 +107,8 @@ const RewardsSettings: React.FC<RewardsSettingsProps> = ({ rewards, setRewards }
                 type="number"
                 value={reward.value?.toString() || ''}
                 onChange={(e) => handleRewardChange(reward.id, 'value', Number(e.target.value))}
-                disabled={reward.type === 'free_hour'}
-                placeholder={reward.type === 'discount' ? 'Valor do desc.' : 'ID do item'}
+                disabled={reward.type === 'free_item'}
+                placeholder={reward.type === 'discount' ? 'Valor do desc.' : 'Qtd. de horas'}
               />
               <Input
                 label="Quantidade"
@@ -100,6 +118,30 @@ const RewardsSettings: React.FC<RewardsSettingsProps> = ({ rewards, setRewards }
                 placeholder="Ilimitado"
               />
             </div>
+            {reward.type === 'free_item' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Vincular a Produto da Loja (Opcional)</label>
+                  <select
+                    value={reward.product_id || ''}
+                    onChange={(e) => handleRewardChange(reward.id, 'product_id', e.target.value || null)}
+                    className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white"
+                  >
+                    <option value="">Nenhum (Item Genérico)</option>
+                    {products.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <Input
+                  label="Ou Descreva o Item Genérico"
+                  value={reward.item_description || ''}
+                  onChange={(e) => handleRewardChange(reward.id, 'item_description', e.target.value)}
+                  placeholder="Ex: 1 Gatorade"
+                  disabled={!!reward.product_id}
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>

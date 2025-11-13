@@ -1,18 +1,20 @@
 import React from 'react';
-import { Aluno, CreditTransaction, GamificationPointTransaction, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, Profile } from '../../types';
+import { Aluno, CreditTransaction, GamificationPointTransaction, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, Profile, RedeemedVoucher, Product } from '../../types';
 import AtletasTab from './AtletasTab';
 import RewardsTab from './RewardsTab';
 import { formatCurrency } from '../../utils/formatters';
-import { CreditCard, CheckCircle, AlertCircle } from 'lucide-react';
+import { CreditCard, CheckCircle, AlertCircle, Gift } from 'lucide-react';
 import { format, addDays, isBefore } from 'date-fns';
 import PaymentMethodsTab from './PaymentMethodsTab';
 import { useAuth } from '../../context/AuthContext';
+import VouchersTab from './VouchersTab';
 
 interface ClientProfileViewProps {
   aluno: Aluno | null;
   profile: Profile | null;
   creditHistory: CreditTransaction[];
   gamificationHistory: GamificationPointTransaction[];
+  paymentHistory: { id: string; date: string; description: string; amount: number }[];
   levels: GamificationLevel[];
   rewards: GamificationReward[];
   achievements: GamificationAchievement[];
@@ -22,6 +24,9 @@ interface ClientProfileViewProps {
   onViewProfile: (atleta: AtletaAluguel) => void;
   onProfileUpdate: (updatedProfile: Partial<Profile>) => void;
   completedReservationsCount: number;
+  vouchers: RedeemedVoucher[];
+  products: Product[];
+  onDataChange: () => void;
 }
 
 const ClientProfileView: React.FC<ClientProfileViewProps> = ({
@@ -29,6 +34,7 @@ const ClientProfileView: React.FC<ClientProfileViewProps> = ({
   profile,
   creditHistory,
   gamificationHistory,
+  paymentHistory,
   levels,
   rewards,
   achievements,
@@ -37,7 +43,10 @@ const ClientProfileView: React.FC<ClientProfileViewProps> = ({
   atletas,
   onViewProfile,
   onProfileUpdate,
-  completedReservationsCount
+  completedReservationsCount,
+  vouchers,
+  products,
+  onDataChange
 }) => {
   if (!profile) return null;
   
@@ -59,9 +68,14 @@ const ClientProfileView: React.FC<ClientProfileViewProps> = ({
             unlockedAchievements={unlockedAchievements}
             history={gamificationHistory}
             completedReservationsCount={completedReservationsCount}
+            onDataChange={onDataChange}
           />
         </div>
       )}
+
+      <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
+        <VouchersTab vouchers={vouchers} products={products} />
+      </div>
 
       <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700">
         <PaymentMethodsTab profile={profile} onProfileUpdate={onProfileUpdate} />

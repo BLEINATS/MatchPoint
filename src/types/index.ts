@@ -119,6 +119,7 @@ export interface Arena {
   athlete_booking_deadline_hours?: number | null;
   athlete_cancellation_deadline_hours?: number | null;
   athlete_payment_window_minutes?: number | null;
+  available_sports?: string[];
 }
 
 export interface Quadra {
@@ -228,6 +229,17 @@ export interface Professor {
   avg_rating?: number;
 }
 
+export interface AvailabilitySlot {
+  id: string;
+  start: string;
+  end: string;
+}
+
+export interface WeeklyAvailability {
+  dayOfWeek: number; // 0 = Sunday, 6 = Saturday
+  slots: AvailabilitySlot[];
+}
+
 export interface AtletaAluguel {
   id: string;
   arena_id: string;
@@ -260,6 +272,7 @@ export interface AtletaAluguel {
     tags: string[];
     date: string;
   }[];
+  weekly_availability?: WeeklyAvailability[];
 }
 
 export interface PlanoAula {
@@ -517,6 +530,7 @@ export interface GamificationSettings {
   is_enabled: boolean;
   points_per_reservation: number;
   points_per_real: number;
+  voucher_expiration_days?: number | null;
 }
 
 export interface GamificationLevel {
@@ -545,6 +559,7 @@ export interface RedeemedVoucher {
   id: string;
   arena_id: string;
   aluno_id: string;
+  code: string;
   reward_id: string;
   reward_title: string;
   product_id: string | null;
@@ -553,6 +568,7 @@ export interface RedeemedVoucher {
   status: 'pendente' | 'resgatado';
   created_at: string;
   redeemed_at: string | null;
+  expires_at?: string | null;
 }
 
 export interface GamificationAchievement {

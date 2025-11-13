@@ -1,15 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Phone, Mail, MapPin, Star, Briefcase, FileText, Hash, Image as ImageIcon, Loader2, Link as LinkIcon, Percent, DollarSign, Trash2, Banknote } from 'lucide-react';
-import { AtletaAluguel, Aluno } from '../../types';
+import { X, Save, User, Phone, Mail, MapPin, Star, Briefcase, FileText, Hash, Image as ImageIcon, Loader2, Link as LinkIcon, Percent, DollarSign, Trash2, Banknote, Plus, Calendar, Info } from 'lucide-react';
+import { AtletaAluguel, Aluno, WeeklyAvailability } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { maskPhone } from '../../utils/masks';
 import { ToggleSwitch } from '../Gamification/ToggleSwitch';
 import { useToast } from '../../context/ToastContext';
+import { v4 as uuidv4 } from 'uuid';
+import Alert from '../Shared/Alert';
 
 const ALL_SPORTS = ['Futevôlei', 'Beach Tennis', 'Futebol', 'Futsal', 'Futsal Society', 'Vôlei', 'Basquete', 'Squash', 'Badminton', 'Ping Pong', 'Padel', 'Multiuso'];
 const NIVEIS_TECNICOS = ['Iniciante', 'Intermediário', 'Avançado', 'Profissional'];
+const WEEK_DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+interface AtletaAluguelModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (atleta: Omit<AtletaAluguel, 'id' | 'arena_id' | 'created_at'> | AtletaAluguel, photoFile?: File | null) => void;
+  onDelete: (id: string) => void;
+  initialData: AtletaAluguel | null;
+  alunos: Aluno[];
+}
 
 const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose, onSave, onDelete, initialData, alunos }) => {
   const [formData, setFormData] = useState({
@@ -29,6 +41,7 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
     palavras_chave: [] as string[],
     status: 'disponivel' as AtletaAluguel['status'],
     pix_key: '',
+    weekly_availability: [] as WeeklyAvailability[],
   });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -41,6 +54,14 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
   useEffect(() => {
     if (!isOpen) return;
 
+    const defaultData = {
+      name: '', email: '', phone: '', avatar_url: null, profile_id: null,
+      esportes: [], nivel_tecnico: null, experiencia_anos: 0, raio_atuacao: 0,
+      taxa_hora: 0, comissao_arena: 10, biografia: '', certificacoes: '',
+      palavras_chave: [], status: 'disponivel' as AtletaAluguel['status'], pix_key: '',
+      weekly_availability: [],
+    };
+
     if (initialData) {
       let initialEsportes: { sport: string; position: string }[] = [];
       if (initialData.esportes) {
@@ -52,33 +73,16 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
       }
       
       setFormData({
-        name: initialData.name,
-        email: initialData.email || '',
-        phone: initialData.phone || '',
-        avatar_url: initialData.avatar_url || null,
-        profile_id: initialData.profile_id || null,
+        ...defaultData,
+        ...initialData,
         esportes: initialEsportes,
-        nivel_tecnico: initialData.nivel_tecnico || null,
-        experiencia_anos: initialData.experiencia_anos || 0,
-        raio_atuacao: initialData.raio_atuacao || 0,
-        taxa_hora: initialData.taxa_hora || 0,
-        comissao_arena: initialData.comissao_arena || 10,
-        biografia: initialData.biografia || '',
-        certificacoes: initialData.certificacoes || '',
-        palavras_chave: initialData.palavras_chave || [],
-        status: initialData.status || 'disponivel',
-        pix_key: initialData.pix_key || '',
+        weekly_availability: initialData.weekly_availability || [],
       });
 
       const customSportEntry = initialData.esportes?.find(e => !ALL_SPORTS.includes(e.sport));
       setCustomSport(customSportEntry ? customSportEntry.sport : '');
     } else {
-      setFormData({
-        name: '', email: '', phone: '', avatar_url: null, profile_id: null,
-        esportes: [], nivel_tecnico: null, experiencia_anos: 0, raio_atuacao: 0,
-        taxa_hora: 0, comissao_arena: 10, biografia: '', certificacoes: '',
-        palavras_chave: [], status: 'disponivel', pix_key: '',
-      });
+      setFormData(defaultData);
       setCustomSport('');
     }
     setPhotoFile(null);
@@ -189,6 +193,53 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
     }));
   };
 
+  const handleAvailabilityChange = (dayOfWeek: number, slotId: string, field: 'start' | 'end', value: string) => {
+    setFormData(prev => {
+        const newAvailability = [...(prev.weekly_availability || [])];
+        let dayAvailability = newAvailability.find(d => d.dayOfWeek === dayOfWeek);
+
+        if (!dayAvailability) return prev;
+
+        const slotIndex = dayAvailability.slots.findIndex(s => s.id === slotId);
+        if (slotIndex > -1) {
+            dayAvailability.slots[slotIndex] = { ...dayAvailability.slots[slotIndex], [field]: value };
+        }
+
+        return { ...prev, weekly_availability: newAvailability };
+    });
+  };
+
+  const addSlot = (dayOfWeek: number) => {
+    setFormData(prev => {
+        const newAvailability = [...(prev.weekly_availability || [])];
+        let dayAvailability = newAvailability.find(d => d.dayOfWeek === dayOfWeek);
+
+        if (!dayAvailability) {
+            dayAvailability = { dayOfWeek, slots: [] };
+            newAvailability.push(dayAvailability);
+        }
+
+        dayAvailability.slots.push({ id: uuidv4(), start: '08:00', end: '12:00' });
+        
+        newAvailability.sort((a,b) => a.dayOfWeek - b.dayOfWeek);
+
+        return { ...prev, weekly_availability: newAvailability };
+    });
+  };
+
+  const removeSlot = (dayOfWeek: number, slotId: string) => {
+    setFormData(prev => {
+        const newAvailability = (prev.weekly_availability || []).map(day => {
+            if (day.dayOfWeek === dayOfWeek) {
+                return { ...day, slots: day.slots.filter(s => s.id !== slotId) };
+            }
+            return day;
+        }).filter(day => day.slots.length > 0);
+
+        return { ...prev, weekly_availability: newAvailability };
+    });
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -246,10 +297,52 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
                     <div className="flex-1 w-full space-y-4">
                         <Input label="Nome Completo" name="name" value={formData.name} onChange={handleChange} icon={<User className="h-4 w-4 text-brand-gray-400"/>} required disabled={!!formData.profile_id} />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Input label="Email" name="email" type="email" value={formData.email} onChange={handleChange} icon={<Mail className="h-4 w-4 text-brand-gray-400"/>} disabled={!!formData.profile_id} />
+                            <Input label="Email" name="email" type="email" value={formData.email || ''} onChange={handleChange} icon={<Mail className="h-4 w-4 text-brand-gray-400"/>} disabled={!!formData.profile_id} />
                             <Input label="Telefone" name="phone" value={formData.phone || ''} onChange={handleChange} icon={<Phone className="h-4 w-4 text-brand-gray-400"/>} disabled={!!formData.profile_id} />
                         </div>
                     </div>
+                </div>
+              </Section>
+
+              <Section title="Disponibilidade Semanal">
+                {(!formData.weekly_availability || formData.weekly_availability.length === 0) && (
+                    <Alert
+                        type="info"
+                        title="Configure a Disponibilidade"
+                        message="Para que este atleta apareça como opção em reservas com horário marcado, é essencial definir seus dias e horários de trabalho. Sem um horário cadastrado, ele não será listado."
+                    />
+                )}
+                <p className="text-sm -mt-2 text-brand-gray-500 dark:text-brand-gray-400">
+                    Defina os dias e horários em que este atleta está disponível para ser contratado. Você pode adicionar múltiplos intervalos para o mesmo dia.
+                </p>
+                <div className="space-y-4">
+                    {WEEK_DAYS.map((dayName, index) => {
+                        const dayAvailability = formData.weekly_availability?.find(d => d.dayOfWeek === index);
+                        return (
+                            <div key={index} className="p-4 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-800/50">
+                                <div className="flex justify-between items-center">
+                                    <h5 className="font-semibold">{dayName}</h5>
+                                    <Button type="button" variant="outline" size="sm" onClick={() => addSlot(index)}>
+                                        <Plus className="h-4 w-4 mr-2" /> Adicionar Horário
+                                    </Button>
+                                </div>
+                                {dayAvailability && dayAvailability.slots.length > 0 && (
+                                    <div className="mt-4 space-y-2">
+                                        {dayAvailability.slots.map(slot => (
+                                            <div key={slot.id} className="flex items-center gap-2">
+                                                <Input type="time" value={slot.start} onChange={(e) => handleAvailabilityChange(index, slot.id, 'start', e.target.value)} />
+                                                <span>até</span>
+                                                <Input type="time" value={slot.end} onChange={(e) => handleAvailabilityChange(index, slot.id, 'end', e.target.value)} />
+                                                <Button type="button" variant="ghost" size="sm" onClick={() => removeSlot(index, slot.id)} className="text-red-500">
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
               </Section>
 
@@ -312,12 +405,12 @@ const AtletaAluguelModal: React.FC<AtletaAluguelModalProps> = ({ isOpen, onClose
                             {NIVEIS_TECNICOS.map(n => <option key={n} value={n}>{n}</option>)}
                         </select>
                     </div>
-                    <Input label="Experiência (anos)" name="experiencia_anos" type="number" value={formData.experiencia_anos.toString()} onChange={handleChange} icon={<Briefcase className="h-4 w-4 text-brand-gray-400"/>} />
+                    <Input label="Experiência (anos)" name="experiencia_anos" type="number" value={String(formData.experiencia_anos || '')} onChange={handleChange} icon={<Briefcase className="h-4 w-4 text-brand-gray-400"/>} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Input label="Taxa por Hora (R$)" name="taxa_hora" type="number" value={formData.taxa_hora.toString()} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} required />
-                    <Input label="Comissão da Arena (%)" name="comissao_arena" type="number" value={formData.comissao_arena.toString()} onChange={handleChange} icon={<Percent className="h-4 w-4 text-brand-gray-400"/>} />
-                    <Input label="Raio de Atuação (KM)" name="raio_atuacao" type="number" value={formData.raio_atuacao.toString()} onChange={handleChange} icon={<MapPin className="h-4 w-4 text-brand-gray-400"/>} />
+                    <Input label="Taxa por Hora (R$)" name="taxa_hora" type="number" value={String(formData.taxa_hora || '')} onChange={handleChange} icon={<DollarSign className="h-4 w-4 text-brand-gray-400"/>} required />
+                    <Input label="Comissão da Arena (%)" name="comissao_arena" type="number" value={String(formData.comissao_arena || '')} onChange={handleChange} icon={<Percent className="h-4 w-4 text-brand-gray-400"/>} />
+                    <Input label="Raio de Atuação (KM)" name="raio_atuacao" type="number" value={String(formData.raio_atuacao || '')} onChange={handleChange} icon={<MapPin className="h-4 w-4 text-brand-gray-400"/>} />
                 </div>
                  <Input label="Chave PIX" name="pix_key" value={formData.pix_key || ''} onChange={handleChange} icon={<Banknote className="h-4 w-4 text-brand-gray-400"/>} placeholder="Chave PIX para pagamentos" />
                 <div>

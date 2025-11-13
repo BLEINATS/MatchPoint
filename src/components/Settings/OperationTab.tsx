@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Arena } from '../../types';
-import { FileText, Info, Clock, Handshake } from 'lucide-react';
+import { FileText, Info, Clock, Handshake, Globe } from 'lucide-react';
 import Input from '../Forms/Input';
 
 interface OperationTabProps {
@@ -9,6 +9,23 @@ interface OperationTabProps {
 }
 
 const OperationTab: React.FC<OperationTabProps> = ({ formData, setFormData }) => {
+  const [sportsInput, setSportsInput] = useState('');
+
+  useEffect(() => {
+    if (Array.isArray(formData.available_sports)) {
+      setSportsInput(formData.available_sports.join(', '));
+    }
+  }, [formData.available_sports]);
+
+  const handleSportsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSportsInput(e.target.value);
+  };
+
+  const handleSportsInputBlur = () => {
+    const sportsArray = sportsInput.split(',').map(s => s.trim()).filter(Boolean);
+    setFormData(prev => ({ ...prev, available_sports: sportsArray }));
+  };
+
   const handleDeadlineChange = (
     field: 'class_cancellation_deadline' | 'class_booking_deadline',
     part: 'value' | 'unit',
@@ -54,6 +71,19 @@ Para cancelar, entre em contato pelo WhatsApp ou telefone informando o número d
 
   return (
     <div className="space-y-8">
+      <Section title="Esportes da Arena" icon={Globe}>
+        <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 -mt-2">
+          Personalize a lista de esportes disponíveis na sua arena. Esta lista será usada nos cadastros e filtros. Separe os nomes por vírgula.
+        </p>
+        <Input
+          label="Lista de Esportes"
+          name="available_sports_input"
+          value={sportsInput}
+          onChange={handleSportsInputChange}
+          onBlur={handleSportsInputBlur}
+          placeholder="Beach Tennis, Futevôlei, Tênis de Mesa"
+        />
+      </Section>
       <Section title="Políticas da Arena" icon={FileText}>
         <div>
           <div className="flex items-center justify-between mb-1">

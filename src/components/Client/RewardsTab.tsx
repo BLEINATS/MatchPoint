@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Aluno, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, GamificationPointTransaction } from '../../types';
+import { Aluno, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, GamificationPointTransaction, RedeemedVoucher, GamificationSettings } from '../../types';
 import { Star, Gift, Trophy, CheckCircle, History } from 'lucide-react';
 import Button from '../Forms/Button';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import { localApi } from '../../lib/localApi';
 import { useToast } from '../../context/ToastContext';
@@ -16,14 +16,19 @@ interface RewardsTabProps {
   achievements: GamificationAchievement[];
   unlockedAchievements: AlunoAchievement[];
   history: GamificationPointTransaction[];
-  completedReservationsCount: number;
+  completedReservationsCount?: number;
+  onDataChange: () => void;
 }
 
-const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achievements, unlockedAchievements, history, completedReservationsCount }) => {
+const generateVoucherCode = () => {
+  return Math.random().toString(36).substring(2, 10).toUpperCase();
+};
+
+const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achievements, unlockedAchievements, history, completedReservationsCount = 0, onDataChange }) => {
   const [rewardToRedeem, setRewardToRedeem] = useState<GamificationReward | null>(null);
   const [isRedeeming, setIsRedeeming] = useState(false);
   const { addToast } = useToast();
-  const { refreshAlunoProfile } = useAuth();
+  const { selectedArenaContext: arena } = useAuth();
 
   const currentLevel = useMemo(() => {
     if (!aluno || !levels || levels.length === 0) return null;
@@ -32,76 +37,101 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
   }, [aluno, levels]);
 
   const handleConfirmRedemption = async () => {
-    if (!aluno || !rewardToRedeem) return;
+    if (!aluno || !rewardToRedeem || !arena) return;
 
     setIsRedeeming(true);
     try {
-      const { data: allAlunos } = await localApi.select<Aluno>('alunos', aluno.arena_id);
+      const { data: settingsData } = await localApi.select<GamificationSettings>('gamification_settings', arena.id);
+      const settings = settingsData?.[0];
+
+      const { data: allAlunos } = await localApi.select<Aluno>('alunos', arena.id);
       const currentAlunoState = allAlunos.find(a => a.id === aluno.id);
       if (!currentAlunoState) throw new Error("Aluno não encontrado para atualizar.");
 
-      const updatedAlunoData = { ...currentAlunoState };
-
-      const currentPoints = updatedAlunoData.gamification_points || 0;
+      const currentPoints = currentAlunoState.gamification_points || 0;
       if (currentPoints < rewardToRedeem.points_cost) {
         throw new Error("Pontos insuficientes para resgatar esta recompensa.");
       }
-      updatedAlunoData.gamification_points = currentPoints - rewardToRedeem.points_cost;
 
-      let creditValue = 0;
-      let creditDescription = `Crédito por resgate: ${rewardToRedeem.title}`;
-
-      if (rewardToRedeem.type === 'discount' && rewardToRedeem.value && rewardToRedeem.value > 0) {
-        creditValue = rewardToRedeem.value;
-      } else if (rewardToRedeem.type === 'free_hour') {
-        const standardHourPrice = 90;
-        creditValue = standardHourPrice * (rewardToRedeem.value || 1);
-        creditDescription = `Crédito (1 Hora Grátis): ${rewardToRedeem.title}`;
-      }
+      // 1. Deduct points from user
+      const updatedAlunoData = {
+        ...currentAlunoState,
+        gamification_points: currentPoints - rewardToRedeem.points_cost,
+      };
       
-      if (creditValue > 0) {
-        updatedAlunoData.credit_balance = (updatedAlunoData.credit_balance || 0) + creditValue;
-      }
-      
-      await localApi.upsert('alunos', [updatedAlunoData], aluno.arena_id);
-      
+      // 2. Create point transaction for deduction
       await localApi.upsert('gamification_point_transactions', [{
         aluno_id: aluno.id,
-        arena_id: aluno.arena_id,
+        arena_id: arena.id,
         points: -rewardToRedeem.points_cost,
         type: 'reward_redemption',
         description: `Resgate: ${rewardToRedeem.title}`,
-      }], aluno.arena_id);
+      }], arena.id);
 
-      if (creditValue > 0) {
-        await localApi.upsert('credit_transactions', [{
-            aluno_id: aluno.id,
-            arena_id: aluno.arena_id,
-            amount: creditValue,
-            type: 'goodwill_credit',
-            description: creditDescription,
-        }], aluno.arena_id);
-      }
+      // 3. Handle reward type
+      if (rewardToRedeem.type === 'discount' || rewardToRedeem.type === 'free_hour') {
+        let creditValue = 0;
+        let creditDescription = `Crédito por resgate: ${rewardToRedeem.title}`;
 
-      if (rewardToRedeem.quantity !== null && rewardToRedeem.quantity > 0) {
-        await localApi.upsert('gamification_rewards', [{ ...rewardToRedeem, quantity: rewardToRedeem.quantity - 1 }], aluno.arena_id);
-      }
-
-      if (aluno.profile_id) {
-        const notificationMessage = creditValue > 0
-          ? `Você resgatou "${rewardToRedeem.title}" e ganhou ${formatCurrency(creditValue)} de crédito!`
-          : `Você resgatou "${rewardToRedeem.title}"!`;
+        if (rewardToRedeem.type === 'discount' && rewardToRedeem.value && rewardToRedeem.value > 0) {
+          creditValue = rewardToRedeem.value;
+        } else if (rewardToRedeem.type === 'free_hour') {
+          const standardHourPrice = 90; // This is a magic number, should be improved later
+          creditValue = standardHourPrice * (rewardToRedeem.value || 1);
+          creditDescription = `Crédito (Hora Grátis): ${rewardToRedeem.title}`;
+        }
         
+        if (creditValue > 0) {
+          updatedAlunoData.credit_balance = (updatedAlunoData.credit_balance || 0) + creditValue;
+          await localApi.upsert('credit_transactions', [{
+              aluno_id: aluno.id,
+              arena_id: arena.id,
+              amount: creditValue,
+              type: 'goodwill_credit',
+              description: creditDescription,
+          }], arena.id);
+        }
+      } else if (rewardToRedeem.type === 'free_item') {
+        let expires_at: string | null = null;
+        if (settings?.voucher_expiration_days && settings.voucher_expiration_days > 0) {
+          expires_at = addDays(new Date(), settings.voucher_expiration_days).toISOString();
+        }
+
+        const newVoucher: Omit<RedeemedVoucher, 'id' | 'created_at'> = {
+          arena_id: arena.id,
+          aluno_id: aluno.id,
+          code: generateVoucherCode(),
+          reward_id: rewardToRedeem.id,
+          reward_title: rewardToRedeem.title,
+          product_id: rewardToRedeem.product_id || null,
+          item_description: rewardToRedeem.item_description || null,
+          status: 'pendente',
+          redeemed_at: null,
+          expires_at: expires_at,
+        };
+        await localApi.upsert('redeemed_vouchers', [newVoucher], arena.id);
+      }
+      
+      // Save updated student data (points and/or credit balance)
+      await localApi.upsert('alunos', [updatedAlunoData], arena.id);
+
+      // 4. Update reward quantity if applicable
+      if (rewardToRedeem.quantity !== null && rewardToRedeem.quantity > 0) {
+        await localApi.upsert('gamification_rewards', [{ ...rewardToRedeem, quantity: rewardToRedeem.quantity - 1 }], arena.id);
+      }
+
+      // 5. Send notification
+      if (aluno.profile_id) {
         await localApi.upsert('notificacoes', [{
             profile_id: aluno.profile_id,
-            arena_id: aluno.arena_id,
-            message: notificationMessage,
+            arena_id: arena.id,
+            message: `Você resgatou "${rewardToRedeem.title}"!`,
             type: 'gamification_reward',
-        }], aluno.arena_id);
+        }], arena.id);
       }
-
-      addToast({ message: 'Recompensa resgatada com sucesso!', type: 'success' });
-      await refreshAlunoProfile();
+      
+      await onDataChange();
+      addToast({ message: 'Recompensa resgatada com sucesso! Verifique "Meus Vouchers" no seu perfil.', type: 'success' });
 
     } catch (error: any) {
       addToast({ message: `Erro ao resgatar: ${error.message}`, type: 'error' });

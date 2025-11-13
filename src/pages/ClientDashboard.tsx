@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, PlanoAula, Friendship, GamificationPointTransaction, FinanceTransaction, Torneio, Participant } from '../types';
+import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, PlanoAula, Friendship, GamificationPointTransaction, FinanceTransaction, Torneio, Participant, RedeemedVoucher, Product } from '../types';
 import { Calendar, Compass, Search, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star, User, Users, Banknote, FileText, MessageSquare, Briefcase, Repeat, XCircle, LifeBuoy, Lock, Unlock, Bell, Trash2, Edit, Hourglass } from 'lucide-react';
 import { isAfter, startOfDay, isSameDay, format, parse, getDay, addDays, isBefore, endOfDay, addMinutes, subDays, isWithinInterval, formatDistanceToNow, isPast, differenceInHours, differenceInWeeks, endOfWeek, startOfWeek, addWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -514,6 +514,8 @@ const ClientDashboard: React.FC = () => {
     const [friends, setFriends] = useState<Profile[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [tournaments, setTournaments] = useState<Torneio[]>([]);
+    const [vouchers, setVouchers] = useState<RedeemedVoucher[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
     
     const [levels, setLevels] = useState<GamificationLevel[]>([]);
     const [rewards, setRewards] = useState<GamificationReward[]>([]);
@@ -584,13 +586,13 @@ const ClientDashboard: React.FC = () => {
         setQuadras([]); setAllArenaReservations([]); setTurmas([]); setProfessores([]);
         setAtletas([]); setPlanos([]); setAllArenaAlunos([]);
         setReservas([]); setCreditHistory([]); setGamificationHistory([]); setPaymentHistory([]);
-        setTournaments([]);
+        setTournaments([]); setVouchers([]); setProducts([]);
         return;
         }
 
         setIsLoading(true);
         try {
-        const [quadrasRes, allReservasRes, turmasRes, profsRes, atletasRes, creditRes, gamificationHistoryRes, gamificationSettingsRes, levelsRes, rewardsRes, achievementsRes, unlockedAchievementsRes, planosRes, allAlunosRes, friendshipsRes, profilesRes, financeTransactionsRes, tournamentsRes] = await Promise.all([
+        const [quadrasRes, allReservasRes, turmasRes, profsRes, atletasRes, creditRes, gamificationHistoryRes, gamificationSettingsRes, levelsRes, rewardsRes, achievementsRes, unlockedAchievementsRes, planosRes, allAlunosRes, friendshipsRes, profilesRes, financeTransactionsRes, tournamentsRes, vouchersRes, productsRes] = await Promise.all([
             localApi.select<Quadra>('quadras', selectedArenaContext.id),
             localApi.select<Reserva>('reservas', selectedArenaContext.id),
             localApi.select<Turma>('turmas', selectedArenaContext.id),
@@ -609,6 +611,8 @@ const ClientDashboard: React.FC = () => {
             localApi.select<Profile>('profiles', 'all'),
             localApi.select<FinanceTransaction>('finance_transactions', selectedArenaContext.id),
             localApi.select<Torneio>('torneios', selectedArenaContext.id),
+            alunoProfileForSelectedArena ? localApi.select<RedeemedVoucher>('redeemed_vouchers', selectedArenaContext.id) : Promise.resolve({ data: [] }),
+            localApi.select<Product>('products', selectedArenaContext.id),
         ]);
         
         const now = new Date();
@@ -647,6 +651,7 @@ const ClientDashboard: React.FC = () => {
         setPlanos(planosRes.data || []);
         setAllArenaAlunos(allAlunosRes.data || []);
         setTournaments(tournamentsRes.data || []);
+        setProducts(productsRes.data || []);
 
         const userFriendships = (friendshipsRes.data || []).filter(f => f.status === 'accepted' && (f.user1_id === profile.id || f.user2_id === profile.id));
         const friendIds = userFriendships.map(f => f.user1_id === profile.id ? f.user2_id : f.user1_id);
@@ -657,6 +662,7 @@ const ClientDashboard: React.FC = () => {
         setGamificationEnabled(settings?.is_enabled || false);
 
         if (alunoProfileForSelectedArena) {
+            setVouchers((vouchersRes.data || []).filter(v => v.aluno_id === alunoProfileForSelectedArena.id));
             setGamificationHistory((gamificationHistoryRes.data || []).filter(t => t.aluno_id === alunoProfileForSelectedArena.id).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
             setCreditHistory((creditRes.data || []).filter(c => c.aluno_id === alunoProfileForSelectedArena.id).sort((a,b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime()));
             
@@ -690,7 +696,7 @@ const ClientDashboard: React.FC = () => {
                 setUnlockedAchievements((unlockedAchievementsRes.data || []).filter(ua => ua.aluno_id === alunoProfileForSelectedArena.id));
             }
         } else {
-            setCreditHistory([]); setGamificationHistory([]); setPaymentHistory([]);
+            setCreditHistory([]); setGamificationHistory([]); setPaymentHistory([]); setVouchers([]);
         }
 
         } catch (error: any) {
@@ -1533,7 +1539,7 @@ const ClientDashboard: React.FC = () => {
         case 'aulas': return <AulasTab aluno={alunoProfileForSelectedArena!} allAlunos={allArenaAlunos} turmas={studentTurmas} professores={professores} quadras={quadras} planos={planos} onDataChange={handleDataChange} onAvaliarProfessor={handleAvaliarProfessor} />;
         case 'loja': return <LojaView />;
         case 'amigos': return <FriendsView />;
-        case 'perfil': return <ClientProfileView aluno={alunoProfileForSelectedArena} profile={profile} onProfileUpdate={handleProfileUpdate} creditHistory={creditHistory} gamificationHistory={gamificationHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} atletas={atletas} onViewProfile={handleOpenAtletaProfile} completedReservationsCount={completedReservationsCount} />;
+        case 'perfil': return <ClientProfileView aluno={alunoProfileForSelectedArena} profile={profile} onProfileUpdate={handleProfileUpdate} creditHistory={creditHistory} gamificationHistory={gamificationHistory} paymentHistory={paymentHistory} levels={levels} rewards={rewards} achievements={achievements} unlockedAchievements={unlockedAchievements} gamificationEnabled={gamificationEnabled} atletas={atletas} onViewProfile={handleOpenAtletaProfile} completedReservationsCount={completedReservationsCount} vouchers={vouchers} products={products} />;
         case 'atleta_painel': return <AtletaProfilePage />;
         case 'professor_painel': return <ProfessorProfilePage />;
         default: return null;

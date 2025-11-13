@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { 
     DollarSign, Users, Plus, Lock, Send, Calendar, Clock, 
     User, Sparkles, Star, TrendingUp, TrendingDown, Phone, MessageSquare, MessageCircle, Bookmark, Loader2, GraduationCap,
-    CheckCircle, AlertCircle, CreditCard, ClipboardList, XCircle, Repeat, ShoppingBag, PieChart, Trophy, PartyPopper, Edit, Trash2, BookOpen, Handshake, Percent, BarChart2
+    CheckCircle, AlertCircle, CreditCard, ClipboardList, XCircle, Repeat, ShoppingBag, PieChart, Trophy, PartyPopper, Edit, Trash2, BookOpen, Handshake, Percent, BarChart2, Gift
 } from 'lucide-react';
-import { Quadra, Reserva, Aluno, Torneio, Evento, Professor, AtletaAluguel, Notificacao, FinanceTransaction, Turma, ReservationType } from '../../types';
+import { Quadra, Reserva, Aluno, Torneio, Evento, Professor, AtletaAluguel, Notificacao, FinanceTransaction, Turma, ReservationType, RedeemedVoucher, Product } from '../../types';
 import { expandRecurringReservations, getReservationTypeDetails } from '../../utils/reservationUtils';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { useAuth } from '../../context/AuthContext';
@@ -29,10 +29,26 @@ import AtletasPendentesWidget from './AtletasPendentesWidget';
 import TodaysAgenda from './TodaysAgenda';
 import MensalistaDetailModal from '../Reservations/MensalistaDetailModal';
 import ConfirmationModal from '../Shared/ConfirmationModal';
+import ResgatesPendentesWidget from './ResgatesPendentesWidget';
 
 interface AnalyticsDashboardProps {
   onReopenOnboarding: () => void;
 }
+
+const ActionButton: React.FC<{ icon: React.ElementType; label: string; onClick: () => void; permission?: boolean }> = ({ icon: Icon, label, onClick, permission = true }) => {
+  if (!permission) return null;
+  return (
+    <motion.button
+      onClick={onClick}
+      className="flex flex-col items-center justify-center gap-2 p-4 bg-white dark:bg-brand-gray-800/50 rounded-lg border border-brand-gray-200 dark:border-brand-gray-700 hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/80 hover:border-brand-blue-500 transition-all text-brand-gray-700 dark:text-brand-gray-300 hover:text-brand-blue-600 dark:hover:text-white"
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+    >
+      <Icon className="h-6 w-6" />
+      <span className="text-sm font-medium">{label}</span>
+    </motion.button>
+  );
+};
 
 const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboarding }) => {
   const { selectedArenaContext: arena, profile } = useAuth();
@@ -47,6 +63,8 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
   const [atletas, setAtletas] = useState<AtletaAluguel[]>([]);
   const [professores, setProfessores] = useState<Professor[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
+  const [vouchers, setVouchers] = useState<RedeemedVoucher[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [isMensalistaModalOpen, setIsMensalistaModalOpen] = useState(false);
@@ -60,7 +78,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
         return;
     }
     try {
-      const [quadrasRes, reservasRes, alunosRes, financeRes, torneiosRes, eventosRes, atletasRes, profsRes, turmasRes] = await Promise.all([
+      const [quadrasRes, reservasRes, alunosRes, financeRes, torneiosRes, eventosRes, atletasRes, profsRes, turmasRes, vouchersRes, productsRes] = await Promise.all([
         localApi.select<Quadra>('quadras', arena.id),
         localApi.select<Reserva>('reservas', arena.id),
         localApi.select<Aluno>('alunos', arena.id),
@@ -70,6 +88,8 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
         localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
         localApi.select<Professor>('professores', arena.id),
         localApi.select<Turma>('turmas', arena.id),
+        localApi.select<RedeemedVoucher>('redeemed_vouchers', arena.id),
+        localApi.select<Product>('products', arena.id),
       ]);
       
       const now = new Date();
@@ -98,6 +118,8 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
       setAtletas(atletasRes.data || []);
       setProfessores(profsRes.data || []);
       setTurmas(turmasRes.data || []);
+      setVouchers(vouchersRes.data || []);
+      setProducts(productsRes.data || []);
     } catch (error: any) {
       addToast({ message: `Erro ao carregar dados do dashboard: ${error.message}`, type: 'error' });
     } finally {
@@ -113,6 +135,63 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
       window.removeEventListener('focus', loadData);
     };
   }, [loadData]);
+
+  const handleConfirmRedemption = async (voucherToConfirm: RedeemedVoucher) => {
+    if (!arena || !profile) return;
+
+    try {
+        const updatedVoucher = {
+            ...voucherToConfirm,
+            status: 'resgatado' as 'resgatado',
+            redeemed_at: new Date().toISOString(),
+        };
+        await localApi.upsert('redeemed_vouchers', [updatedVoucher], arena.id);
+
+        if (voucherToConfirm.product_id) {
+            const { data: allProducts } = await localApi.select<Product>('products', arena.id);
+            const productToUpdate = allProducts.find(p => p.id === voucherToConfirm.product_id);
+
+            if (productToUpdate) {
+                let stockUpdated = false;
+                if (voucherToConfirm.variant_id && productToUpdate.variants) {
+                    const variantIndex = productToUpdate.variants.findIndex(v => v.id === voucherToConfirm.variant_id);
+                    if (variantIndex > -1 && productToUpdate.variants[variantIndex].stock > 0) {
+                        productToUpdate.variants[variantIndex].stock -= 1;
+                        stockUpdated = true;
+                    }
+                } 
+                else if (productToUpdate.stock && productToUpdate.stock > 0) {
+                    productToUpdate.stock -= 1;
+                    stockUpdated = true;
+                }
+
+                if (stockUpdated) {
+                    await localApi.upsert('products', [productToUpdate], arena.id);
+                }
+            }
+        }
+
+        const aluno = alunos.find(a => a.id === voucherToConfirm.aluno_id);
+        if (aluno && aluno.profile_id) {
+            await localApi.upsert('notificacoes', [{
+                arena_id: arena.id,
+                profile_id: aluno.profile_id,
+                message: `Sua recompensa "${voucherToConfirm.reward_title}" foi entregue com sucesso!`,
+                type: 'gamification_reward',
+                read: false,
+                sender_id: profile.id,
+                sender_name: 'Arena',
+                sender_avatar_url: arena.logo_url,
+            }], arena.id);
+        }
+
+        addToast({ message: 'Resgate confirmado e estoque atualizado!', type: 'success' });
+        loadData();
+
+    } catch (error: any) {
+        addToast({ message: `Erro ao confirmar resgate: ${error.message}`, type: 'error' });
+    }
+  };
 
   const analyticsData = useMemo(() => {
     const today = startOfDay(new Date());
@@ -132,15 +211,6 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
     );
 
     const receitaDoMes = monthlyConfirmedReservations.reduce((sum, r) => sum + (r.total_price || 0), 0);
-
-    const receitaPorCategoria: Record<string, number> = {};
-    monthlyConfirmedReservations.forEach(r => {
-        const category = r.type === 'avulsa' ? 'Reservas Avulsas' :
-                         r.type === 'aula' ? 'Aulas' :
-                         r.type === 'torneio' ? 'Torneios' :
-                         r.type === 'evento' ? 'Eventos' : 'Outras';
-        receitaPorCategoria[category] = (receitaPorCategoria[category] || 0) + (r.total_price || 0);
-    });
 
     const activeQuadras = quadras.filter(q => q.status === 'ativa');
     const dayOfWeek = getDay(today);
@@ -208,25 +278,24 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
       isSameDay(parseDateStringAsLocal(r.updated_at), today)
     );
 
-    const cancelamentosClienteValor = todaysCancellations
+    const cancelamentosClienteCount = todaysCancellations
       .filter(r => !r.notes?.includes('[Cancelado automaticamente por falta de pagamento]'))
-      .reduce((sum, r) => sum + (r.total_price || 0), 0);
+      .length;
 
-    const cancelamentosFaltaPagtoValor = todaysCancellations
+    const cancelamentosFaltaPagtoCount = todaysCancellations
       .filter(r => r.notes?.includes('[Cancelado automaticamente por falta de pagamento]'))
-      .reduce((sum, r) => sum + (r.total_price || 0), 0);
-
-    const totalCancelamentosHojeValor = cancelamentosClienteValor + cancelamentosFaltaPagtoValor;
+      .length;
 
     const novosClientesMes = alunos.filter(a => isWithinInterval(parseDateStringAsLocal(a.join_date), { start: monthStart, end: monthEnd })).length;
     const novosAlunosMes = alunos.filter(a => a.plan_id && isWithinInterval(parseDateStringAsLocal(a.join_date), { start: monthStart, end: monthEnd })).length;
 
     return { 
         receitaDoMes, receitaDoDia, contasAReceber, ocupacaoHoje: Math.min(ocupacaoHoje, 100), 
-        novosClientesMes, novosAlunosMes, receitaPorCategoria, contasAReceberBreakdown,
-        totalCancelamentosHojeValor, cancelamentosClienteValor, cancelamentosFaltaPagtoValor
+        novosClientesMes, novosAlunosMes, contasAReceberBreakdown,
+        totalCancelamentosHojeValor: todaysCancellations.reduce((sum, r) => sum + (r.total_price || 0), 0), 
+        cancelamentosClienteCount, cancelamentosFaltaPagtoCount
     };
-  }, [quadras, reservas, alunos, financeTransactions]);
+  }, [quadras, reservas, alunos]);
   
   const todaysReservations = useMemo(() => {
     const today = startOfDay(new Date());
@@ -308,6 +377,9 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
     }
   };
 
+  const canEditReservas = profile?.role === 'admin_arena' || profile?.permissions?.reservas === 'edit';
+  const canEditGerenciamento = profile?.role === 'admin_arena' || profile?.permissions?.gerenciamento_arena === 'edit';
+
   if (isLoading) {
     return <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto text-brand-blue-500" /></div>;
   }
@@ -319,7 +391,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
             <div>
                 <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Action Center</h1>
                 <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">
-                  Bom dia, {profile?.name}! Você tem <span className="font-bold text-brand-blue-500">{todaysReservations.length}</span> reservas confirmadas para hoje.
+                  Olá, {profile?.name}! Você tem <span className="font-bold text-brand-blue-500">{todaysReservations.length}</span> reservas confirmadas para hoje.
                 </p>
             </div>
             {profile?.role === 'admin_arena' && (
@@ -329,32 +401,39 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
               </Button>
             )}
         </div>
+        
+        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <ActionButton icon={Plus} label="Nova Reserva" onClick={() => handleActionClick('Nova Reserva')} permission={canEditReservas} />
+            <ActionButton icon={Lock} label="Bloquear Horário" onClick={() => handleActionClick('Bloquear Horário')} permission={canEditReservas} />
+            <ActionButton icon={User} label="Novo Cliente" onClick={() => handleActionClick('Novo Cliente')} permission={canEditGerenciamento} />
+            <ActionButton icon={Send} label="Notificação" onClick={() => handleActionClick('Notificação')} permission={profile?.role === 'admin_arena'} />
+        </div>
       </motion.div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         <DetailedPerformanceCard
             receita={analyticsData.receitaDoDia}
             ocupacao={analyticsData.ocupacaoHoje}
-            className="lg:col-span-1"
+            className="lg:h-44"
         />
         <MonthlyRevenueCard
             label="Receita do Mês (Reservas)"
             value={analyticsData.receitaDoMes}
-            breakdown={Object.entries(analyticsData.receitaPorCategoria).map(([key, value]) => ({ label: key, value })).filter(item => item.value > 0)}
-            className="lg:col-span-1"
+            reservas={reservas}
+            className="lg:h-44"
         />
         <AcquisitionCard
             clientes={analyticsData.novosClientesMes}
             alunos={analyticsData.novosAlunosMes}
-            className="lg:col-span-1"
+            className="lg:h-44"
         />
         <SimpleStatCard
             label="Cancelamentos Hoje"
             value={formatCurrency(analyticsData.totalCancelamentosHojeValor)}
-            description={`Cliente: ${formatCurrency(analyticsData.cancelamentosClienteValor)} | Falta Pgto: ${formatCurrency(analyticsData.cancelamentosFaltaPagtoValor)}`}
+            description={`Cliente: ${analyticsData.cancelamentosClienteCount} | Falta Pgto: ${analyticsData.cancelamentosFaltaPagtoCount}`}
             icon={XCircle}
             color="text-red-500"
-            className="lg:col-span-1"
+            className="lg:h-44"
         />
         <SimpleStatCard
             label="Contas a Receber"
@@ -362,28 +441,21 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
             description={analyticsData.contasAReceberBreakdown.map(item => `${item.label}: ${formatCurrency(item.value)}`).join(' | ')}
             icon={DollarSign}
             color="text-yellow-500"
-            className="lg:col-span-1"
+            className="lg:h-44"
         />
       </div>
       
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <QuickActionButton icon={Plus} label="Nova Reserva" onClick={() => handleActionClick('Nova Reserva')} />
-        <QuickActionButton icon={Lock} label="Bloquear Horário" onClick={() => handleActionClick('Bloquear Horário')} />
-        <QuickActionButton icon={User} label="Novo Cliente" onClick={() => handleActionClick('Novo Cliente')} />
-        <QuickActionButton icon={Send} label="Notificação" onClick={() => handleActionClick('Notificação')} />
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         <TodaysAgenda 
           reservations={todaysReservations} 
           quadras={quadras} 
           arenaName={arena?.name || ''} 
-          className="lg:col-span-1"
+          className="lg:col-span-1 lg:h-[28rem]"
         />
         <HorariosLivresWidget 
           quadras={quadras} 
           reservas={reservas}
-          className="lg:col-span-1"
+          className="lg:col-span-1 lg:h-[28rem]"
         />
         <MensalistasHojeWidget 
             reservas={reservas}
@@ -393,16 +465,36 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
             turmas={turmas}
             arena={arena}
             onCardClick={handleOpenMensalistaModal}
-            className="lg:col-span-1"
+            className="lg:col-span-1 lg:h-[28rem]"
         />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
-        <AtletasPendentesWidget atletas={atletas} reservas={reservas} onCardClick={() => {}} />
-        <ProximoEventoWidget eventos={proximosEventos} />
-        <TopQuadrasWidget reservas={reservas} quadras={quadras} />
-        <InsightsWidget reservas={reservas} alunos={alunos} quadras={quadras} />
+        <ResgatesPendentesWidget
+          vouchers={vouchers}
+          alunos={alunos}
+          products={products}
+          onConfirmRedemption={handleConfirmRedemption}
+          className="md:h-96"
+        />
+        <AtletasPendentesWidget 
+          atletas={atletas} 
+          reservas={reservas} 
+          onCardClick={() => { navigate('/financeiro', { state: { activeTab: 'athlete_payments' } }) }} 
+          className="md:h-96"
+        />
+        <ProximoEventoWidget 
+          eventos={proximosEventos} 
+          className="md:h-96"
+        />
+        <TopQuadrasWidget 
+          reservas={reservas} 
+          quadras={quadras} 
+          className="md:h-96"
+        />
       </div>
+      
+      <InsightsWidget reservas={reservas} alunos={alunos} quadras={quadras} className="xl:col-span-4" />
 
       <AnimatePresence>
         {isMensalistaModalOpen && selectedMensalista && (
@@ -431,12 +523,5 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
     </div>
   );
 };
-
-const QuickActionButton: React.FC<{ icon: React.ElementType, label: string, onClick: () => void }> = ({ icon: Icon, label, onClick }) => (
-  <Button variant="outline" className="w-full h-full flex-col py-4" onClick={onClick}>
-    <Icon className="h-6 w-6 mb-2 text-brand-gray-600 dark:text-brand-gray-400" />
-    <span className="text-sm font-medium">{label}</span>
-  </Button>
-);
 
 export default AnalyticsDashboard;

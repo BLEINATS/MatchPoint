@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Settings, Star, Gift, Trophy, Loader2, Save, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Settings, Star, Gift, Trophy, Loader2, Save, CheckCircle, BarChart2 } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { localApi } from '../lib/localApi';
-import { GamificationSettings, GamificationLevel, GamificationReward, GamificationAchievement } from '../types';
+import { GamificationSettings, GamificationLevel, GamificationReward, GamificationAchievement, Product, RedeemedVoucher, Aluno } from '../types';
 import Button from '../components/Forms/Button';
 import GeneralSettings from '../components/Gamification/GeneralSettings';
 import LevelsSettings from '../components/Gamification/LevelsSettings';
 import RewardsSettings from '../components/Gamification/RewardsSettings';
 import AchievementsSettings from '../components/Gamification/AchievementsSettings';
+import RewardsReportTab from '../components/Gamification/RewardsReportTab';
 
-type TabType = 'general' | 'levels' | 'rewards' | 'achievements';
+type TabType = 'general' | 'levels' | 'rewards' | 'achievements' | 'reports';
 
 const Gamification: React.FC = () => {
   const { selectedArenaContext: arena } = useAuth();
@@ -27,22 +28,31 @@ const Gamification: React.FC = () => {
   const [levels, setLevels] = useState<GamificationLevel[]>([]);
   const [rewards, setRewards] = useState<GamificationReward[]>([]);
   const [achievements, setAchievements] = useState<GamificationAchievement[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [vouchers, setVouchers] = useState<RedeemedVoucher[]>([]);
+  const [alunos, setAlunos] = useState<Aluno[]>([]);
 
   const loadData = useCallback(async () => {
     if (!arena) return;
     setIsLoading(true);
     try {
-      const [settingsRes, levelsRes, rewardsRes, achievementsRes] = await Promise.all([
+      const [settingsRes, levelsRes, rewardsRes, achievementsRes, productsRes, vouchersRes, alunosRes] = await Promise.all([
         localApi.select<GamificationSettings>('gamification_settings', arena.id),
         localApi.select<GamificationLevel>('gamification_levels', arena.id),
         localApi.select<GamificationReward>('gamification_rewards', arena.id),
         localApi.select<GamificationAchievement>('gamification_achievements', arena.id),
+        localApi.select<Product>('products', arena.id),
+        localApi.select<RedeemedVoucher>('redeemed_vouchers', arena.id),
+        localApi.select<Aluno>('alunos', arena.id),
       ]);
 
-      setSettings(settingsRes.data?.[0] || null);
+      setSettings(settingsRes.data?.[0] || { arena_id: arena.id, is_enabled: false, points_per_real: 1, points_per_reservation: 10 });
       setLevels(levelsRes.data?.sort((a, b) => a.level_rank - b.level_rank) || []);
       setRewards(rewardsRes.data || []);
       setAchievements(achievementsRes.data || []);
+      setProducts(productsRes.data || []);
+      setVouchers(vouchersRes.data || []);
+      setAlunos(alunosRes.data || []);
 
     } catch (error: any) {
       addToast({ message: `Erro ao carregar configurações: ${error.message}`, type: 'error' });
@@ -84,6 +94,7 @@ const Gamification: React.FC = () => {
     { id: 'levels', label: 'Níveis', icon: Star },
     { id: 'rewards', label: 'Recompensas', icon: Gift },
     { id: 'achievements', label: 'Conquistas', icon: Trophy },
+    { id: 'reports', label: 'Relatórios', icon: BarChart2 },
   ];
 
   const renderContent = () => {
@@ -95,9 +106,11 @@ const Gamification: React.FC = () => {
       case 'levels':
         return <LevelsSettings levels={levels} setLevels={setLevels} />;
       case 'rewards':
-        return <RewardsSettings rewards={rewards} setRewards={setRewards} />;
+        return <RewardsSettings rewards={rewards} setRewards={setRewards} products={products} />;
       case 'achievements':
         return <AchievementsSettings achievements={achievements} setAchievements={setAchievements} />;
+      case 'reports':
+        return <RewardsReportTab vouchers={vouchers} alunos={alunos} products={products} rewards={rewards} />;
       default:
         return null;
     }

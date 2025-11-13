@@ -5,6 +5,8 @@ import { AtletaAluguel, Reserva } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { formatCurrency } from '../../utils/formatters';
+import { getDay, parse } from 'date-fns';
+import { parseDateStringAsLocal } from '../../utils/dateUtils';
 
 interface HirePlayerModalProps {
   isOpen: boolean;
@@ -20,13 +22,47 @@ const HirePlayerModal: React.FC<HirePlayerModalProps> = ({ isOpen, onClose, onCo
   const [searchTerm, setSearchTerm] = useState('');
 
   const availableProfissionais = useMemo(() => {
-    if (!profissionais) return [];
-    return profissionais.filter(p => 
-      p.status === 'disponivel' && 
-      p.esportes.some(e => e.sport === reserva.sport_type) &&
-      p.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [profissionais, reserva.sport_type, searchTerm]);
+    if (!profissionais || !reserva) return [];
+
+    const reservaDate = parseDateStringAsLocal(reserva.date);
+    const reservaDayOfWeek = getDay(reservaDate);
+    const reservaStartTime = parse(reserva.start_time, 'HH:mm', new Date());
+
+    return profissionais.filter(p => {
+        if (p.status !== 'disponivel') return false;
+
+        const isCompatibleSport = p.esportes.some(e => e.sport === reserva.sport_type);
+        if (!isCompatibleSport) return false;
+
+        if (!p.weekly_availability || p.weekly_availability.length === 0) {
+            // Se o atleta não cadastrou horário, ele não aparece para reservas com hora marcada.
+            return false;
+        }
+
+        const dayAvailability = p.weekly_availability.find(d => d.dayOfWeek === reservaDayOfWeek);
+        if (!dayAvailability || dayAvailability.slots.length === 0) {
+            return false;
+        }
+
+        const isAvailableAtTime = dayAvailability.slots.some(slot => {
+            try {
+                const slotStart = parse(slot.start, 'HH:mm', new Date());
+                const slotEnd = parse(slot.end, 'HH:mm', new Date());
+                // Check if reservation time is within the slot [start, end)
+                return reservaStartTime >= slotStart && reservaStartTime < slotEnd;
+            } catch (e) {
+                console.error("Error parsing athlete availability slot:", slot, e);
+                return false;
+            }
+        });
+        
+        if (!isAvailableAtTime) {
+            return false;
+        }
+
+        return p.name.toLowerCase().includes(searchTerm.toLowerCase());
+    });
+  }, [profissionais, reserva, searchTerm]);
 
   const handleConfirm = () => {
     if (selectedProfissionalId) {
@@ -88,7 +124,7 @@ const HirePlayerModal: React.FC<HirePlayerModalProps> = ({ isOpen, onClose, onCo
                   ))}
                 </div>
               ) : (
-                <p className="text-center text-brand-gray-500 py-8">Nenhum atleta disponível para este esporte ou busca no momento.</p>
+                <p className="text-center text-brand-gray-500 py-8">Nenhum atleta disponível para este esporte, horário ou busca no momento.</p>
               )}
             </div>
             <div className="p-6 mt-auto border-t border-brand-gray-200 dark:border-brand-gray-700 flex justify-end gap-3">

@@ -77,6 +77,8 @@ interface ProfileDetailModalProps {
   achievements: GamificationAchievement[];
   unlockedAchievements: AlunoAchievement[];
   gamificationEnabled: boolean;
+  onDataChange: () => void;
+  completedReservationsCount: number;
 }
 
 const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
@@ -91,7 +93,9 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   rewards,
   achievements,
   unlockedAchievements,
-  gamificationEnabled
+  gamificationEnabled,
+  onDataChange,
+  completedReservationsCount,
 }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
 
@@ -115,6 +119,8 @@ const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
             achievements={achievements}
             unlockedAchievements={unlockedAchievements}
             history={gamificationHistory}
+            onDataChange={onDataChange}
+            completedReservationsCount={completedReservationsCount}
           />
         ) : <p>O sistema de gamificação não está ativo para esta arena.</p>;
       case 'payments':

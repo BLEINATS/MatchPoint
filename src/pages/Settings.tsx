@@ -25,6 +25,11 @@ type AdminTabType = 'profile' | 'operation' | 'documents' | 'payments' | 'planos
 type ClientTabType = 'my-profile' | 'notifications' | 'security' | 'documents';
 type StaffTabType = 'planos_aulas';
 
+const DEFAULT_SPORTS_LIST = [
+  'Beach Tennis', 'Futevôlei', 'Vôlei de Praia', 'Futebol Society', 
+  'Tênis', 'Padel', 'Funcional', 'Basquete', 'Handebol', 'Pickleball', 'Futsal'
+];
+
 const Settings: React.FC = () => {
   const { selectedArenaContext: arena, updateArena, profile, updateProfile, isLoading: isAuthLoading } = useAuth();
   const location = useLocation();
@@ -80,7 +85,11 @@ const Settings: React.FC = () => {
 
   useEffect(() => {
     if (arena && isAdmin) {
-      setArenaFormData(arena);
+      const initialData = { ...arena };
+      if (!initialData.available_sports || initialData.available_sports.length === 0) {
+        initialData.available_sports = DEFAULT_SPORTS_LIST;
+      }
+      setArenaFormData(initialData);
     }
     if (profile) {
       setProfileFormData(profile);
@@ -106,7 +115,11 @@ const Settings: React.FC = () => {
     setIsSaving(true);
     try {
       if (isAdmin) {
-        await updateArena(arenaFormData);
+        const cleanedData = {
+          ...arenaFormData,
+          available_sports: (arenaFormData.available_sports || []).map(s => typeof s === 'string' ? s.trim() : '').filter(Boolean)
+        };
+        await updateArena(cleanedData);
       } else {
         await updateProfile(profileFormData);
       }

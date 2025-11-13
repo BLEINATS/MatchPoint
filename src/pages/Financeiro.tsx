@@ -251,10 +251,18 @@ const Financeiro: React.FC = () => {
               <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Painel Financeiro</h1>
               <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Acompanhe a saúde financeira da sua arena.</p>
             </div>
-            <Button onClick={() => { setEditingTransaction(null); setIsModalOpen(true); }}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nova Transação
-            </Button>
+            <div className="flex gap-2">
+              <Link to="/financeiro-detalhado">
+                <Button variant="outline">
+                  <BarChart2 className="h-4 w-4 mr-2" />
+                  Dashboard Detalhado
+                </Button>
+              </Link>
+              <Button onClick={() => { setEditingTransaction(null); setIsModalOpen(true); }}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Transação
+              </Button>
+            </div>
           </div>
         </motion.div>
         

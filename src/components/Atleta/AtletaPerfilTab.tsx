@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { AtletaAluguel } from '../../types';
+import { AtletaAluguel, WeeklyAvailability } from '../../types';
 import Input from '../Forms/Input';
 import Button from '../Forms/Button';
-import { Save, DollarSign, Briefcase } from 'lucide-react';
+import { Save, DollarSign, Briefcase, Plus, Trash2, Calendar, Info } from 'lucide-react';
 import { ToggleSwitch } from '../Gamification/ToggleSwitch';
 import { AnimatePresence, motion } from 'framer-motion';
+import { v4 as uuidv4 } from 'uuid';
+import Alert from '../Shared/Alert';
 
 interface AtletaPerfilTabProps {
   atleta: AtletaAluguel;
@@ -13,6 +15,7 @@ interface AtletaPerfilTabProps {
 
 const ALL_SPORTS = ['Futevôlei', 'Beach Tennis', 'Futebol', 'Futsal', 'Futsal Society', 'Vôlei', 'Basquete', 'Squash', 'Badminton', 'Ping Pong', 'Padel', 'Multiuso'];
 const NIVEIS_TECNICOS = ['Iniciante', 'Intermediário', 'Avançado', 'Profissional'];
+const WEEK_DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
 const AtletaPerfilTab: React.FC<AtletaPerfilTabProps> = ({ atleta, onSave }) => {
   const [formData, setFormData] = useState<Partial<AtletaAluguel>>({
@@ -22,6 +25,7 @@ const AtletaPerfilTab: React.FC<AtletaPerfilTabProps> = ({ atleta, onSave }) => 
     experiencia_anos: atleta.experiencia_anos,
     biografia: atleta.biografia,
     status: atleta.status,
+    weekly_availability: atleta.weekly_availability || [],
   });
   const [customSport, setCustomSport] = useState('');
 
@@ -35,6 +39,7 @@ const AtletaPerfilTab: React.FC<AtletaPerfilTabProps> = ({ atleta, onSave }) => 
       experiencia_anos: atleta.experiencia_anos,
       biografia: atleta.biografia,
       status: atleta.status,
+      weekly_availability: atleta.weekly_availability || [],
     });
   }, [atleta]);
 
@@ -89,6 +94,53 @@ const AtletaPerfilTab: React.FC<AtletaPerfilTabProps> = ({ atleta, onSave }) => 
     onSave(formData);
   };
 
+  const handleAvailabilityChange = (dayOfWeek: number, slotId: string, field: 'start' | 'end', value: string) => {
+    setFormData(prev => {
+        const newAvailability = [...(prev.weekly_availability || [])];
+        let dayAvailability = newAvailability.find(d => d.dayOfWeek === dayOfWeek);
+
+        if (!dayAvailability) return prev;
+
+        const slotIndex = dayAvailability.slots.findIndex(s => s.id === slotId);
+        if (slotIndex > -1) {
+            dayAvailability.slots[slotIndex] = { ...dayAvailability.slots[slotIndex], [field]: value };
+        }
+
+        return { ...prev, weekly_availability: newAvailability };
+    });
+  };
+
+  const addSlot = (dayOfWeek: number) => {
+    setFormData(prev => {
+        const newAvailability = [...(prev.weekly_availability || [])];
+        let dayAvailability = newAvailability.find(d => d.dayOfWeek === dayOfWeek);
+
+        if (!dayAvailability) {
+            dayAvailability = { dayOfWeek, slots: [] };
+            newAvailability.push(dayAvailability);
+        }
+
+        dayAvailability.slots.push({ id: uuidv4(), start: '08:00', end: '12:00' });
+        
+        newAvailability.sort((a,b) => a.dayOfWeek - b.dayOfWeek);
+
+        return { ...prev, weekly_availability: newAvailability };
+    });
+  };
+
+  const removeSlot = (dayOfWeek: number, slotId: string) => {
+    setFormData(prev => {
+        const newAvailability = (prev.weekly_availability || []).map(day => {
+            if (day.dayOfWeek === dayOfWeek) {
+                return { ...day, slots: day.slots.filter(s => s.id !== slotId) };
+            }
+            return day;
+        }).filter(day => day.slots.length > 0);
+
+        return { ...prev, weekly_availability: newAvailability };
+    });
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       <Section title="Disponibilidade e Taxa">
@@ -113,6 +165,48 @@ const AtletaPerfilTab: React.FC<AtletaPerfilTabProps> = ({ atleta, onSave }) => 
               setEnabled={(val) => setFormData(p => ({ ...p, status: val ? 'disponivel' : 'indisponivel' }))}
             />
           </div>
+        </div>
+      </Section>
+      
+      <Section title="Disponibilidade Semanal">
+        {(!formData.weekly_availability || formData.weekly_availability.length === 0) && (
+            <Alert
+                type="info"
+                title="Configure sua Disponibilidade"
+                message="Para aparecer como disponível para contratação em horários específicos, você precisa definir seus dias e horários de trabalho. Sem um horário cadastrado, você não será listado para reservas com hora marcada."
+            />
+        )}
+        <p className="text-sm -mt-2 text-brand-gray-500 dark:text-brand-gray-400">
+            Defina os dias e horários em que você está disponível para ser contratado. Você pode adicionar múltiplos intervalos para o mesmo dia.
+        </p>
+        <div className="space-y-4">
+            {WEEK_DAYS.map((dayName, index) => {
+                const dayAvailability = formData.weekly_availability?.find(d => d.dayOfWeek === index);
+                return (
+                    <div key={index} className="p-4 rounded-lg bg-brand-gray-50 dark:bg-brand-gray-800/50">
+                        <div className="flex justify-between items-center">
+                            <h5 className="font-semibold">{dayName}</h5>
+                            <Button type="button" variant="outline" size="sm" onClick={() => addSlot(index)}>
+                                <Plus className="h-4 w-4 mr-2" /> Adicionar Horário
+                            </Button>
+                        </div>
+                        {dayAvailability && dayAvailability.slots.length > 0 && (
+                            <div className="mt-4 space-y-2">
+                                {dayAvailability.slots.map(slot => (
+                                    <div key={slot.id} className="flex items-center gap-2">
+                                        <Input type="time" value={slot.start} onChange={(e) => handleAvailabilityChange(index, slot.id, 'start', e.target.value)} />
+                                        <span>até</span>
+                                        <Input type="time" value={slot.end} onChange={(e) => handleAvailabilityChange(index, slot.id, 'end', e.target.value)} />
+                                        <Button type="button" variant="ghost" size="sm" onClick={() => removeSlot(index, slot.id)} className="text-red-500">
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
         </div>
       </Section>
 

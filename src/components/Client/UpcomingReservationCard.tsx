@@ -50,16 +50,24 @@ const UpcomingReservationCard: React.FC<UpcomingReservationCardProps> = ({ reser
           </div>
         </div>
       </div>
-      <div className="bg-brand-gray-50 dark:bg-brand-gray-700/50 p-4 flex items-center justify-center">
-        <div className="bg-white dark:bg-brand-gray-800 p-2 rounded-md shadow-inner">
-           <QRCode
-            value={reservation.id}
-            size={80}
-            fgColor={currentColors.fg}
-            bgColor={currentColors.bg}
-            level="L"
-            includeMargin={false}
-          />
+      <div className="bg-brand-gray-50 dark:bg-brand-gray-700/50 p-4 flex items-center justify-center text-center">
+        <div>
+          <div className="bg-white dark:bg-brand-gray-800 p-2 rounded-md shadow-inner inline-block">
+             <QRCode
+              value={reservation.id}
+              size={80}
+              fgColor={currentColors.fg}
+              bgColor={currentColors.bg}
+              level="L"
+              includeMargin={false}
+            />
+          </div>
+          <div className="mt-2">
+            <p className="text-xs text-brand-gray-500">ou informe o código:</p>
+            <p className="font-mono font-bold tracking-widest text-sm text-brand-gray-800 dark:text-white">
+              {reservation.id.substring(0, 8).toUpperCase()}
+            </p>
+          </div>
         </div>
       </div>
     </motion.div>

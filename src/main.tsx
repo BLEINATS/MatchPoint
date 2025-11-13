@@ -21,13 +21,14 @@ import TorneioDetail from './pages/TorneioDetail';
 import Eventos from './pages/Eventos';
 import EventoDetail from './pages/EventoDetail';
 import Gamification from './pages/Gamification';
-import TorneioPublico from './pages/TorneioPublico.tsx';
+import TorneioPublico from './components/Client/TorneioPublico.tsx';
 import Financeiro from './pages/Financeiro.tsx';
 import ProfessorProfilePage from './pages/ProfessorProfilePage.tsx';
 import SuperAdminPage from './pages/SuperAdmin.tsx';
 import Notificacoes from './pages/Notificacoes.tsx';
 import Loja from './pages/Loja.tsx';
 import AtletaProfilePage from './pages/AtletaProfilePage.tsx';
+import FinanceiroProfissional from './pages/FinanceiroProfissional.tsx';
 
 import React from 'react';
 
@@ -95,6 +96,10 @@ const router = createBrowserRouter([
        {
         path: 'financeiro',
         element: <ProtectedRoute><Financeiro /></ProtectedRoute>,
+      },
+      {
+        path: 'financeiro-detalhado',
+        element: <ProtectedRoute><FinanceiroProfissional /></ProtectedRoute>,
       },
       {
         path: 'notificacoes',

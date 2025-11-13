@@ -26,28 +26,7 @@ import { localApi } from '../../lib/localApi';
 import { v4 as uuidv4 } from 'uuid';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
-
-interface ReservationModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (reservation: (Omit<Reserva, 'id' | 'created_at' | 'arena_id'> | Reserva) & { originalCreditUsed?: number }) => void;
-  onCancelReservation: (reservation: Reserva) => void;
-  reservation?: Reserva | null;
-  newReservationSlot?: { quadraId: string, time: string, type?: ReservationType } | null;
-  quadras: Quadra[];
-  alunos: Aluno[];
-  allReservations: Reserva[];
-  arenaId: string;
-  selectedDate: Date;
-  isClientBooking?: boolean;
-  userProfile?: Profile | null;
-  clientProfile?: Aluno | null;
-  profissionais?: AtletaAluguel[];
-  friends?: Profile[];
-  isReadOnly?: boolean;
-}
-
-const ALL_SPORTS = ['Beach Tennis', 'Futevôlei', 'Vôlei de Praia', 'Tênis', 'Padel', 'Futebol Society', 'Outro'];
+import CreatableSelect from '../Forms/CreatableSelect';
 
 const timeToMinutes = (timeStr: string): number => {
   if (!timeStr || !timeStr.includes(':')) return -1;
@@ -60,9 +39,29 @@ const timeToMinutes = (timeStr: string): number => {
   }
 };
 
-const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, onSave, onCancelReservation, reservation, newReservationSlot, quadras, alunos, allReservations, arenaId, selectedDate, isClientBooking = false, userProfile, clientProfile, profissionais = [], friends = [], isReadOnly = false }) => {
+interface ReservationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (reservation: (Omit<Reserva, 'id' | 'created_at' | 'arena_id'> | Reserva) & { originalCreditUsed?: number; newSportCreated?: string }) => void;
+  onCancelReservation: (reservation: Reserva) => void;
+  reservation?: Reserva | null;
+  newReservationSlot?: { quadraId: string, time: string, type?: ReservationType } | null;
+  quadras: Quadra[];
+  alunos: Aluno[];
+  allReservations: Reserva[];
+  arenaId: string;
+  allArenas: Arena[];
+  selectedDate: Date;
+  isClientBooking?: boolean;
+  userProfile?: Profile | null;
+  clientProfile?: Aluno | null;
+  profissionais?: AtletaAluguel[];
+  friends?: Profile[];
+  isReadOnly?: boolean;
+}
+
+const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, onSave, onCancelReservation, reservation, newReservationSlot, quadras, alunos, allReservations, arenaId, allArenas, selectedDate, isClientBooking = false, userProfile, clientProfile, profissionais = [], friends = [], isReadOnly = false }) => {
   const { addToast } = useToast();
-  const { allArenas } = useAuth();
   const [durationDiscounts, setDurationDiscounts] = useState<DurationDiscount[]>([]);
   const [rentalItems, setRentalItems] = useState<RentalItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -99,7 +98,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     clientPhone: '',
     status: 'confirmada' as Reserva['status'],
     type: 'avulsa' as ReservationType,
-    sport_type: 'Beach Tennis',
+    sport_type: '',
     total_price: 0,
     credit_used: 0,
     isRecurring: false,
@@ -143,7 +142,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
           clientPhone: '',
           status: 'confirmada' as Reserva['status'],
           type: 'avulsa' as ReservationType,
-          sport_type: 'Beach Tennis',
+          sport_type: '',
           total_price: 0,
           credit_used: 0,
           isRecurring: false,
@@ -194,7 +193,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
             start_time: startTime,
             end_time: endTime,
             type: newReservationSlot.type || 'avulsa',
-            sport_type: selectedQuadra?.sports?.[0] || 'Beach Tennis',
+            sport_type: selectedQuadra?.sports?.[0] || '',
           };
           
           if (newReservationSlot.type === 'bloqueio') {
@@ -236,13 +235,49 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     return selectedClient ? selectedClient.id : null;
   }, [selectedClient]);
 
+  const allSportsOptions = useMemo(() => {
+    const arena = allArenas.find(a => a.id === arenaId);
+    const defaultSports = [
+        'Beach Tennis', 'Futevôlei', 'Vôlei de Praia', 'Futebol Society', 
+        'Tênis', 'Padel', 'Funcional', 'Basquete', 'Handebol', 'Pickleball', 'Futsal'
+    ];
+    const arenaSports = arena?.available_sports || [];
+    const quadraSports = quadras.flatMap(q => q.sports).filter(Boolean);
+    return [...new Set([...defaultSports, ...arenaSports, ...quadraSports])].sort((a, b) => a.localeCompare(b));
+  }, [allArenas, quadras, arenaId]);
+
   const availableProfessionals = useMemo(() => {
-    if (!profissionais) return [];
-    return profissionais.filter(p =>
-      p.status === 'disponivel' &&
-      p.esportes.some(e => e.sport === formData.sport_type)
-    );
-  }, [profissionais, formData.sport_type]);
+    if (!profissionais || !formData.date || !formData.start_time) return [];
+
+    try {
+        const reservaDate = parseDateStringAsLocal(formData.date);
+        const reservaDayOfWeek = getDay(reservaDate);
+        const reservaStartTime = parse(formData.start_time, 'HH:mm', new Date());
+
+        return profissionais.filter(p => {
+            const isCompatibleSport = p.esportes.some(e => e.sport === formData.sport_type);
+            if (!isCompatibleSport) return false;
+
+            if (!p.weekly_availability || p.weekly_availability.length === 0) {
+                return true; // Assume available if not configured
+            }
+
+            const dayAvailability = p.weekly_availability.find(d => d.dayOfWeek === reservaDayOfWeek);
+            if (!dayAvailability || dayAvailability.slots.length === 0) {
+                return false;
+            }
+
+            return dayAvailability.slots.some(slot => {
+                const slotStart = parse(slot.start, 'HH:mm', new Date());
+                const slotEnd = parse(slot.end, 'HH:mm', new Date());
+                return reservaStartTime >= slotStart && reservaStartTime < slotEnd;
+            });
+        });
+    } catch (e) {
+        console.error("Error filtering professionals in ReservationModal", e);
+        return profissionais; // Return all on error to avoid breaking the UI
+    }
+  }, [profissionais, formData.date, formData.start_time, formData.sport_type]);
 
   const availableStock = useMemo(() => {
     const stock: Record<string, number> = {};
@@ -690,7 +725,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         });
     }
 
-    let dataToSave: Partial<Reserva> & { originalCreditUsed?: number } = { ...formData, participants, originalCreditUsed: originalCreditUsed, aluno_id: finalAlunoId };
+    let dataToSave: Partial<Reserva> & { originalCreditUsed?: number; newSportCreated?: string } = { ...formData, participants, originalCreditUsed: originalCreditUsed, aluno_id: finalAlunoId };
     
     if (!isEditing) {
       dataToSave.created_by_name = userProfile?.name;
@@ -725,16 +760,25 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
       dataToSave.recurringEndDate = null;
     }
 
+    const isNewSport = !allSportsOptions.includes(formData.sport_type);
+    if (isNewSport && formData.sport_type) {
+        dataToSave.newSportCreated = formData.sport_type;
+    }
+
     onSave(isEditing ? { ...reservation, ...dataToSave } as Reserva : dataToSave as Reserva);
   };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    let finalValue = value;
+    let finalValue: any = value;
     if (name === 'clientPhone') {
       finalValue = maskPhone(value);
     }
-    setFormData(prev => ({ ...prev, [name]: finalValue }));
+    if (name === 'quadra_id') {
+        setFormData(prev => ({ ...prev, quadra_id: value }));
+    } else {
+        setFormData(prev => ({ ...prev, [name]: finalValue }));
+    }
   };
 
   const handleIndefiniteToggle = (checked: boolean) => {
@@ -843,11 +887,14 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                     </div>
                     {!isBlockMode && (
                      <div>
-                      <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte</label>
-                      <select name="sport_type" value={formData.sport_type} onChange={handleChange} className="form-select w-full rounded-md dark:bg-brand-gray-800 dark:text-white dark:border-brand-gray-600" disabled={isReadOnly}>
-                        {ALL_SPORTS.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
+                       <CreatableSelect
+                         label="Esporte"
+                         options={allSportsOptions}
+                         value={formData.sport_type}
+                         onChange={(value) => setFormData(prev => ({ ...prev, sport_type: value }))}
+                         disabled={isReadOnly}
+                       />
+                     </div>
                     )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -950,7 +997,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                     </>
                   )}
 
-                  {conflictWarning && (<div className="p-3 rounded-md bg-red-50 dark:bg-red-900/50 flex items-start text-red-700 dark:text-red-300"><AlertTriangle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"/><p className="text-xs">{conflictWarning}</p></div>)}
+                  {conflictWarning && (<div className="p-3 rounded-md bg-red-50 dark:bg-red-900/20 flex items-start text-red-700 dark:text-red-300"><AlertTriangle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"/><p className="text-xs">{conflictWarning}</p></div>)}
                   {operatingHoursWarning && (<div className="p-3 rounded-md bg-yellow-50 dark:bg-yellow-900/50 flex items-start text-yellow-700 dark:text-yellow-300"><AlertTriangle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"/><p className="text-xs">{operatingHoursWarning}</p></div>)}
                 </>
               )}

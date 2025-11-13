@@ -46,7 +46,7 @@ import ConfirmationModal from '../components/Shared/ConfirmationModal';
 type ViewMode = 'agenda' | 'calendar' | 'list';
 
 const Reservations: React.FC = () => {
-  const { selectedArenaContext, profile } = useAuth();
+  const { selectedArenaContext, profile, allArenas, updateArena } = useAuth();
   const { addToast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -214,8 +214,22 @@ const Reservations: React.FC = () => {
   const activeFilterCount = Object.values(filters).filter(value => value !== 'all' && value !== '').length;
   const handleClearFilters = () => { setFilters({ status: 'all', type: 'all', clientName: '', quadraId: 'all', startDate: '', endDate: '' }); setIsFilterPanelOpen(false); };
 
-  const handleSaveReservation = async (reservaData: (Omit<Reserva, 'id' | 'created_at'> | Reserva) & { originalCreditUsed?: number }) => {
+  const handleSaveReservation = async (reservaData: any) => {
     if (!selectedArenaContext || !profile) return;
+
+    if (reservaData.newSportCreated) {
+        const newSport = reservaData.newSportCreated;
+        const currentArena = allArenas.find(a => a.id === selectedArenaContext.id);
+        if (currentArena && !currentArena.available_sports?.includes(newSport)) {
+            const updatedArena = {
+                ...currentArena,
+                available_sports: [...(currentArena.available_sports || []), newSport]
+            };
+            await updateArena(updatedArena);
+        }
+        delete reservaData.newSportCreated;
+    }
+    
     const isEditing = !!(reservaData as Reserva).id;
     
     try {
@@ -491,7 +505,7 @@ const Reservations: React.FC = () => {
         <ReservationLegend />
         <AnimatePresence mode="wait"><motion.div key={viewMode + filters.quadraId} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>{isLoading ? <div className="text-center py-16"><Loader2 className="w-8 h-8 border-4 border-brand-blue-500 border-t-transparent rounded-full animate-spin mx-auto" /></div> : renderContent()}</motion.div></AnimatePresence>
       </div>
-      <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={selectedArenaContext?.id || ''} selectedDate={selectedDate} profissionais={atletas} isReadOnly={!canEdit} />}</AnimatePresence>
+      <AnimatePresence>{isModalOpen && <ReservationModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveReservation} onCancelReservation={handleCancelReservation} reservation={selectedReservation} newReservationSlot={newReservationSlot} quadras={quadras} alunos={alunos} allReservations={reservas} arenaId={selectedArenaContext?.id || ''} selectedDate={selectedDate} profissionais={atletas} isReadOnly={!canEdit} allArenas={allArenas} />}</AnimatePresence>
       <AnimatePresence>{isCancellationModalOpen && (<CancellationModal isOpen={isCancellationModalOpen} onClose={() => { setIsCancellationModalOpen(false); setReservationToCancel(null); }} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} />)}</AnimatePresence>
       <AnimatePresence>{isManualCancelModalOpen && (<ManualCancellationModal isOpen={isManualCancelModalOpen} onClose={() => { setIsManualCancelModalOpen(false); setReservationToCancel(null); }} onConfirm={handleConfirmManualCancel} reservaName={reservationToCancel?.clientName || 'Reserva'} />)}</AnimatePresence>
       <AnimatePresence>{isMensalistaModalOpen && selectedMensalistaReserva && <MensalistaDetailModal isOpen={isMensalistaModalOpen} onClose={closeMensalistaModal} reserva={selectedMensalistaReserva} aluno={alunos.find(a => a.id === selectedMensalistaReserva.aluno_id)} onSave={handleUpdateMasterReserva} onEdit={() => { closeMensalistaModal(); openEditReservationModal(selectedMensalistaReserva, true); }} onDelete={() => handleDeleteRequest(selectedMensalistaReserva)} />}</AnimatePresence>

@@ -65,6 +65,20 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, setSettings
             disabled={!settings.is_enabled}
           />
         </div>
+        <div>
+          <Input
+            label="Validade dos Vouchers (dias)"
+            name="voucher_expiration_days"
+            type="number"
+            value={settings.voucher_expiration_days?.toString() || ''}
+            onChange={(e) => setSettings(prev => prev ? { ...prev, voucher_expiration_days: e.target.value === '' ? null : Number(e.target.value) } : null)}
+            placeholder="Deixe em branco para não expirar"
+            disabled={!settings.is_enabled}
+          />
+          <p className="text-xs text-brand-gray-500 mt-1">
+            Defina por quantos dias um voucher de item resgatado é válido para retirada. Após este prazo, ele expira.
+          </p>
+        </div>
       </div>
     </div>
   );
