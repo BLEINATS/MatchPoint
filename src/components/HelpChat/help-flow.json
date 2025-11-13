@@ -2,27 +2,43 @@
   "start": {
     "message": "Olá! Sou seu assistente virtual. Como posso ajudar hoje?",
     "options": [
+      { "text": "Dúvidas sobre o Painel", "next": "dashboard_cards" },
       { "text": "Dúvidas sobre Reservas", "next": "start_reservas" },
       { "text": "Gerenciar minha Arena", "next": "start_alunos" },
       { "text": "Configurações da Arena", "next": "start_settings" },
       { "text": "Dúvidas Financeiras", "next": "start_financeiro" }
     ]
   },
-  "start_dashboard": {
-    "message": "Estou vendo que você está no Dashboard. Sobre o que você tem dúvida?",
+  "dashboard_cards": {
+    "message": "Sobre qual card do painel principal você tem dúvida?",
     "options": [
-      { "text": "O que significa 'Receita do Mês'?", "next": "dashboard_receita" },
-      { "text": "Como funcionam os 'Insights'?", "next": "dashboard_insights" },
-      { "text": "Ver outras opções", "next": "start" }
+      { "text": "Desempenho do Dia", "next": "help_desempenho" },
+      { "text": "Receita do Mês", "next": "help_receita" },
+      { "text": "Aquisição (Mês)", "next": "help_aquisicao" },
+      { "text": "Cancelamentos Hoje", "next": "help_cancelamentos" },
+      { "text": "Contas a Receber", "next": "help_contas_receber" },
+      { "text": "Voltar ao início", "next": "start" }
     ]
   },
-  "dashboard_receita": {
-    "message": "A 'Receita do Mês' soma todos os pagamentos confirmados de reservas e mensalidades dentro do mês atual. É uma visão geral do seu faturamento.",
-    "options": [{ "text": "Voltar", "next": "start_dashboard" }]
+  "help_desempenho": {
+    "message": "O card 'Desempenho do Dia' mostra dois indicadores chave para hoje: a 'Receita', que é a soma de todas as reservas confirmadas para o dia, e a 'Ocupação', que é a porcentagem de horas reservadas em relação ao total de horas disponíveis em suas quadras ativas.",
+    "options": [ { "text": "Ver outros cards", "next": "dashboard_cards" } ]
   },
-  "dashboard_insights": {
-    "message": "Os 'Insights' são sugestões automáticas baseadas na atividade da sua arena, como identificar seus horários de pico ou clientes mais fiéis, para te ajudar a tomar decisões.",
-    "options": [{ "text": "Voltar", "next": "start_dashboard" }]
+  "help_receita": {
+    "message": "O card 'Receita do Mês' mostra o faturamento total com reservas confirmadas e mensalidades pagas dentro do mês corrente. O detalhamento mostra a origem dessa receita (reservas avulsas, aulas, torneios, etc).",
+    "options": [ { "text": "Ver outros cards", "next": "dashboard_cards" } ]
+  },
+  "help_aquisicao": {
+    "message": "O card 'Aquisição (Mês)' rastreia quantos novos 'Clientes' (primeira reserva) e novos 'Alunos com Plano' (primeira contratação de plano) você ganhou no mês corrente.",
+    "options": [ { "text": "Ver outros cards", "next": "dashboard_cards" } ]
+  },
+  "help_cancelamentos": {
+    "message": "O card 'Cancelamentos Hoje' mostra o VALOR MONETÁRIO total das reservas que foram canceladas no dia de hoje. O detalhe separa o valor cancelado manualmente por clientes e o valor cancelado automaticamente pelo sistema por falta de pagamento.",
+    "options": [ { "text": "Ver outros cards", "next": "dashboard_cards" } ]
+  },
+  "help_contas_receber": {
+    "message": "O card 'Contas a Receber' mostra a soma de todos os valores pendentes de pagamento. Isso inclui reservas avulsas aguardando pagamento e mensalidades de meses anteriores que estão em atraso.",
+    "options": [ { "text": "Ver outros cards", "next": "dashboard_cards" } ]
   },
   "start_reservas": {
     "message": "Você está no Hub de Reservas. Posso ajudar com algo?",

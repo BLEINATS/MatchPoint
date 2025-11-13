@@ -208,15 +208,15 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
       isSameDay(parseDateStringAsLocal(r.updated_at), today)
     );
 
-    const cancelamentosCliente = todaysCancellations.filter(r => 
-        !r.notes?.includes('[Cancelado automaticamente por falta de pagamento]')
-    ).length;
+    const cancelamentosClienteValor = todaysCancellations
+      .filter(r => !r.notes?.includes('[Cancelado automaticamente por falta de pagamento]'))
+      .reduce((sum, r) => sum + (r.total_price || 0), 0);
 
-    const cancelamentosFaltaPagto = todaysCancellations.filter(r => 
-        r.notes?.includes('[Cancelado automaticamente por falta de pagamento]')
-    ).length;
+    const cancelamentosFaltaPagtoValor = todaysCancellations
+      .filter(r => r.notes?.includes('[Cancelado automaticamente por falta de pagamento]'))
+      .reduce((sum, r) => sum + (r.total_price || 0), 0);
 
-    const totalCancelamentosHoje = cancelamentosCliente + cancelamentosFaltaPagto;
+    const totalCancelamentosHojeValor = cancelamentosClienteValor + cancelamentosFaltaPagtoValor;
 
     const novosClientesMes = alunos.filter(a => isWithinInterval(parseDateStringAsLocal(a.join_date), { start: monthStart, end: monthEnd })).length;
     const novosAlunosMes = alunos.filter(a => a.plan_id && isWithinInterval(parseDateStringAsLocal(a.join_date), { start: monthStart, end: monthEnd })).length;
@@ -224,7 +224,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
     return { 
         receitaDoMes, receitaDoDia, contasAReceber, ocupacaoHoje: Math.min(ocupacaoHoje, 100), 
         novosClientesMes, novosAlunosMes, receitaPorCategoria, contasAReceberBreakdown,
-        totalCancelamentosHoje, cancelamentosCliente, cancelamentosFaltaPagto
+        totalCancelamentosHojeValor, cancelamentosClienteValor, cancelamentosFaltaPagtoValor
     };
   }, [quadras, reservas, alunos, financeTransactions]);
   
@@ -350,8 +350,8 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
         />
         <SimpleStatCard
             label="Cancelamentos Hoje"
-            value={analyticsData.totalCancelamentosHoje}
-            description={`Cliente: ${analyticsData.cancelamentosCliente} | Falta de Pgto: ${analyticsData.cancelamentosFaltaPagto}`}
+            value={formatCurrency(analyticsData.totalCancelamentosHojeValor)}
+            description={`Cliente: ${formatCurrency(analyticsData.cancelamentosClienteValor)} | Falta Pgto: ${formatCurrency(analyticsData.cancelamentosFaltaPagtoValor)}`}
             icon={XCircle}
             color="text-red-500"
             className="lg:col-span-1"

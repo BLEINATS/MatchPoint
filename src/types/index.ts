@@ -537,6 +537,22 @@ export interface GamificationReward {
   value: number | null;
   quantity: number | null;
   is_active: boolean;
+  product_id?: string | null;
+  item_description?: string | null;
+}
+
+export interface RedeemedVoucher {
+  id: string;
+  arena_id: string;
+  aluno_id: string;
+  reward_id: string;
+  reward_title: string;
+  product_id: string | null;
+  variant_id?: string | null;
+  item_description: string | null;
+  status: 'pendente' | 'resgatado';
+  created_at: string;
+  redeemed_at: string | null;
 }
 
 export interface GamificationAchievement {
@@ -614,4 +630,9 @@ export type SupabaseData<T> = {
 export type SupabaseSingleData<T> = {
   data: T | null;
   error: PostgrestError | null;
+};
+
+export type ArenaMembership = {
+  profile_id: string;
+  arena_id: string;
 };
