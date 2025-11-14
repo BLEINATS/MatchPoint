@@ -154,15 +154,20 @@ const ProfessorProfileContent: React.FC<ProfessorProfileContentProps> = ({ profe
       </motion.div>
 
       <div className="border-b border-brand-gray-200 dark:border-brand-gray-700 mb-8">
-        <nav className="-mb-px flex space-x-6 overflow-x-auto">
+        <nav className="-mb-px flex justify-around sm:justify-start sm:space-x-4 overflow-x-auto no-scrollbar">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${activeTab === tab.id ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400' : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400'}`}
+              title={tab.label}
+              className={`whitespace-nowrap py-3 px-2 border-b-2 font-medium text-xs sm:text-sm flex items-center transition-colors ${
+                activeTab === tab.id
+                  ? 'border-brand-blue-500 text-brand-blue-600 dark:text-brand-blue-400'
+                  : 'border-transparent text-brand-gray-500 hover:text-brand-gray-700 dark:text-brand-gray-400'
+              }`}
             >
-              <tab.icon className="mr-2 h-5 w-5" />
-              {tab.label}
+              <tab.icon className="h-4 w-4 mr-1.5" />
+              <span>{tab.label}</span>
             </button>
           ))}
         </nav>

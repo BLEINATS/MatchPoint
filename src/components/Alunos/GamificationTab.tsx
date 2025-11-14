@@ -154,7 +154,7 @@ const GamificationTab: React.FC<GamificationTabProps> = ({ aluno, onDataChange }
       </div>
       <div>
         <h4 className="font-semibold mb-3 flex items-center"><History className="h-5 w-5 mr-2 text-brand-blue-500"/> Histórico de Pontos</h4>
-        <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+        <div className="max-h-44 overflow-y-auto space-y-2 pr-2">
           {history.length > 0 ? history.map(tx => (
             <div key={tx.id} className="flex justify-between items-center p-2 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-md">
               <div>

@@ -169,6 +169,13 @@ export interface DurationDiscount {
   created_at: string;
 }
 
+export interface AlunoLevel {
+  id: string;
+  arena_id: string;
+  name: string;
+  color: string;
+}
+
 export interface Aluno {
   id: string;
   arena_id: string;
@@ -181,6 +188,7 @@ export interface Aluno {
   gender?: 'masculino' | 'feminino' | 'outro' | 'nao_informado' | null;
   status: 'ativo' | 'inativo' | 'experimental';
   sport: string | null;
+  level_id?: string | null;
   plan_id: string | null;
   plan_name: string;
   monthly_fee: number | null;

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
-import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, PlanoAula, Friendship, GamificationPointTransaction, FinanceTransaction, Torneio, Participant, RedeemedVoucher, Product } from '../../types';
+import { Quadra, Reserva, Aluno, Turma, Professor, CreditTransaction, Profile, Arena, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, PlanoAula, Friendship, GamificationPointTransaction, FinanceTransaction, Torneio, Participant, RedeemedVoucher, Product, AlunoLevel } from '../../types';
 import { Calendar, Compass, Search, CreditCard, LayoutDashboard, Loader2, CheckCircle, AlertCircle, ShoppingBag, Clock, Heart, DollarSign, Gift, Handshake, GraduationCap, Star, User, Users, Banknote, FileText, MessageSquare, Briefcase, Repeat, XCircle, LifeBuoy, Lock, Unlock, Bell, Trash2, Edit, Hourglass } from 'lucide-react';
 import { isAfter, startOfDay, isSameDay, format, parse, getDay, addDays, isBefore, endOfDay, addMinutes, subDays, isWithinInterval, formatDistanceToNow, isPast, differenceInHours, differenceInWeeks, endOfWeek, startOfWeek, addWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,7 +16,6 @@ import { useToast } from '../../context/ToastContext';
 import { expandRecurringReservations } from '../../utils/reservationUtils';
 import DatePickerCalendar from './DatePickerCalendar';
 import ClientCancellationModal from './ClientCancellationModal';
-import ArenaInfoCard from './ArenaInfoCard';
 import ReservationDetailModal from './ReservationDetailModal';
 import { localApi } from '../../lib/localApi';
 import { formatCurrency } from '../../utils/formatters';
@@ -52,17 +51,21 @@ import TournamentBanner from './TournamentBanner';
 import TournamentInvitesWidget from './TournamentInvitesWidget';
 import MyTournamentsWidget from './MyTournamentsWidget';
 import InvitePartnerModal from './InvitePartnerModal';
+import QRCode from 'qrcode.react';
+import { useTheme } from '../../context/ThemeContext';
+import { useDragToScroll } from '../../hooks/useDragToScroll';
+import LevelBadge from '../Shared/LevelBadge';
 
 type View = 'inicio' | 'aulas' | 'reservas' | 'loja' | 'amigos' | 'perfil' | 'atleta_painel' | 'professor_painel' | 'documentos' | 'seguranca' | 'notificacoes' | 'suporte';
 
 const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: Quadra[], atletas: AtletaAluguel[], arenaName?: string, onCancel: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string, onAvaliarAtleta: (reserva: Reserva) => void, arenaSettings: Partial<Arena> | null}> = ({upcoming, past, quadras, atletas, arenaName, onCancel, onDetail, onHirePlayer, profileId, onAvaliarAtleta, arenaSettings}) => {
     const [showAllPast, setShowAllPast] = useState(false);
-    const shouldPaginatePast = past.length > 5;
-    const displayedPastReservations = shouldPaginatePast && !showAllPast ? past.slice(0, 5) : past;
+    const shouldPaginatePast = past.length > 3;
+    const displayedPastReservations = shouldPaginatePast && !showAllPast ? past.slice(0, 3) : past;
   
     return (
       <div className="space-y-8">
-        <ReservationList title="Próximas Reservas" reservations={upcoming} quadras={quadras} atletas={atletas} arenaName={arenaName} onCancel={onCancel} onDetail={onDetail} onHirePlayer={onHirePlayer} profileId={profileId} onAvaliarAtleta={onAvaliarAtleta} arenaSettings={arenaSettings} />
+        <ReservationList title="Próximas Atividades" reservations={upcoming} quadras={quadras} atletas={atletas} arenaName={arenaName} onCancel={onCancel} onDetail={onDetail} onHirePlayer={onHirePlayer} profileId={profileId} onAvaliarAtleta={onAvaliarAtleta} arenaSettings={arenaSettings} />
         <ReservationList title="Histórico de Reservas" reservations={displayedPastReservations} quadras={quadras} atletas={atletas} arenaName={arenaName} isPast onDetail={onDetail} profileId={profileId} onAvaliarAtleta={onAvaliarAtleta} arenaSettings={arenaSettings} />
         {shouldPaginatePast && !showAllPast && (
           <div className="text-center">
@@ -76,154 +79,207 @@ const ReservationsTab: React.FC<{upcoming: Reserva[], past: Reserva[], quadras: 
 };
   
 const ReservationList: React.FC<{title: string, reservations: Reserva[], quadras: Quadra[], atletas: AtletaAluguel[], arenaName?: string, isPast?: boolean, onCancel?: (reserva: Reserva) => void, onDetail: (reserva: Reserva) => void, onHirePlayer?: (reserva: Reserva) => void, profileId: string, onAvaliarAtleta: (reserva: Reserva) => void, arenaSettings: Partial<Arena> | null}> = ({title, reservations, quadras, atletas, arenaName, isPast, onCancel, onDetail, onHirePlayer, profileId, onAvaliarAtleta, arenaSettings}) => {
+    const activitiesCarouselRef = useDragToScroll<HTMLDivElement>();
+    
     return (
       <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700">
         <h3 className="text-xl font-semibold p-6">{title}</h3>
         {reservations.length === 0 ? (
           <p className="px-6 pb-6 text-brand-gray-500">Nenhuma reserva encontrada.</p>
         ) : (
-          <ul className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
-            {reservations.map(res => {
-              const isOrganizer = res.profile_id === profileId;
-              const isInvited = res.participants?.some(p => p.profile_id === profileId) && !isOrganizer;
-              const isClickable = true;
-              const atleta = res.atleta_aluguel_id ? atletas.find(a => a.id === res.atleta_aluguel_id) : null;
-              const podeAvaliar = isPast && atleta && res.atleta_aceite_status === 'aceito' && !atleta.ratings?.some(r => r.reservationId === res.id && r.clientId === profileId);
-              
-              const canHire = !isPast && onHirePlayer && isOrganizer && (!res.atleta_aluguel_id || res.atleta_aceite_status === 'recusado' || res.atleta_aceite_status === 'cancelado_pelo_cliente') && res.type === 'avulsa';
-              let hireDisabled = false;
-              let hireDisabledMessage = '';
-  
-              if (canHire && arenaSettings?.athlete_booking_deadline_hours) {
-                try {
-                  const reservationStart = parseDateStringAsLocal(`${res.date}T${res.start_time}`);
-                  const hoursUntilGame = differenceInHours(reservationStart, new Date());
-                  if (hoursUntilGame < arenaSettings.athlete_booking_deadline_hours) {
-                    hireDisabled = true;
-                    hireDisabledMessage = `O prazo para contratar um atleta (${arenaSettings.athlete_booking_deadline_hours}h antes do jogo) já expirou.`;
+          <>
+            <div ref={activitiesCarouselRef} className="lg:hidden flex overflow-x-auto gap-6 pb-4 -mx-2 px-6 no-scrollbar snap-x snap-mandatory">
+                {reservations.map((res, index) => (
+                    <div key={res.id} className="flex-shrink-0 w-11/12 snap-center border-r-8 border-transparent">
+                        <UpcomingReservationCard reservation={res} quadra={quadras.find(q => q.id === res.quadra_id)} index={index} arenaName={arenaName} onCardClick={() => onDetail(res)} />
+                    </div>
+                ))}
+            </div>
+            <ul className="hidden lg:block divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
+              {reservations.map(res => {
+                const isOrganizer = res.profile_id === profileId;
+                const isInvited = res.participants?.some(p => p.profile_id === profileId) && !isOrganizer;
+                const isClickable = true;
+                const atleta = res.atleta_aluguel_id ? atletas.find(a => a.id === res.atleta_aluguel_id) : null;
+                const podeAvaliar = isPast && atleta && res.atleta_aceite_status === 'aceito' && !atleta.ratings?.some(r => r.reservationId === res.id && r.clientId === profileId);
+                
+                const canHire = !isPast && onHirePlayer && isOrganizer && (!res.atleta_aluguel_id || res.atleta_aceite_status === 'recusado' || res.atleta_aceite_status === 'cancelado_pelo_cliente') && res.type === 'avulsa';
+                let hireDisabled = false;
+                let hireDisabledMessage = '';
+    
+                if (canHire && arenaSettings?.athlete_booking_deadline_hours) {
+                  try {
+                    const reservationStart = parseDateStringAsLocal(`${res.date}T${res.start_time}`);
+                    const hoursUntilGame = differenceInHours(reservationStart, new Date());
+                    if (hoursUntilGame < arenaSettings.athlete_booking_deadline_hours) {
+                      hireDisabled = true;
+                      hireDisabledMessage = `O prazo para contratar um atleta (${arenaSettings.athlete_booking_deadline_hours}h antes do jogo) já expirou.`;
+                    }
+                  } catch (e) {
+                    console.error("Error calculating hiring deadline", e);
                   }
-                } catch (e) {
-                  console.error("Error calculating hiring deadline", e);
                 }
-              }
-  
-              return (
-                <li key={res.id} onClick={() => isClickable && onDetail(res)} className={`p-4 sm:p-6 transition-colors ${isClickable ? 'hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer' : 'cursor-default opacity-70'}`}>
-                  <div className="flex flex-col sm:flex-row justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        {isInvited && <Handshake className="h-4 w-4 text-purple-500" title="Você foi convidado" />}
-                        {isOrganizer && res.participants && res.participants.length > 1 && <Users className="h-4 w-4 text-blue-500" title="Você é o organizador" />}
-                        <p className="font-bold text-brand-gray-900 dark:text-white">{quadras.find(q => q.id === res.quadra_id)?.name} <span className="font-normal text-brand-gray-500">• {arenaName}</span></p>
-                      </div>
-                      <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">
-                        {format(parseDateStringAsLocal(res.date), "dd/MM/yyyy")} • {res.start_time.slice(0, 5)} - {res.end_time.slice(0, 5)}
-                      </p>
-                      {atleta && res.atleta_aceite_status !== 'recusado' && res.atleta_aceite_status !== 'cancelado_pelo_cliente' ? (
-                        <div className="flex items-center flex-wrap gap-2 mt-2 text-xs">
-                          <span className="text-indigo-500 font-medium">com {atleta.name}</span>
-                          {res.atleta_aceite_status === 'aceito' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Aceito
-                            </span>
-                          ) : res.atleta_aceite_status === 'pendente' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
-                              <Hourglass className="h-3 w-3 mr-1" />
-                              Aguardando
-                            </span>
-                          ) : null}
+    
+                return (
+                  <li key={res.id} onClick={() => isClickable && onDetail(res)} className={`p-4 sm:p-6 transition-colors ${isClickable ? 'hover:bg-brand-gray-50 dark:hover:bg-brand-gray-700/50 cursor-pointer' : 'cursor-default opacity-70'}`}>
+                    <div className="flex flex-col sm:flex-row justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          {isInvited && <Handshake className="h-4 w-4 text-purple-500" title="Você foi convidado" />}
+                          {isOrganizer && res.participants && res.participants.length > 1 && <Users className="h-4 w-4 text-blue-500" title="Você é o organizador" />}
+                          <p className="font-bold text-brand-gray-900 dark:text-white">{quadras.find(q => q.id === res.quadra_id)?.name} <span className="font-normal text-brand-gray-500">• {arenaName}</span></p>
                         </div>
-                      ) : res.atleta_aceite_status === 'recusado' ? (
-                        <p className="text-xs text-red-500 font-medium mt-1">Atleta Recusou</p>
-                      ) : res.status === 'aguardando_aceite_profissional' ? (
-                        <p className="text-xs text-orange-500 font-medium mt-1">Aguardando aceite do profissional</p>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-4 self-end sm:self-center">
-                      <div className="text-right">
-                        <p className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(res.total_price)}</p>
-                        <div className="flex items-center justify-end gap-2 text-xs text-brand-gray-500">
-                          {res.payment_status === 'pago' && <><CheckCircle className="h-3 w-3 text-green-500"/> Pago</>}
-                          {res.payment_status === 'pendente' && <><AlertCircle className="h-3 w-3 text-yellow-500"/> Pendente</>}
-                          {res.credit_used && res.credit_used > 0 && <CreditCard className="h-3 w-3 text-blue-500" title={`Pago com ${formatCurrency(res.credit_used)} de crédito`} />}
-                          {res.rented_items && res.rented_items.length > 0 && <ShoppingBag className="h-3 w-3 text-purple-500" title="Itens alugados" />}
-                        </div>
+                        <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">
+                          {format(parseDateStringAsLocal(res.date), "dd/MM/yyyy")} • {res.start_time.slice(0, 5)} - {res.end_time.slice(0, 5)}
+                        </p>
+                        {atleta && res.atleta_aceite_status !== 'recusado' && res.atleta_aceite_status !== 'cancelado_pelo_cliente' ? (
+                          <div className="flex items-center flex-wrap gap-2 mt-2 text-xs">
+                            <span className="text-indigo-500 font-medium">com {atleta.name}</span>
+                            {res.atleta_aceite_status === 'aceito' ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Aceito
+                              </span>
+                            ) : res.atleta_aceite_status === 'pendente' ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
+                                <Hourglass className="h-3 w-3 mr-1" />
+                                Aguardando
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : res.atleta_aceite_status === 'recusado' ? (
+                          <p className="text-xs text-red-500 font-medium mt-1">Atleta Recusou</p>
+                        ) : res.status === 'aguardando_aceite_profissional' ? (
+                          <p className="text-xs text-orange-500 font-medium mt-1">Aguardando aceite do profissional</p>
+                        ) : null}
                       </div>
-                      {podeAvaliar && (
-                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onAvaliarAtleta(res); }}>
-                              <Star className="h-4 w-4 mr-1"/> Avaliar Atleta
+                      <div className="flex items-center gap-4 self-end sm:self-center">
+                        <div className="text-right">
+                          <p className="font-semibold text-brand-gray-800 dark:text-white">{formatCurrency(res.total_price)}</p>
+                          <div className="flex items-center justify-end gap-2 text-xs text-brand-gray-500">
+                            {res.payment_status === 'pago' && <><CheckCircle className="h-3 w-3 text-green-500"/> Pago</>}
+                            {res.payment_status === 'pendente' && <><AlertCircle className="h-3 w-3 text-yellow-500"/> Pendente</>}
+                            {res.credit_used && res.credit_used > 0 && <CreditCard className="h-3 w-3 text-blue-500" title={`Pago com ${formatCurrency(res.credit_used)} de crédito`} />}
+                            {res.rented_items && res.rented_items.length > 0 && <ShoppingBag className="h-3 w-3 text-purple-500" title="Itens alugados" />}
+                          </div>
+                        </div>
+                        {podeAvaliar && (
+                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onAvaliarAtleta(res); }}>
+                                <Star className="h-4 w-4 mr-1"/> Avaliar Atleta
+                            </Button>
+                        )}
+                        {canHire && (
+                          <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onHirePlayer(res); }} disabled={hireDisabled} title={hireDisabledMessage}>
+                            <Handshake className="h-4 w-4 mr-2"/> Contratar Atleta
                           </Button>
-                      )}
-                      {canHire && (
-                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onHirePlayer(res); }} disabled={hireDisabled} title={hireDisabledMessage}>
-                          <Handshake className="h-4 w-4 mr-2"/> Contratar Atleta
-                        </Button>
-                      )}
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
         )}
       </div>
     );
 };
 
-const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], levels: GamificationLevel[], rewards: GamificationReward[], onOpenProfileModal: (tab: 'credits' | 'gamification' | 'payments') => void, nextReservation?: Reserva, pendingReservations: Reserva[], onDetail: (reserva: Reserva) => void, onDataChange: () => void, nextClass?: any, quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, profile: Profile | null, arenaName?: string, selectedArena: Arena | null, onOpenAttendanceModal: () => void, creditHistory: CreditTransaction[], nextProfessorClass: any, onOpenClassAttendanceModal: (classData: any) => void, tournaments: Torneio[], onUpdateTournamentInvite: (torneioId: string, participantId: string, status: 'accepted' | 'declined') => void, onInvitePartner: (torneio: Torneio, participant: Participant) => void }> = ({ alunoProfile, planos, levels, rewards, onOpenProfileModal, nextReservation, pendingReservations, onDetail, onDataChange, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, selectedArena, onOpenAttendanceModal, creditHistory, nextProfessorClass, onOpenClassAttendanceModal, tournaments, onUpdateTournamentInvite, onInvitePartner }) => { 
-    const [favoriteQuadras, setFavoriteQuadras] = useState<string[]>([]);
-    const [timeUntilNext, setTimeUntilNext] = useState<string | null>(null);
+const InicioView: React.FC<{
+  alunoProfile: Aluno | null;
+  planos: PlanoAula[];
+  levels: GamificationLevel[];
+  rewards: GamificationReward[];
+  onOpenProfileModal: (tab: 'credits' | 'gamification' | 'payments') => void;
+  upcomingActivities: any[];
+  pendingReservations: Reserva[];
+  onDetail: (reserva: Reserva) => void;
+  onDataChange: () => void;
+  nextClass?: any;
+  quadras: Quadra[];
+  reservas: Reserva[];
+  onSlotClick: (time: string, quadraId: string) => void;
+  selectedDate: Date;
+  setSelectedDate: (date: Date) => void;
+  profile: Profile | null;
+  arenaName?: string;
+  selectedArena: Arena | null;
+  onOpenAttendanceModal: () => void;
+  creditHistory: CreditTransaction[];
+  nextProfessorClass: any;
+  onOpenClassAttendanceModal: (classData: any) => void;
+  tournaments: Torneio[];
+  onUpdateTournamentInvite: (torneioId: string, participantId: string, status: 'accepted' | 'declined') => void;
+  onInvitePartner: (torneio: Torneio, participant: Participant) => void;
+  vouchers: RedeemedVoucher[];
+  products: Product[];
+  setActiveView: (view: View) => void;
+  alunoLevels: AlunoLevel[];
+}> = ({ alunoProfile, planos, levels, rewards, onOpenProfileModal, upcomingActivities, pendingReservations, onDetail, onDataChange, nextClass, quadras, reservas, onSlotClick, selectedDate, setSelectedDate, profile, arenaName, selectedArena, onOpenAttendanceModal, creditHistory, nextProfessorClass, onOpenClassAttendanceModal, tournaments, onUpdateTournamentInvite, onInvitePartner, vouchers, products, setActiveView, alunoLevels }) => { 
+    const statsCarouselRef = useDragToScroll<HTMLDivElement>();
+    const activitiesCarouselRef = useDragToScroll<HTMLDivElement>();
+    const { theme } = useTheme();
   
+    const getItemName = useCallback((voucher: RedeemedVoucher) => {
+        if (voucher.product_id) {
+            const product = products.find(p => p.id === voucher.product_id);
+            return product?.name || voucher.reward_title;
+        }
+        return voucher.item_description || voucher.reward_title;
+    }, [products]);
+
+    const pendingVouchers = useMemo(() => {
+        return vouchers.filter(v => v.status === 'pendente' && (!v.expires_at || isAfter(new Date(v.expires_at), new Date())));
+    }, [vouchers]);
+
     const expiringCredits = useMemo(() => {
-        if (!alunoProfile || !selectedArena?.credit_expiration_days || !creditHistory) {
-            return [];
-        }
-    
-        // 1. Separate deposits and calculate total withdrawals
-        const deposits = creditHistory
-            .filter(tx => tx.amount > 0)
-            .sort((a, b) => new Date(a.created_at!).getTime() - new Date(b.created_at!).getTime()); // Oldest first
-    
-        const totalWithdrawals = creditHistory
-            .filter(tx => tx.amount < 0)
-            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    
-        // 2. Apply FIFO logic to find unspent deposits
-        let remainingWithdrawals = totalWithdrawals;
-        const unspentDeposits: CreditTransaction[] = [];
-    
-        for (const deposit of deposits) {
-            if (remainingWithdrawals <= 0) {
-                unspentDeposits.push(deposit);
-                continue;
-            }
-    
-            if (remainingWithdrawals >= deposit.amount) {
-                // This entire deposit has been spent
-                remainingWithdrawals -= deposit.amount;
-            } else {
-                // Part of this deposit has been spent
-                const remainingAmount = deposit.amount - remainingWithdrawals;
-                unspentDeposits.push({ ...deposit, amount: remainingAmount });
-                remainingWithdrawals = 0;
-            }
-        }
-    
-        // 3. Now, check which of the unspent deposits are expiring soon
-        const now = new Date();
-        const expirationDays = selectedArena.credit_expiration_days;
-    
-        return unspentDeposits
-            .map(tx => {
-                const creationDate = new Date(tx.created_at!);
-                const expirationDate = addDays(creationDate, expirationDays);
-                const daysUntilExpiry = differenceInHours(expirationDate, now) / 24;
-                return { ...tx, expirationDate, daysUntilExpiry };
-            })
-            .filter(tx => isAfter(tx.expirationDate, now) && tx.daysUntilExpiry <= 7)
-            .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
-    
+      if (!alunoProfile || !selectedArena?.credit_expiration_days || !creditHistory || creditHistory.length === 0) {
+          return [];
+      }
+  
+      const deposits = creditHistory
+          .filter(tx => tx.amount > 0)
+          .sort((a, b) => new Date(a.created_at!).getTime() - new Date(b.created_at!).getTime());
+  
+      const totalWithdrawals = creditHistory
+          .filter(tx => tx.amount < 0)
+          .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  
+      let remainingWithdrawals = totalWithdrawals;
+      const unspentDeposits: CreditTransaction[] = [];
+  
+      for (const deposit of deposits) {
+          if (remainingWithdrawals <= 0) {
+              unspentDeposits.push(deposit);
+              continue;
+          }
+  
+          if (remainingWithdrawals >= deposit.amount) {
+              remainingWithdrawals -= deposit.amount;
+          } else {
+              const remainingAmount = deposit.amount - remainingWithdrawals;
+              unspentDeposits.push({ ...deposit, amount: remainingAmount });
+              remainingWithdrawals = 0;
+          }
+      }
+      
+      if (unspentDeposits.length === 0) {
+          return [];
+      }
+  
+      const now = new Date();
+      const expirationDays = selectedArena.credit_expiration_days;
+  
+      return unspentDeposits
+          .map(tx => {
+              const creationDate = new Date(tx.created_at!);
+              const expirationDate = addDays(creationDate, expirationDays);
+              const daysUntilExpiry = differenceInHours(expirationDate, now) / 24;
+              return { ...tx, expirationDate, daysUntilExpiry };
+          })
+          .filter(tx => isAfter(tx.expirationDate, now) && tx.daysUntilExpiry <= 7)
+          .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
+  
     }, [alunoProfile, selectedArena, creditHistory]);
   
     const currentLevel = useMemo(() => {
@@ -231,6 +287,11 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
       const sortedLevels = [...levels].sort((a, b) => b.points_required - a.points_required);
       return sortedLevels.find(l => (alunoProfile.gamification_points || 0) >= l.points_required) || null;
     }, [alunoProfile, levels]);
+
+    const skillLevel = useMemo(() => {
+      if (!alunoProfile?.level_id || !alunoLevels || alunoLevels.length === 0) return null;
+      return alunoLevels.find(l => l.id === alunoProfile.level_id);
+    }, [alunoProfile, alunoLevels]);
   
     const nextLevel = useMemo(() => {
         if (!currentLevel || !levels) return null;
@@ -286,97 +347,14 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
       const total = presencas + faltas;
       return { total, presencas, faltas };
     }, [alunoProfile]);
-  
-    useEffect(() => {
-      if (nextReservation) {
-        const reservationDate = parseDateStringAsLocal(nextReservation.date);
-        const [hours, minutes] = nextReservation.start_time.split(':').map(Number);
-        reservationDate.setHours(hours, minutes);
-        const reservationDateTime = reservationDate;
-        
-        const updateDistance = () => {
-          if (isAfter(reservationDateTime, new Date())) {
-            const distance = formatDistanceToNow(reservationDateTime, { addSuffix: true, locale: ptBR });
-            setTimeUntilNext(distance);
-          } else {
-            setTimeUntilNext(null);
-          }
-        };
-  
-        updateDistance();
-        const interval = setInterval(updateDistance, 60000);
-  
-        return () => clearInterval(interval);
-      } else {
-        setTimeUntilNext(null);
-      }
-    }, [nextReservation]);
-  
-    const reservationDetailsString = useMemo(() => {
-      if (!nextReservation) return '';
-      const reservationDate = parseDateStringAsLocal(nextReservation.date);
-      const [hours, minutes] = nextReservation.start_time.split(':').map(Number);
-      reservationDate.setHours(hours, minutes);
-      return format(reservationDate, "EEEE, dd/MM 'às' HH:mm", { locale: ptBR });
-    }, [nextReservation]);
-  
-    useEffect(() => { if (profile?.id) { const savedFavorites = localStorage.getItem(`favorite_quadras_${profile.id}`); if (savedFavorites) setFavoriteQuadras(JSON.parse(savedFavorites)); } }, [profile?.id]); 
-    const toggleFavorite = (quadraId: string) => { if (!profile) return; const newFavorites = favoriteQuadras.includes(quadraId) ? favoriteQuadras.filter(id => id !== quadraId) : [...favoriteQuadras, quadraId]; setFavoriteQuadras(newFavorites); localStorage.setItem(`favorite_quadras_${profile.id}`, JSON.stringify(newFavorites)); }; 
-    const sortedQuadras = useMemo(() => { return [...quadras].sort((a, b) => { const aIsFav = favoriteQuadras.includes(a.id); const bIsFav = favoriteQuadras.includes(b.id); if (aIsFav && !bIsFav) return -1; if (!aIsFav && bIsFav) return 1; return a.name.localeCompare(b.name); }); }, [quadras, favoriteQuadras]); 
-    const quadraName = nextReservation ? quadras.find(q => q.id === nextReservation.quadra_id)?.name : '';
     
-    const upcomingTournaments = useMemo(() => {
-        if (!tournaments) return [];
-        const today = startOfDay(new Date());
-        return tournaments.filter(t => {
-            if (t.status !== 'inscricoes_abertas') return false;
-            // Check if ANY category has a start date in the future or today
-            return t.categories.some(cat => {
-                try {
-                    const startDate = parseDateStringAsLocal(cat.start_date);
-                    return !isBefore(startDate, today);
-                } catch (e) {
-                    return false;
-                }
-            });
-        }).sort((a, b) => {
-            const aDate = Math.min(...a.categories.map(c => parseDateStringAsLocal(c.start_date).getTime()));
-            const bDate = Math.min(...b.categories.map(c => parseDateStringAsLocal(c.start_date).getTime()));
-            return aDate - bDate;
-        });
-    }, [tournaments]);
-
-    const renderFirstCard = () => {
-      if (nextProfessorClass) {
-        return <ProfessorNextClassCard nextClass={nextProfessorClass} onClick={() => onOpenClassAttendanceModal(nextProfessorClass)} />;
-      }
-      if (nextClass) {
-        return <NextClassCard date={nextClass.date} turmaName={nextClass.turma.name} quadraName={nextClass.quadra?.name} professorName={nextClass.professor?.name} startTime={nextClass.time} arenaName={arenaName} />;
-      }
-      if (nextReservation) {
-        return <UpcomingReservationCard reservation={nextReservation} quadra={quadras.find(q => q.id === nextReservation.quadra_id)} index={0} arenaName={arenaName} />;
-      }
-      if (selectedArena) {
-        return <ArenaInfoCard arena={selectedArena} />;
-      }
-      return <EmptyState message="Você não tem nenhuma atividade agendada." />;
-    };
+    const alertSlides = useMemo(() => {
+      const slides: React.ReactNode[] = [];
   
-    const renderSecondCard = () => {
-      if (nextProfessorClass && nextClass) {
-        return <NextClassCard date={nextClass.date} turmaName={nextClass.turma.name} quadraName={nextClass.quadra?.name} professorName={nextClass.professor?.name} startTime={nextClass.time} arenaName={arenaName} />;
-      }
-      if ((nextProfessorClass || nextClass) && nextReservation) {
-        return <UpcomingReservationCard reservation={nextReservation} quadra={quadras.find(q => q.id === nextReservation.quadra_id)} index={0} arenaName={arenaName} />;
-      }
-      return null;
-    };
-
-    return ( 
-      <div className="space-y-8"> 
-        {pendingReservations.map(res => (
+      pendingReservations.forEach(res => {
+        slides.push(
           <Alert
-            key={res.id}
+            key={`pending-${res.id}`}
             type="warning"
             title="Pagamento Pendente"
             message={
@@ -386,63 +364,70 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
               </div>
             }
           />
-        ))}
-        {timeUntilNext && nextReservation && nextReservation.status !== 'cancelada' && !nextProfessorClass && !nextClass && (
+        );
+      });
+  
+      if (expiringCredits.length > 0) {
+        slides.push(
           <Alert
-            type="info"
-            title="Lembrete de Reserva"
+            key="credits"
+            type="warning"
+            title="Créditos a Expirar"
             message={
-              <span>
-                Sua próxima reserva {quadraName ? `na quadra ${quadraName}` : ''} é {timeUntilNext}{' '}
-                <span className="font-semibold block sm:inline sm:ml-1 capitalize">({reservationDetailsString})</span>.
-              </span>
+              <div>
+                <p>Você tem créditos que expirarão em breve. Use-os antes que seja tarde!</p>
+                <ul className="list-disc list-inside mt-2 text-sm">
+                  {expiringCredits.slice(0, 2).map(tx => (
+                    <li key={tx.id}>
+                      <strong>{formatCurrency(tx.amount)}</strong> expira em {Math.ceil(tx.daysUntilExpiry)} dia(s) ({format(tx.expirationDate, 'dd/MM/yyyy')}).
+                    </li>
+                  ))}
+                </ul>
+              </div>
             }
           />
-        )}
-        
-        {expiringCredits.length > 0 && (
-          <Alert
-              type="warning"
-              title="Créditos a Expirar"
-              message={
-                  <div>
-                      <p>Você tem créditos que expirarão em breve. Use-os antes que seja tarde!</p>
-                      <ul className="list-disc list-inside mt-2 text-sm">
-                          {expiringCredits.map(tx => (
-                              <li key={tx.id}>
-                                  <strong>{formatCurrency(tx.amount)}</strong> expira em {Math.ceil(tx.daysUntilExpiry)} dia(s) ({format(tx.expirationDate, 'dd/MM/yyyy')}).
-                              </li>
-                          ))}
-                      </ul>
-                  </div>
-              }
-          />
-        )}
-        
-        {upcomingTournaments.length > 0 && <TournamentBanner torneio={upcomingTournaments[0]} />}
-        <TournamentInvitesWidget tournaments={tournaments} profile={profile!} onUpdateInvite={onUpdateTournamentInvite} />
-        <MyTournamentsWidget tournaments={tournaments} profile={profile!} onInvitePartner={onInvitePartner} />
-    
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1">
-            {renderFirstCard()}
-          </div>
-          <div className="lg:col-span-1">
-            {renderSecondCard()}
-          </div>
-          <button onClick={() => onOpenProfileModal('gamification')} className="w-full text-left bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700 hover:shadow-lg hover:border-brand-blue-500 transition-all">
+        );
+      }
+      
+      const upcomingTournaments = tournaments.filter(t => {
+        if (t.status !== 'inscricoes_abertas') return false;
+        return t.categories.some(cat => !isBefore(parseDateStringAsLocal(cat.start_date), startOfDay(new Date())));
+      }).sort((a, b) => {
+        const aDate = Math.min(...a.categories.map(c => parseDateStringAsLocal(c.start_date).getTime()));
+        const bDate = Math.min(...b.categories.map(c => parseDateStringAsLocal(c.start_date).getTime()));
+        return aDate - bDate;
+      });
+
+      if (upcomingTournaments.length > 0) {
+        slides.push(<TournamentBanner key="tournament" torneio={upcomingTournaments[0]} />);
+      }
+      
+      const tournamentInvitesWidget = <TournamentInvitesWidget key="invites" tournaments={tournaments} profile={profile!} onUpdateInvite={onUpdateTournamentInvite} />;
+      if (tournaments.some(t => t.participants.some(p => p.players.some(player => player.profile_id === profile?.id && player.status === 'pending')))) {
+        slides.push(tournamentInvitesWidget);
+      }
+
+      return slides;
+    }, [pendingReservations, expiringCredits, tournaments, profile, onDataChange, onDetail, onUpdateTournamentInvite]);
+  
+    const statCards = useMemo(() => {
+        const slides = [];
+        slides.push(
+          <button key="gamification" onClick={() => onOpenProfileModal('gamification')} className="w-full h-full text-left bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700 hover:shadow-lg hover:border-brand-blue-500 transition-all flex flex-col">
             <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><Star className="h-5 w-5 mr-2 text-yellow-400" /> Meu Nível</h4>
-            <div className="flex justify-between items-baseline mb-2">
-              <span className="font-bold text-lg text-brand-blue-500">{currentLevel?.name || 'Iniciante'}</span>
-              <span className="font-bold text-sm text-brand-gray-700 dark:text-brand-gray-300">{alunoProfile?.gamification_points || 0} Pontos</span>
+            <div className="flex-grow">
+              <div className="flex justify-between items-baseline mb-2">
+                <span className="font-bold text-lg text-brand-blue-500">{currentLevel?.name || 'Iniciante'}</span>
+                <span className="font-bold text-sm text-brand-gray-700 dark:text-brand-gray-300">{alunoProfile?.gamification_points || 0} Pontos</span>
+              </div>
+              <div className="w-full bg-brand-gray-200 dark:bg-brand-gray-700 rounded-full h-2.5">
+                <div className="bg-brand-blue-500 h-2.5 rounded-full" style={{ width: `${progressPercentage}%` }}></div>
+              </div>
+              {nextLevel && (
+                <p className="text-xs text-right mt-1 text-brand-gray-500">Faltam {nextLevel.points_required - (alunoProfile?.gamification_points || 0)} pts para {nextLevel.name}</p>
+              )}
             </div>
-            <div className="w-full bg-brand-gray-200 dark:bg-brand-gray-700 rounded-full h-2.5">
-              <div className="bg-brand-blue-500 h-2.5 rounded-full" style={{ width: `${progressPercentage}%` }}></div>
-            </div>
-            {nextLevel && (
-              <p className="text-xs text-right mt-1 text-brand-gray-500">Faltam {nextLevel.points_required - (alunoProfile?.gamification_points || 0)} pts para {nextLevel.name}</p>
-            )}
-            <div className="mt-4 pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700">
+            <div className="mt-4 pt-4 border-t border-brand-gray-200 dark:border-brand-gray-700 flex items-end">
               {availableReward ? (
                 <div className="flex items-center gap-2 text-sm">
                   <Gift className="h-5 w-5 text-green-500 flex-shrink-0" />
@@ -464,32 +449,321 @@ const InicioView: React.FC<{ alunoProfile: Aluno | null, planos: PlanoAula[], le
               )}
             </div>
           </button>
-          <button onClick={() => onOpenProfileModal('credits')} className="w-full text-left bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700 hover:shadow-lg hover:border-brand-blue-500 transition-all">
+        );
+        slides.push(
+          <button key="credits" onClick={() => onOpenProfileModal('credits')} className="w-full h-full text-left bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700 hover:shadow-lg hover:border-brand-blue-500 transition-all flex flex-col">
               <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><CreditCard className="h-5 w-5 mr-2 text-green-500" /> Meus Créditos</h4>
-              <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCurrency(alunoProfile?.credit_balance || 0)}</p>
-              <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 mt-1">Seu saldo para usar em reservas.</p>
+              <div className="flex-grow flex flex-col justify-center">
+                <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCurrency(alunoProfile?.credit_balance || 0)}</p>
+                <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 mt-1">Seu saldo para usar em reservas.</p>
+              </div>
+              <div className="mt-2 pt-2 border-t border-brand-gray-200 dark:border-brand-gray-700 min-h-[20px]">
+                {expiringCredits.length > 0 ? (
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1.5">
+                    <Clock className="h-3 w-3" />
+                    <span>
+                      <strong>{formatCurrency(expiringCredits[0].amount)}</strong> expiram em: {format(expiringCredits[0].expirationDate, 'dd/MM/yyyy')}
+                    </span>
+                  </p>
+                ) : (
+                  (alunoProfile?.credit_balance || 0) > 0 && (
+                    <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400 flex items-center gap-1.5">
+                      <Clock className="h-3 w-3" />
+                      <span>
+                        {selectedArena?.credit_expiration_days ? 'Nenhum crédito a expirar em breve.' : 'Créditos não expiram.'}
+                      </span>
+                    </p>
+                  )
+                )}
+              </div>
           </button>
-          {alunoProfile?.plan_id && (
-            <button onClick={onOpenAttendanceModal} className="w-full text-left bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700 hover:shadow-lg hover:border-brand-blue-500 transition-all">
+        );
+        if (alunoProfile?.plan_id) {
+          slides.push(
+            <button key="attendance" onClick={onOpenAttendanceModal} className="w-full h-full text-left bg-white dark:bg-brand-gray-800 rounded-lg shadow-md p-6 border border-brand-gray-200 dark:border-brand-gray-700 hover:shadow-lg hover:border-brand-blue-500 transition-all flex flex-col">
               <h4 className="font-semibold text-brand-gray-800 dark:text-white mb-3 flex items-center"><Calendar className="h-5 w-5 mr-2 text-purple-500" /> Meu Progresso de Aulas</h4>
-              <div className="flex justify-around text-center">
-                <div><p className="text-2xl font-bold text-brand-gray-900 dark:text-white">{attendanceSummary.total}</p><p className="text-xs text-brand-gray-500">Aulas Dadas</p></div>
-                <div><p className="text-2xl font-bold text-green-500">{attendanceSummary.presencas}</p><p className="text-xs text-brand-gray-500">Presenças</p></div>
-                <div><p className="text-2xl font-bold text-red-500">{attendanceSummary.faltas}</p><p className="text-xs text-brand-gray-500">Faltas</p></div>
+              <div className="flex-grow flex flex-col justify-center">
+                <div className="flex justify-around text-center">
+                  <div><p className="text-2xl font-bold text-brand-gray-900 dark:text-white">{attendanceSummary.total}</p><p className="text-xs text-brand-gray-500">Aulas Dadas</p></div>
+                  <div><p className="text-2xl font-bold text-green-500">{attendanceSummary.presencas}</p><p className="text-xs text-brand-gray-500">Presenças</p></div>
+                  <div><p className="text-2xl font-bold text-red-500">{attendanceSummary.faltas}</p><p className="text-xs text-brand-gray-500">Faltas</p></div>
+                </div>
+                <div className="w-full bg-brand-gray-200 dark:bg-brand-gray-700 rounded-full h-2.5 mt-4">
+                  <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${attendanceSummary.total > 0 ? (attendanceSummary.presencas / attendanceSummary.total) * 100 : 0}%` }}></div>
+                </div>
+                <p className="text-xs text-right mt-1 text-brand-gray-500">Frequência de {attendanceSummary.total > 0 ? ((attendanceSummary.presencas / attendanceSummary.total) * 100).toFixed(0) : 0}%</p>
               </div>
-              <div className="w-full bg-brand-gray-200 dark:bg-brand-gray-700 rounded-full h-2.5 mt-4">
-                <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${attendanceSummary.total > 0 ? (attendanceSummary.presencas / attendanceSummary.total) * 100 : 0}%` }}></div>
-              </div>
-              <p className="text-xs text-right mt-1 text-brand-gray-500">Frequência de {attendanceSummary.total > 0 ? ((attendanceSummary.presencas / attendanceSummary.total) * 100).toFixed(0) : 0}%</p>
             </button>
+          );
+        }
+        pendingVouchers.forEach((voucher) => {
+            const itemName = getItemName(voucher);
+            slides.push(
+                <button 
+                    key={`voucher-${voucher.id}`} 
+                    onClick={() => setActiveView('perfil')} 
+                    className="w-full h-full text-left bg-gradient-to-br from-blue-900 to-indigo-900 rounded-lg shadow-lg p-3 flex flex-col"
+                >
+                    <h4 className="font-semibold text-white mb-2 flex items-center">
+                        <Gift className="h-5 w-5 mr-2 text-blue-300" /> Vouchers Pendentes
+                    </h4>
+                    <div className="bg-blue-950/50 rounded-lg p-2 flex justify-between items-center flex-grow border border-blue-800/50">
+                        <div className="flex-1 space-y-1">
+                            <p className="font-bold text-base text-white">{itemName}</p>
+                            <div className="text-xs text-blue-300">
+                                <p>Solicitado em: {format(new Date(voucher.created_at), 'dd/MM/yyyy', { locale: ptBR })}</p>
+                                <p>{format(new Date(voucher.created_at), 'HH:mm', { locale: ptBR })}</p>
+                            </div>
+                            {voucher.expires_at && (
+                                <p className="text-xs font-semibold text-yellow-400">
+                                    Expira em: {format(new Date(voucher.expires_at), 'dd/MM/yyyy')}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex-shrink-0 ml-2 p-2 bg-slate-900/70 rounded-lg flex flex-col items-center gap-1 text-center border border-slate-700">
+                            <div className="p-1 bg-white rounded-sm">
+                                <QRCode
+                                    value={voucher.code}
+                                    size={56}
+                                    fgColor="#000000"
+                                    bgColor="#FFFFFF"
+                                    level="M"
+                                />
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">CÓDIGO</p>
+                            <p className="text-xs font-mono font-bold tracking-widest text-white">{voucher.code}</p>
+                        </div>
+                    </div>
+                </button>
+            );
+        });
+
+        return slides;
+      }, [alunoProfile, planos, levels, rewards, onOpenProfileModal, onOpenAttendanceModal, creditHistory, selectedArena, pendingVouchers, products, theme, getItemName, setActiveView, currentLevel, nextLevel, progressPercentage, availableReward, nextReward, attendanceSummary, expiringCredits]);
+  
+    return ( 
+      <div className="space-y-8">
+        <motion.h2 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-xl font-bold text-brand-gray-900 dark:text-white flex items-center gap-3"
+        >
+          <span>Bem-vindo, <span className="text-brand-blue-500">{alunoProfile?.name || 'Cliente'}</span>!</span>
+          {skillLevel && (
+            <LevelBadge name={skillLevel.name} color={skillLevel.color} />
+          )}
+        </motion.h2>
+
+        <div className="relative">
+          <div ref={statsCarouselRef} className="flex overflow-x-auto gap-6 pb-4 -mx-4 px-4 no-scrollbar snap-x snap-mandatory md:grid md:grid-cols-2 lg:grid-cols-3 md:mx-0 md:px-0 md:overflow-visible">
+              {statCards.map((card, index) => (
+                  <div key={card.key} className="w-11/12 flex-shrink-0 snap-center md:w-auto h-72 md:h-auto">
+                      {React.cloneElement(card, {
+                          className: `${card.props.className || ''} h-full`
+                      })}
+                  </div>
+              ))}
+          </div>
+        </div>
+
+        <div className="md:hidden space-y-4">
+          {alertSlides.map((slide, index) => (
+            <div key={index}>{slide}</div>
+          ))}
+        </div>
+
+        <div className="hidden md:block space-y-4">
+          {alertSlides.map((slide, index) => (
+            <div key={index}>{slide}</div>
+          ))}
+        </div>
+        
+        <MyTournamentsWidget tournaments={tournaments} profile={profile!} onInvitePartner={onInvitePartner} />
+    
+        <div>
+          <h3 className="text-xl font-semibold mb-4 text-brand-gray-900 dark:text-white">Próximas Atividades</h3>
+          {upcomingActivities.length === 0 ? (
+            <EmptyState message="Você não tem nenhuma atividade agendada." />
+          ) : (
+            <>
+                <div ref={activitiesCarouselRef} className="lg:hidden flex overflow-x-auto gap-6 pb-4 -mx-4 px-4 no-scrollbar snap-x snap-mandatory">
+                    {upcomingActivities.map((item, index) => (
+                        <div key={index} className="flex-shrink-0 w-11/12 snap-center">
+                        {(() => {
+                            switch (item.type) {
+                                case 'professorClass': return <ProfessorNextClassCard nextClass={item.data} onClick={() => onOpenClassAttendanceModal(item.data)} />;
+                                case 'studentClass': return <NextClassCard date={item.data.date} turmaName={item.data.turma.name} quadraName={item.data.quadra?.name} professorName={item.data.professor?.name} startTime={item.data.time} arenaName={arenaName} />;
+                                case 'reservation': return <UpcomingReservationCard reservation={item.data} quadra={quadras.find(q => q.id === item.data.quadra_id)} index={index} arenaName={arenaName} onCardClick={() => onDetail(item.data)} />;
+                                default: return null;
+                            }
+                        })()}
+                        </div>
+                    ))}
+                </div>
+                <div className="hidden lg:grid lg:grid-cols-3 gap-6">
+                    {upcomingActivities.map((item, index) => (
+                        <div key={index}>
+                        {(() => {
+                            switch (item.type) {
+                            case 'professorClass': return <ProfessorNextClassCard nextClass={item.data} onClick={() => onOpenClassAttendanceModal(item.data)} />;
+                            case 'studentClass': return <NextClassCard date={item.data.date} turmaName={item.data.turma.name} quadraName={item.data.quadra?.name} professorName={item.data.professor?.name} startTime={item.data.time} arenaName={arenaName} />;
+                            case 'reservation': return <UpcomingReservationCard reservation={item.data} quadra={quadras.find(q => q.id === item.data.quadra_id)} index={index} arenaName={arenaName} onCardClick={() => onDetail(item.data)} />;
+                            default: return null;
+                            }
+                        })()}
+                        </div>
+                    ))}
+                </div>
+            </>
           )}
         </div>
   
-        <QuickBookingWidget quadras={sortedQuadras} reservas={reservas} onSlotClick={onSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} favoriteQuadras={favoriteQuadras} toggleFavorite={toggleFavorite} profile={profile} /> 
+        <QuickBookingWidget quadras={quadras} reservas={reservas} onSlotClick={onSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} /> 
       </div> 
     ); 
 };
-const QuickBookingWidget: React.FC<{ quadras: Quadra[], reservas: Reserva[], onSlotClick: (time: string, quadraId: string) => void, selectedDate: Date, setSelectedDate: (date: Date) => void, favoriteQuadras: string[], toggleFavorite: (quadraId: string) => void, profile: Profile | null, }> = ({quadras, reservas, onSlotClick, selectedDate, setSelectedDate, favoriteQuadras, toggleFavorite, profile}) => { const displayedReservations = useMemo(() => { const viewStartDate = startOfDay(new Date()); const viewEndDate = endOfDay(addDays(new Date(), 365)); return expandRecurringReservations(reservas, viewStartDate, viewEndDate, quadras); }, [reservas, quadras]); const generateTimeSlots = (quadra: Quadra) => { const slots = []; const dayOfWeek = getDay(selectedDate); let horario; if (dayOfWeek === 0) horario = quadra.horarios?.sunday; else if (dayOfWeek === 6) horario = quadra.horarios?.saturday; else horario = quadra.horarios?.weekday; if (!horario || !horario.start || !horario.end) return []; let currentTime = parse(horario.start.slice(0, 5), 'HH:mm', selectedDate); let endTime = parse(horario.end.slice(0, 5), 'HH:mm', selectedDate); if (endTime <= currentTime) endTime = addDays(endTime, 1); const interval = 60; while (currentTime < endTime) { slots.push(format(currentTime, 'HH:mm')); currentTime = addMinutes(currentTime, interval); } return slots; }; const getSlotStatus = (time: string, quadraId: string) => { const slotDateTime = parse(time, 'HH:mm', selectedDate); if (isPast(slotDateTime) && !isSameDay(selectedDate, startOfDay(new Date()))) { return { status: 'past', data: null }; } else if (isPast(slotDateTime) && isSameDay(selectedDate, startOfDay(new Date()))) { return { status: 'past', data: null }; } const reserva = displayedReservations.find(r => r.quadra_id === quadraId && isSameDay(parseDateStringAsLocal(r.date), selectedDate) && r.start_time.slice(0, 5) === time && r.status !== 'cancelada'); if (reserva) return { status: 'booked', data: reserva }; return { status: 'available', data: null }; }; const getPriceRange = (quadra: Quadra) => { if (!quadra.pricing_rules || quadra.pricing_rules.length === 0) return "A definir"; const activePrices = quadra.pricing_rules.filter(r => r.is_active).map(r => r.price_single); if (activePrices.length === 0) return "A definir"; const minPrice = Math.min(...activePrices); const maxPrice = Math.max(...activePrices); if (minPrice === maxPrice) return formatCurrency(minPrice); return `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`; }; const renderSlotButton = (quadra: Quadra, time: string) => { const { status } = getSlotStatus(time, quadra.id); let styles = 'bg-brand-gray-100 text-brand-gray-500 dark:bg-brand-gray-700 dark:text-brand-gray-400'; let icon = <Clock className="h-3 w-3 mr-1" />; if (status === 'available') { styles = 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-500/20'; } else if (status === 'past') { styles = 'bg-brand-gray-100 text-brand-gray-400 dark:bg-brand-gray-700/50 dark:text-brand-gray-500 cursor-not-allowed'; } else if (status === 'booked') { styles = 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400 cursor-not-allowed'; } return ( <motion.button key={time} whileHover={{ scale: status === 'available' ? 1.05 : 1 }} whileTap={{ scale: status === 'available' ? 0.95 : 1 }} onClick={() => onSlotClick(time, quadra.id)} disabled={status !== 'available'} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all text-center ${styles}`}> <div className="flex items-center justify-center"> {icon} {time.slice(0,5)} </div> </motion.button> ); }; return ( <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 p-6"> <h3 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200 mb-4 flex items-center"><Calendar className="h-5 w-5 mr-2 text-brand-blue-500" /> Reserva Rápida</h3> <div className="mb-6"> <DatePickerCalendar selectedDate={selectedDate} onDateChange={setSelectedDate} /> </div> <div className="space-y-6"> {quadras.map(quadra => ( <div key={quadra.id}> <div className="flex justify-between items-center mb-3"> <div> <h4 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200">{quadra.name}</h4> <p className="text-sm text-brand-gray-500">{quadra.sports.join(', ')} - <span className="font-medium text-green-600">{getPriceRange(quadra)}</span></p> </div> {profile && ( <button onClick={() => toggleFavorite(quadra.id)} className="p-2 rounded-full hover:bg-red-100/50 dark:hover:bg-red-500/10 transition-colors"> <Heart className={`h-5 w-5 transition-all ${favoriteQuadras.includes(quadra.id) ? 'fill-current text-red-500' : 'text-brand-gray-400'}`} /> </button> )} </div> <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3"> {generateTimeSlots(quadra).map(time => renderSlotButton(quadra, time))} </div> </div> ))} </div> </div> ); };
+const QuickBookingWidget: React.FC<{
+  quadras: Quadra[],
+  reservas: Reserva[],
+  onSlotClick: (time: string, quadraId: string) => void,
+  selectedDate: Date,
+  setSelectedDate: (date: Date) => void,
+  profile: Profile | null,
+}> = ({
+  quadras,
+  reservas,
+  onSlotClick,
+  selectedDate,
+  setSelectedDate,
+  profile,
+}) => {
+  const [favoriteQuadras, setFavoriteQuadras] = useState<string[]>([]);
+  const courtsCarouselRef = useDragToScroll<HTMLDivElement>();
+
+  useEffect(() => { if (profile?.id) { const savedFavorites = localStorage.getItem(`favorite_quadras_${profile.id}`); if (savedFavorites) setFavoriteQuadras(JSON.parse(savedFavorites)); } }, [profile?.id]);
+  const toggleFavorite = (quadraId: string) => { if (!profile) return; const newFavorites = favoriteQuadras.includes(quadraId) ? favoriteQuadras.filter(id => id !== quadraId) : [...favoriteQuadras, quadraId]; setFavoriteQuadras(newFavorites); localStorage.setItem(`favorite_quadras_${profile.id}`, JSON.stringify(newFavorites)); };
+
+  const sortedQuadras = useMemo(() => {
+    return [...quadras].sort((a, b) => {
+      const aIsFav = favoriteQuadras.includes(a.id);
+      const bIsFav = favoriteQuadras.includes(b.id);
+      if (aIsFav && !bIsFav) return -1;
+      if (!aIsFav && bIsFav) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [quadras, favoriteQuadras]);
+
+  const displayedReservations = useMemo(() => {
+    const viewStartDate = startOfDay(new Date());
+    const viewEndDate = endOfDay(addDays(new Date(), 365));
+    return expandRecurringReservations(reservas, viewStartDate, viewEndDate, quadras);
+  }, [reservas, quadras]);
+
+  const generateTimeSlots = (quadra: Quadra) => {
+    const slots = [];
+    const dayOfWeek = getDay(selectedDate);
+    let horario;
+    if (dayOfWeek === 0) horario = quadra.horarios?.sunday;
+    else if (dayOfWeek === 6) horario = quadra.horarios?.saturday;
+    else horario = quadra.horarios?.weekday;
+    if (!horario || !horario.start || !horario.end) return [];
+    let currentTime = parse(horario.start.slice(0, 5), 'HH:mm', selectedDate);
+    let endTime = parse(horario.end.slice(0, 5), 'HH:mm', selectedDate);
+    if (endTime <= currentTime) endTime = addDays(endTime, 1);
+    const interval = 60;
+    while (currentTime < endTime) {
+      slots.push(format(currentTime, 'HH:mm'));
+      currentTime = addMinutes(currentTime, interval);
+    }
+    return slots;
+  };
+
+  const getSlotStatus = (time: string, quadraId: string) => {
+    const slotDateTime = parse(time, 'HH:mm', selectedDate);
+    if (isPast(slotDateTime) && !isSameDay(selectedDate, startOfDay(new Date()))) {
+      return { status: 'past', data: null };
+    } else if (isPast(slotDateTime) && isSameDay(selectedDate, startOfDay(new Date()))) {
+      return { status: 'past', data: null };
+    }
+    const reserva = displayedReservations.find(r => r.quadra_id === quadraId && isSameDay(parseDateStringAsLocal(r.date), selectedDate) && r.start_time.slice(0, 5) === time && r.status !== 'cancelada');
+    if (reserva) return { status: 'booked', data: reserva };
+    return { status: 'available', data: null };
+  };
+
+  const getPriceRange = (quadra: Quadra) => {
+    if (!quadra.pricing_rules || quadra.pricing_rules.length === 0) return "A definir";
+    const activePrices = quadra.pricing_rules.filter(r => r.is_active).map(r => r.price_single);
+    if (activePrices.length === 0) return "A definir";
+    const minPrice = Math.min(...activePrices);
+    const maxPrice = Math.max(...activePrices);
+    if (minPrice === maxPrice) return formatCurrency(minPrice);
+    return `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`;
+  };
+
+  const renderSlotButton = (quadra: Quadra, time: string) => {
+    const { status } = getSlotStatus(time, quadra.id);
+    let styles = 'bg-brand-gray-100 text-brand-gray-500 dark:bg-brand-gray-700 dark:text-brand-gray-400';
+    let icon = <Clock className="h-3 w-3 mr-1" />;
+    if (status === 'available') {
+      styles = 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-500/20';
+    } else if (status === 'past') {
+      styles = 'bg-brand-gray-100 text-brand-gray-400 dark:bg-brand-gray-700/50 dark:text-brand-gray-500 cursor-not-allowed';
+    } else if (status === 'booked') {
+      styles = 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400 cursor-not-allowed';
+    }
+    return (
+      <motion.button
+        key={time}
+        whileHover={{ scale: status === 'available' ? 1.05 : 1 }}
+        whileTap={{ scale: status === 'available' ? 0.95 : 1 }}
+        onClick={() => onSlotClick(time, quadra.id)}
+        disabled={status !== 'available'}
+        className={`px-3 py-2 rounded-lg text-sm font-medium transition-all text-center ${styles}`}
+      >
+        <div className="flex items-center justify-center">
+          {icon}
+          {time.slice(0, 5)}
+        </div>
+      </motion.button>
+    );
+  };
+
+  return (
+    <div className="bg-white dark:bg-brand-gray-800 rounded-lg shadow-md border border-brand-gray-200 dark:border-brand-gray-700 p-6">
+      <h3 className="font-semibold text-brand-gray-800 dark:text-brand-gray-200 mb-4 flex items-center">
+        <Calendar className="h-5 w-5 mr-2 text-brand-blue-500" /> Reserva Rápida
+      </h3>
+      <div className="mb-6">
+        <DatePickerCalendar selectedDate={selectedDate} onDateChange={setSelectedDate} />
+      </div>
+
+      {sortedQuadras.length > 0 ? (
+        <div ref={courtsCarouselRef} className="lg:space-y-6 flex lg:flex-col overflow-x-auto lg:overflow-visible gap-6 lg:gap-0 pb-4 lg:pb-0 -mx-4 px-4 lg:mx-0 lg:px-0 no-scrollbar snap-x snap-mandatory">
+          {sortedQuadras.map((quadra) => (
+            <div key={quadra.id} className="w-full flex-shrink-0 snap-center lg:w-auto">
+              <div className="flex justify-between items-center mb-3">
+                <div>
+                  <h4 className="font-semibold text-lg text-brand-gray-800 dark:text-brand-gray-200">{quadra.name}</h4>
+                  <p className="text-sm text-brand-gray-500">{quadra.sports.join(', ')} - <span className="font-medium text-green-600">{getPriceRange(quadra)}</span></p>
+                </div>
+                {profile && (
+                  <button onClick={() => toggleFavorite(quadra.id)} className="p-2 rounded-full hover:bg-red-100/50 dark:hover:bg-red-500/10 transition-colors">
+                    <Heart className={`h-5 w-5 transition-all ${favoriteQuadras.includes(quadra.id) ? 'fill-current text-red-500' : 'text-brand-gray-400'}`} />
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                {generateTimeSlots(quadra).map(time => renderSlotButton(quadra, time))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-center text-brand-gray-500">Nenhuma quadra disponível para reserva rápida.</p>
+      )}
+    </div>
+  );
+};
 const EmptyState: React.FC<{message: string}> = ({ message }) => ( <div className="text-center h-full flex flex-col justify-center items-center py-10 px-6 bg-brand-gray-50 dark:bg-brand-gray-800/50 rounded-lg border-2 border-dashed border-brand-gray-300 dark:border-brand-gray-700"> <p className="text-brand-gray-600 dark:text-brand-gray-400">{message}</p> </div> );
 
 const ClientDashboard: React.FC = () => {
@@ -516,6 +790,7 @@ const ClientDashboard: React.FC = () => {
     const [tournaments, setTournaments] = useState<Torneio[]>([]);
     const [vouchers, setVouchers] = useState<RedeemedVoucher[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
+    const [alunoLevels, setAlunoLevels] = useState<AlunoLevel[]>([]);
     
     const [levels, setLevels] = useState<GamificationLevel[]>([]);
     const [rewards, setRewards] = useState<GamificationReward[]>([]);
@@ -587,12 +862,13 @@ const ClientDashboard: React.FC = () => {
         setAtletas([]); setPlanos([]); setAllArenaAlunos([]);
         setReservas([]); setCreditHistory([]); setGamificationHistory([]); setPaymentHistory([]);
         setTournaments([]); setVouchers([]); setProducts([]);
+        setAlunoLevels([]);
         return;
         }
 
         setIsLoading(true);
         try {
-        const [quadrasRes, allReservasRes, turmasRes, profsRes, atletasRes, creditRes, gamificationHistoryRes, gamificationSettingsRes, levelsRes, rewardsRes, achievementsRes, unlockedAchievementsRes, planosRes, allAlunosRes, friendshipsRes, profilesRes, financeTransactionsRes, tournamentsRes, vouchersRes, productsRes] = await Promise.all([
+        const [quadrasRes, allReservasRes, turmasRes, profsRes, atletasRes, creditRes, gamificationHistoryRes, gamificationSettingsRes, levelsRes, rewardsRes, achievementsRes, unlockedAchievementsRes, planosRes, allAlunosRes, friendshipsRes, profilesRes, financeTransactionsRes, tournamentsRes, vouchersRes, productsRes, alunoLevelsRes] = await Promise.all([
             localApi.select<Quadra>('quadras', selectedArenaContext.id),
             localApi.select<Reserva>('reservas', selectedArenaContext.id),
             localApi.select<Turma>('turmas', selectedArenaContext.id),
@@ -613,6 +889,7 @@ const ClientDashboard: React.FC = () => {
             localApi.select<Torneio>('torneios', selectedArenaContext.id),
             alunoProfileForSelectedArena ? localApi.select<RedeemedVoucher>('redeemed_vouchers', selectedArenaContext.id) : Promise.resolve({ data: [] }),
             localApi.select<Product>('products', selectedArenaContext.id),
+            localApi.select<AlunoLevel>('aluno_levels', selectedArenaContext.id),
         ]);
         
         const now = new Date();
@@ -652,6 +929,7 @@ const ClientDashboard: React.FC = () => {
         setAllArenaAlunos(allAlunosRes.data || []);
         setTournaments(tournamentsRes.data || []);
         setProducts(productsRes.data || []);
+        setAlunoLevels(alunoLevelsRes.data || []);
 
         const userFriendships = (friendshipsRes.data || []).filter(f => f.status === 'accepted' && (f.user1_id === profile.id || f.user2_id === profile.id));
         const friendIds = userFriendships.map(f => f.user1_id === profile.id ? f.user2_id : f.user1_id);
@@ -1460,6 +1738,21 @@ const ClientDashboard: React.FC = () => {
         return upcomingClasses[0];
     }, [isStudent, alunoProfileForSelectedArena, turmas, quadras, professores]);
 
+    const upcomingActivities = useMemo(() => {
+        const activities: { type: 'professorClass' | 'studentClass' | 'reservation'; data: any; sortDate: Date }[] = [];
+        if (nextClass) {
+            activities.push({ type: 'studentClass', data: nextClass, sortDate: nextClass.dateTime });
+        }
+        if (upcomingReservations && upcomingReservations.length > 0) {
+            upcomingReservations.forEach(res => {
+                const resDate = parseDateStringAsLocal(`${res.date}T${res.start_time}`);
+                activities.push({ type: 'reservation', data: res, sortDate: resDate });
+            });
+        }
+        activities.sort((a, b) => a.sortDate.getTime() - b.sortDate.getTime());
+        return activities;
+    }, [nextClass, upcomingReservations]);
+
     useEffect(() => {
         const query = new URLSearchParams(location.search);
         const tab = query.get('tab');
@@ -1534,8 +1827,8 @@ const ClientDashboard: React.FC = () => {
     const renderContent = () => {
         if (isLoading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>;
         switch (activeView) {
-        case 'inicio': return <InicioView alunoProfile={alunoProfileForSelectedArena} planos={planos} levels={levels} rewards={rewards} onOpenProfileModal={handleOpenProfileModal} nextReservation={upcomingReservations[0]} pendingReservations={pendingPaymentReservations} onDetail={handleOpenDetailModal} onDataChange={handleDataChange} nextClass={nextClass} quadras={quadras} reservas={allArenaReservations} onSlotClick={handleSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} arenaName={selectedArenaContext?.name} selectedArena={selectedArenaContext} onOpenAttendanceModal={() => setIsAttendanceModalOpen(true)} creditHistory={creditHistory} tournaments={tournaments} onUpdateTournamentInvite={handleUpdateTournamentInvite} onInvitePartner={handleOpenInvitePartnerModal} />;
-        case 'reservas': return <ReservationsTab upcoming={upcomingReservations} past={pastReservations} quadras={quadras} atletas={atletas} arenaName={selectedArenaContext?.name} onCancel={handleOpenCancelModal} onDetail={handleOpenDetailModal} onHirePlayer={(res) => { setReservationToHireFor(res); setIsHirePlayerModalOpen(true); }} profileId={profile.id} onAvaliarAtleta={handleAvaliarAtleta} arenaSettings={selectedArenaContext} />;
+        case 'inicio': return <InicioView alunoProfile={alunoProfileForSelectedArena} planos={planos} levels={levels} rewards={rewards} onOpenProfileModal={handleOpenProfileModal} upcomingActivities={upcomingActivities} pendingReservations={pendingPaymentReservations} onDetail={handleOpenDetailModal} onDataChange={handleDataChange} nextClass={nextClass} quadras={quadras} reservas={allArenaReservations} onSlotClick={handleSlotClick} selectedDate={selectedDate} setSelectedDate={setSelectedDate} profile={profile} arenaName={selectedArenaContext?.name} selectedArena={selectedArenaContext} onOpenAttendanceModal={() => setIsAttendanceModalOpen(true)} creditHistory={creditHistory} nextProfessorClass={null} onOpenClassAttendanceModal={() => {}} tournaments={tournaments} onUpdateTournamentInvite={handleUpdateTournamentInvite} onInvitePartner={handleOpenInvitePartnerModal} vouchers={vouchers} products={products} setActiveView={setActiveView} alunoLevels={alunoLevels} />;
+        case 'reservas': return <ReservationsTab upcoming={upcomingActivities.filter(a => a.type === 'reservation').map(a => a.data)} past={pastReservations} quadras={quadras} atletas={atletas} arenaName={selectedArenaContext?.name} onCancel={handleOpenCancelModal} onDetail={handleOpenDetailModal} onHirePlayer={(res) => { setReservationToHireFor(res); setIsHirePlayerModalOpen(true); }} profileId={profile.id} onAvaliarAtleta={handleAvaliarAtleta} arenaSettings={selectedArenaContext} />;
         case 'aulas': return <AulasTab aluno={alunoProfileForSelectedArena!} allAlunos={allArenaAlunos} turmas={studentTurmas} professores={professores} quadras={quadras} planos={planos} onDataChange={handleDataChange} onAvaliarProfessor={handleAvaliarProfessor} />;
         case 'loja': return <LojaView />;
         case 'amigos': return <FriendsView />;
@@ -1552,10 +1845,6 @@ const ClientDashboard: React.FC = () => {
             <div className="flex-1 overflow-y-auto pt-8 md:pt-0">
                 <main className="p-4 sm:p-6 lg:p-8 pb-24">
                     <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 flex flex-col md:flex-row justify-between md:items-center gap-4">
-                        <div>
-                        <h1 className="text-2xl md:text-3xl font-bold text-brand-gray-900 dark:text-white">Meu Painel</h1>
-                        <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-1 md:mt-2">Gerencie suas reservas, aulas e perfil.</p>
-                        </div>
                         <div className="w-full md:w-auto">
                         <ArenaSelector arenas={myArenas} selectedArena={selectedArenaContext} onSelect={switchArenaContext} />
                         </div>
@@ -1579,7 +1868,7 @@ const ClientDashboard: React.FC = () => {
             </div>
             <BottomNavBar items={navItems} activeView={activeView} setActiveView={handleNavClick} />
             
-            <AnimatePresence>{isModalOpen && modalSlot && selectedArenaContext && (<ReservationModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveClientReservation} onCancelReservation={() => {}} newReservationSlot={{ quadraId: modalSlot.quadraId, time: modalSlot.time, type: 'avulsa' }} quadras={quadras} alunos={alunoProfileForSelectedArena ? [alunoProfileForSelectedArena] : []} allReservations={allArenaReservations} arenaId={selectedArenaContext.id} selectedDate={selectedDate} isClientBooking={true} userProfile={profile} clientProfile={alunoProfileForSelectedArena} profissionais={atletas} friends={friends} />)}</AnimatePresence>
+            <AnimatePresence>{isModalOpen && modalSlot && selectedArenaContext && (<ReservationModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveClientReservation} onCancelReservation={() => {}} newReservationSlot={{ quadraId: modalSlot.quadraId, time: modalSlot.time, type: 'avulsa' }} quadras={quadras} alunos={alunoProfileForSelectedArena ? [alunoProfileForSelectedArena] : []} allReservations={allArenaReservations} arenaId={selectedArenaContext.id} allArenas={allArenas} selectedDate={selectedDate} isClientBooking={true} userProfile={profile} clientProfile={alunoProfileForSelectedArena} profissionais={atletas} friends={friends} />)}</AnimatePresence>
             <AnimatePresence>{isCancelModalOpen && reservationToCancel && selectedArenaContext && (<ClientCancellationModal isOpen={isCancelModalOpen} onClose={() => setIsCancelModalOpen(false)} onConfirm={handleConfirmCancellation} reserva={reservationToCancel} policyText={selectedArenaContext.cancellation_policy} creditExpirationDays={selectedArenaContext.credit_expiration_days} />)}</AnimatePresence>
             <AnimatePresence>{isDetailModalOpen && reservationToDetail && selectedArenaContext && (<ReservationDetailModal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} reserva={reservationToDetail} quadra={quadras.find(q => q.id === reservationToDetail.quadra_id) || null} atleta={atletas.find(a => a.id === reservationToDetail.atleta_aluguel_id) || null} arenaName={selectedArenaContext.name} onCancel={handleOpenCancelModal} onUpdateParticipantStatus={handleUpdateParticipantStatus} onUpdateReservation={handleUpdateReservation} friends={friends} onPay={handleOpenPaymentModal} onAvaliarAtleta={handleAvaliarAtleta} onContactAtleta={handleContactAtleta} onTrocarAtleta={handleTrocarAtleta} onCancelarAtleta={handleCancelarAtleta} onPayAtleta={handlePayAtleta} onAthletePaymentExpire={handleAthletePaymentExpire} />)}</AnimatePresence>
             <AnimatePresence>{isHirePlayerModalOpen && reservationToHireFor && (<HirePlayerModal isOpen={isHirePlayerModalOpen} onClose={() => setIsHirePlayerModalOpen(false)} onConfirm={(profId) => handleHireProfessional(reservationToHireFor.id, profId)} reserva={reservationToHireFor} profissionais={atletas} onViewProfile={handleOpenAtletaProfile} />)}</AnimatePresence>

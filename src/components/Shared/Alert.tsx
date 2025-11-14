@@ -13,35 +13,35 @@ interface AlertProps {
 const alertConfig = {
   info: {
     icon: Info,
-    bg: 'bg-blue-50 dark:bg-blue-900/50',
+    bg: 'bg-blue-800',
     border: 'border-blue-500',
-    iconColor: 'text-blue-500',
-    titleColor: 'text-blue-800 dark:text-blue-200',
-    messageColor: 'text-blue-700 dark:text-blue-300',
+    iconColor: 'text-blue-300',
+    titleColor: 'text-white',
+    messageColor: 'text-blue-200',
   },
   success: {
     icon: CheckCircle,
-    bg: 'bg-green-50 dark:bg-green-900/50',
+    bg: 'bg-green-800',
     border: 'border-green-500',
-    iconColor: 'text-green-500',
-    titleColor: 'text-green-800 dark:text-green-200',
-    messageColor: 'text-green-700 dark:text-green-300',
+    iconColor: 'text-green-300',
+    titleColor: 'text-white',
+    messageColor: 'text-green-200',
   },
   warning: {
     icon: AlertTriangle,
-    bg: 'bg-yellow-50 dark:bg-yellow-900/50',
-    border: 'border-yellow-500',
-    iconColor: 'text-yellow-500',
-    titleColor: 'text-yellow-800 dark:text-yellow-200',
-    messageColor: 'text-yellow-700 dark:text-yellow-300',
+    bg: 'bg-amber-800',
+    border: 'border-amber-500',
+    iconColor: 'text-amber-300',
+    titleColor: 'text-white',
+    messageColor: 'text-amber-200',
   },
   error: {
     icon: XCircle,
-    bg: 'bg-red-50 dark:bg-red-900/50',
+    bg: 'bg-red-800',
     border: 'border-red-500',
-    iconColor: 'text-red-500',
-    titleColor: 'text-red-800 dark:text-red-200',
-    messageColor: 'text-red-700 dark:text-red-300',
+    iconColor: 'text-red-300',
+    titleColor: 'text-white',
+    messageColor: 'text-red-200',
   },
 };
 
@@ -53,7 +53,7 @@ const Alert: React.FC<AlertProps> = ({ type = 'info', title, message }) => {
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-lg border-l-4 p-4 ${config.bg} ${config.border}`}
+      className={`rounded-lg p-4 border-l-4 ${config.bg} ${config.border}`}
     >
       <div className="flex">
         <div className="flex-shrink-0">

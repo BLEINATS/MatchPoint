@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Aluno, CreditTransaction, GamificationPointTransaction, GamificationLevel, GamificationReward, GamificationAchievement, AlunoAchievement, AtletaAluguel, Profile, RedeemedVoucher, Product } from '../../types';
 import AtletasTab from './AtletasTab';
 import RewardsTab from './RewardsTab';
@@ -8,6 +8,7 @@ import { format, addDays, isBefore } from 'date-fns';
 import PaymentMethodsTab from './PaymentMethodsTab';
 import { useAuth } from '../../context/AuthContext';
 import VouchersTab from './VouchersTab';
+import Button from '../Forms/Button';
 
 interface ClientProfileViewProps {
   aluno: Aluno | null;
@@ -90,6 +91,10 @@ const ClientProfileView: React.FC<ClientProfileViewProps> = ({
 
 const CreditsTab: React.FC<{balance: number, history: CreditTransaction[]}> = ({balance, history}) => {
     const { selectedArenaContext: arena } = useAuth();
+    const [showAllHistory, setShowAllHistory] = useState(false);
+
+    const displayedHistory = showAllHistory ? history : history.slice(0, 3);
+    const hasMoreHistory = history.length > 3;
     
     return (
         <div className="space-y-6">
@@ -109,32 +114,41 @@ const CreditsTab: React.FC<{balance: number, history: CreditTransaction[]}> = ({
             <div>
                 <h4 className="font-semibold mb-3">Histórico de Transações</h4>
                 {history.length > 0 ? (
-                    <ul className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700 max-h-60 overflow-y-auto pr-2">
-                        {history.map(item => {
-                            const isPositiveCredit = item.amount > 0;
-                            let expirationDate: Date | null = null;
-                            if (isPositiveCredit && arena?.credit_expiration_days && item.created_at) {
-                                expirationDate = addDays(new Date(item.created_at), arena.credit_expiration_days);
-                            }
-                            const isExpired = expirationDate && isBefore(expirationDate, new Date());
+                    <>
+                        <ul className="divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
+                            {displayedHistory.map(item => {
+                                const isPositiveCredit = item.amount > 0;
+                                let expirationDate: Date | null = null;
+                                if (isPositiveCredit && arena?.credit_expiration_days && item.created_at) {
+                                    expirationDate = addDays(new Date(item.created_at), arena.credit_expiration_days);
+                                }
+                                const isExpired = expirationDate && isBefore(expirationDate, new Date());
 
-                            return (
-                                <li key={item.id} className={`py-3 flex justify-between items-start gap-2 ${isExpired ? 'opacity-50' : ''}`}>
-                                  <div className="flex-1 min-w-0">
-                                    <p className={`font-medium text-sm truncate ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{item.amount > 0 ? 'Crédito Adicionado' : 'Crédito Utilizado'}</p>
-                                    <p className="text-xs text-brand-gray-500 truncate">{item.description}</p>
-                                    <p className="text-xs text-brand-gray-400 mt-1">{item.created_at ? format(new Date(item.created_at), 'dd/MM/yyyy HH:mm') : ''}</p>
-                                    {expirationDate && (
-                                        <p className={`text-xs mt-1 ${isExpired ? 'text-red-500' : 'text-brand-gray-400'}`}>
-                                            {isExpired ? 'Expirou em:' : 'Expira em:'} {format(expirationDate, 'dd/MM/yyyy')}
-                                        </p>
-                                    )}
-                                  </div>
-                                  <p className={`text-base font-bold text-right ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}> {item.amount > 0 ? '+' : ''}{formatCurrency(item.amount)} </p>
-                                </li>
-                            );
-                        })}
-                    </ul>
+                                return (
+                                    <li key={item.id} className={`py-3 flex justify-between items-start gap-2 ${isExpired ? 'opacity-50' : ''}`}>
+                                      <div className="flex-1 min-w-0">
+                                        <p className={`font-medium text-sm truncate ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{item.amount > 0 ? 'Crédito Adicionado' : 'Crédito Utilizado'}</p>
+                                        <p className="text-xs text-brand-gray-500 truncate">{item.description}</p>
+                                        <p className="text-xs text-brand-gray-400 mt-1">{item.created_at ? format(new Date(item.created_at), 'dd/MM/yyyy HH:mm') : ''}</p>
+                                        {expirationDate && (
+                                            <p className={`text-xs mt-1 ${isExpired ? 'text-red-500' : 'text-brand-gray-400'}`}>
+                                                {isExpired ? 'Expirou em:' : 'Expira em:'} {format(expirationDate, 'dd/MM/yyyy')}
+                                            </p>
+                                        )}
+                                      </div>
+                                      <p className={`text-base font-bold text-right ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}> {item.amount > 0 ? '+' : ''}{formatCurrency(item.amount)} </p>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                        {hasMoreHistory && !showAllHistory && (
+                            <div className="text-center mt-4">
+                                <Button variant="outline" onClick={() => setShowAllHistory(true)}>
+                                    Ver todo o histórico ({history.length})
+                                </Button>
+                            </div>
+                        )}
+                    </>
                 ) : (
                     <p className="text-center text-sm text-brand-gray-500 py-8">Nenhuma transação de crédito encontrada.</p>
                 )}

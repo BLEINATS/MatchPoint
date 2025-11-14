@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, User, Mail, Phone, Calendar, DollarSign, Trash2, Gift, ClipboardList, Hash, Users, UserPlus, ShieldCheck, AlertTriangle } from 'lucide-react';
-import { Aluno, PlanoAula, Profile } from '../../types';
+import { X, Save, User, Mail, Phone, Calendar, DollarSign, Trash2, Gift, ClipboardList, Hash, Users, UserPlus, ShieldCheck, AlertTriangle, Star, BarChart2 } from 'lucide-react';
+import { Aluno, PlanoAula, Profile, AlunoLevel } from '../../types';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { format, endOfMonth, differenceInDays, getDaysInMonth } from 'date-fns';
@@ -13,6 +13,7 @@ import CreditsTab from './CreditsTab';
 import { localApi } from '../../lib/localApi';
 import { formatCurrency } from '../../utils/formatters';
 import ConfirmationModal from '../Shared/ConfirmationModal';
+import LevelBadge from '../Shared/LevelBadge';
 import { useAuth } from '../../context/AuthContext';
 import ActivityTab from './ActivityTab';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
@@ -35,7 +36,7 @@ const DEFAULT_SPORTS = ['Beach Tennis', 'Futevôlei', 'Futebol Society', 'Vôlei
 const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDelete, initialData, availableSports, planos, modalType, allAlunos, onDataChange }) => {
   const { arena } = useAuth();
   const [formData, setFormData] = useState<Partial<Omit<Aluno, 'id' | 'arena_id' | 'created_at'>>>({
-    name: '', email: '', phone: '', status: 'ativo', sport: '', plan_id: null,
+    name: '', email: '', phone: '', status: 'ativo', sport: '', level_id: null, plan_id: null,
     aulas_restantes: 0, join_date: format(new Date(), 'yyyy-MM-dd'), monthly_fee: 0,
     cpf: '', birth_date: '', gender: 'nao_informado'
   });
@@ -45,8 +46,21 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   const [isRenewConfirmOpen, setIsRenewConfirmOpen] = useState(false);
   const [isCreateLoginConfirmOpen, setIsCreateLoginConfirmOpen] = useState(false);
   const [proRataInfo, setProRataInfo] = useState<{ firstPayment: number; recurringPayment: number; daysRemaining: number; daysInMonth: number; } | null>(null);
+  const [alunoLevels, setAlunoLevels] = useState<AlunoLevel[]>([]);
   
   const isEditing = !!initialData;
+
+  useEffect(() => {
+    const fetchLevels = async () => {
+      if (arena?.id) {
+        const { data } = await localApi.select<AlunoLevel>('aluno_levels', arena.id);
+        setAlunoLevels(data || []);
+      }
+    };
+    if (isOpen) {
+      fetchLevels();
+    }
+  }, [isOpen, arena]);
 
   const allSports = useMemo(() => {
     return [...new Set([...DEFAULT_SPORTS, ...availableSports])];
@@ -59,6 +73,11 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   const selectedPlan = useMemo(() => {
     return planos.find(p => p.id === formData.plan_id);
   }, [formData.plan_id, planos]);
+
+  const selectedLevelForBadge = useMemo(() => {
+    if (!formData.level_id) return null;
+    return alunoLevels.find(l => l.id === formData.level_id);
+  }, [formData.level_id, alunoLevels]);
 
   const isUnlimitedPlan = useMemo(() => selectedPlan?.num_aulas === null, [selectedPlan]);
 
@@ -84,7 +103,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
       setProRataInfo(null);
       
       const baseData = {
-        name: '', email: '', phone: '', status: 'ativo', sport: '', plan_id: null,
+        name: '', email: '', phone: '', status: 'ativo', sport: '', level_id: null, plan_id: null,
         aulas_restantes: 0, join_date: format(new Date(), 'yyyy-MM-dd'), monthly_fee: 0,
         cpf: '', birth_date: '', gender: 'nao_informado' as Aluno['gender']
       };
@@ -100,6 +119,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
           gender: initialData.gender || 'nao_informado',
           status: initialData.status,
           sport: initialData.sport || '',
+          level_id: initialData.level_id || null,
           plan_id: initialData.plan_id,
           aulas_restantes: initialData.aulas_restantes,
           join_date: initialData.join_date,
@@ -329,9 +349,14 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center p-6 border-b border-brand-gray-200 dark:border-brand-gray-700">
-                <h3 className="text-xl font-semibold text-brand-gray-900 dark:text-white">
-                  {modalTitle}
-                </h3>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xl font-semibold text-brand-gray-900 dark:text-white">
+                    {modalTitle}
+                  </h3>
+                  {isEditing && selectedLevelForBadge && (
+                    <LevelBadge name={selectedLevelForBadge.name} color={selectedLevelForBadge.color} />
+                  )}
+                </div>
                 <button onClick={onClose} className="p-1 rounded-full hover:bg-brand-gray-100 dark:hover:bg-brand-gray-700">
                   <X className="h-5 w-5 text-brand-gray-500" />
                 </button>
@@ -418,12 +443,23 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Input label="Data de Início" name="join_date" type="date" value={formData.join_date} onChange={handleChange} icon={<Calendar className="h-4 w-4 text-brand-gray-400"/>} />
-                            <div>
-                                <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte Principal</label>
-                                <select name="sport" value={formData.sport || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
-                                <option value="">Selecione um esporte</option>
-                                {allSports.map(sport => <option key={sport} value={sport}>{sport}</option>)}
-                                </select>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Esporte Principal</label>
+                                    <select name="sport" value={formData.sport || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                                    <option value="">Selecione um esporte</option>
+                                    {allSports.map(sport => <option key={sport} value={sport}>{sport}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-brand-gray-700 dark:text-brand-gray-300 mb-1">Nível</label>
+                                    <select name="level_id" value={formData.level_id || ''} onChange={handleChange} className="w-full form-select rounded-md border-brand-gray-300 dark:border-brand-gray-600 bg-white dark:bg-brand-gray-800 text-brand-gray-900 dark:text-white focus:border-brand-blue-500 focus:ring-brand-blue-500">
+                                        <option value="">Selecione...</option>
+                                        {alunoLevels.map(level => (
+                                            <option key={level.id} value={level.id}>{level.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                             </div>
                             <div>

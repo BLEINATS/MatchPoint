@@ -29,4 +29,9 @@
       transparent 20px
     );
   }
+
+  .cursor-grabbing {
+    cursor: grabbing;
+    user-select: none;
+  }
 }

@@ -4,9 +4,13 @@
     "options": [
       { "text": "Dúvidas sobre o Painel", "next": "dashboard_cards" },
       { "text": "Dúvidas sobre Reservas", "next": "start_reservas" },
-      { "text": "Gerenciar minha Arena", "next": "start_alunos" },
+      { "text": "Gerenciar Clientes e Aulas", "next": "start_alunos" },
+      { "text": "Gamificação e Recompensas", "next": "start_gamificacao" },
       { "text": "Configurações da Arena", "next": "start_settings" },
-      { "text": "Dúvidas Financeiras", "next": "start_financeiro" }
+      { "text": "Dúvidas Financeiras", "next": "start_financeiro" },
+      { "text": "Torneios e Eventos", "next": "start_torneios" },
+      { "text": "Loja e Produtos", "next": "start_loja" },
+      { "text": "Enviar Notificações", "next": "start_notificacoes" }
     ]
   },
   "dashboard_cards": {
@@ -67,6 +71,8 @@
       { "text": "Qual a diferença entre Cliente e Aluno?", "next": "alunos_diferenca" },
       { "text": "Como cadastrar um Mensalista?", "next": "alunos_mensalista" },
       { "text": "Como criar uma Turma de aula?", "next": "alunos_turma" },
+      { "text": "Como gerenciar Professores?", "next": "alunos_professores" },
+      { "text": "Como gerenciar Atletas de Aluguel?", "next": "alunos_atletas" },
       { "text": "Ver outras opções", "next": "start" }
     ]
   },
@@ -80,6 +86,14 @@
   },
   "alunos_turma": {
     "message": "Na aba 'Turmas', clique em 'Adicionar Turma'. Defina o nome, professor, quadra, dias e horários. Depois, você poderá matricular os alunos na grade de horários da turma.",
+    "options": [{ "text": "Voltar", "next": "start_alunos" }]
+  },
+  "alunos_professores": {
+    "message": "Na aba 'Professores', você pode cadastrar os instrutores da sua arena, definir suas especialidades e o modelo de remuneração (por hora, aula, salário, etc.). Se o professor já tiver uma conta de cliente, você pode vinculá-la para que ele acesse seu próprio painel.",
+    "options": [{ "text": "Voltar", "next": "start_alunos" }]
+  },
+  "alunos_atletas": {
+    "message": "Na aba 'Atletas', você cadastra jogadores para o serviço de 'Atleta de Aluguel'. Defina a taxa por jogo, a comissão da arena e os horários de disponibilidade de cada um. Isso cria uma nova fonte de receita para a arena e para os jogadores.",
     "options": [{ "text": "Voltar", "next": "start_alunos" }]
   },
   "start_quadras": {
@@ -101,13 +115,39 @@
   "start_settings": {
     "message": "Você está nas Configurações. Qual área precisa de ajuda?",
     "options": [
-      { "text": "Como alterar dados da minha arena?", "next": "settings_perfil" },
-      { "text": "Como gerenciar minha equipe?", "next": "settings_equipe" },
-      { "text": "Onde vejo meu plano de assinatura?", "next": "settings_plano" }
+      { "text": "Perfil da Arena", "next": "settings_perfil" },
+      { "text": "Operação da Arena", "next": "settings_operacao" },
+      { "text": "Documentos (Termos e Privacidade)", "next": "settings_documentos" },
+      { "text": "Pagamentos (Asaas)", "next": "settings_pagamentos" },
+      { "text": "Planos de Aulas", "next": "settings_planos_aulas" },
+      { "text": "Faturamento e Cobrança", "next": "settings_faturamento" },
+      { "text": "Equipe e Permissões", "next": "settings_equipe" },
+      { "text": "Plano e Assinatura", "next": "settings_plano" },
+      { "text": "Voltar ao início", "next": "start" }
     ]
   },
   "settings_perfil": {
     "message": "Na aba 'Perfil da Arena', você pode editar o nome, endereço, dados de contato e o 'slug' (link público) da sua arena.",
+    "options": [{ "text": "Voltar", "next": "start_settings" }]
+  },
+  "settings_operacao": {
+    "message": "Na aba 'Operação', você define regras importantes como o prazo máximo para um cliente cancelar uma reserva de aula e o prazo para contratar um atleta antes do jogo. Você também pode personalizar a lista de esportes oferecidos na sua arena.",
+    "options": [{ "text": "Voltar", "next": "start_settings" }]
+  },
+  "settings_documentos": {
+    "message": "Aqui você pode colar seus 'Termos de Uso' e 'Política de Privacidade'. Esses documentos serão exibidos para seus clientes. Se não tiver um, pode usar nossos modelos como ponto de partida.",
+    "options": [{ "text": "Voltar", "next": "start_settings" }]
+  },
+  "settings_pagamentos": {
+    "message": "Para habilitar pagamentos online (Pix e Cartão), você precisa criar uma conta no Asaas e colar sua chave de API aqui. Isso automatiza a cobrança de reservas e mensalidades.",
+    "options": [{ "text": "Voltar", "next": "start_settings" }]
+  },
+  "settings_planos_aulas": {
+    "message": "Em 'Planos de Aulas', você cria os pacotes que seus alunos podem contratar, como 'Plano Mensal - 8 aulas' ou 'Plano Trimestral'. Defina o preço, a duração e a quantidade de créditos (aulas) de cada um.",
+    "options": [{ "text": "Voltar", "next": "start_settings" }]
+  },
+  "settings_faturamento": {
+    "message": "Na aba 'Faturamento', você define o dia do mês em que as cobranças recorrentes (mensalidades) são geradas. Também pode configurar um prazo de tolerância para pagamentos em atraso antes que o sistema cancele automaticamente o plano do cliente.",
     "options": [{ "text": "Voltar", "next": "start_settings" }]
   },
   "settings_equipe": {
@@ -197,6 +237,53 @@
   "loja_variacoes": {
     "message": "'Variações' são usadas para produtos com diferentes opções, como camisetas com tamanhos (P, M, G) ou bolas com cores diferentes. Cada variação pode ter seu próprio controle de estoque.",
     "options": [{ "text": "Voltar", "next": "start_loja" }]
+  },
+  "start_gamificacao": {
+    "message": "Você está na área de Gamificação (MatchPlay Rewards). Aqui você cria um sistema de pontos e recompensas para fidelizar seus clientes. Sobre o que você tem dúvida?",
+    "options": [
+      { "text": "Configurações Gerais", "next": "gamificacao_geral" },
+      { "text": "Níveis", "next": "gamificacao_niveis" },
+      { "text": "Recompensas", "next": "gamificacao_recompensas" },
+      { "text": "Conquistas", "next": "gamificacao_conquistas" },
+      { "text": "Relatórios", "next": "gamificacao_relatorios" },
+      { "text": "Voltar", "next": "start" }
+    ]
+  },
+  "gamificacao_geral": {
+    "message": "Na aba 'Geral', você ativa o sistema, define quantos pontos são ganhos por reserva ou por real gasto, e configura a validade dos vouchers de recompensa.",
+    "options": [{ "text": "Voltar", "next": "start_gamificacao" }]
+  },
+  "gamificacao_niveis": {
+    "message": "Em 'Níveis', você cria os ranks de prestígio (ex: Bronze, Prata, Ouro). Cada nível exige uma quantidade de pontos para ser alcançado, incentivando a participação contínua.",
+    "options": [{ "text": "Voltar", "next": "start_gamificacao" }]
+  },
+  "gamificacao_recompensas": {
+    "message": "Em 'Recompensas', você define os prêmios que os clientes podem resgatar com pontos, como descontos, horas grátis ou produtos da sua loja. Você pode controlar o estoque de cada recompensa.",
+    "options": [{ "text": "Voltar", "next": "start_gamificacao" }]
+  },
+  "gamificacao_conquistas": {
+    "message": "As 'Conquistas' são medalhas automáticas que os clientes ganham ao atingir marcos, como 'Primeira Reserva' ou '10 Jogos Concluídos'. Cada conquista pode dar uma recompensa em pontos.",
+    "options": [{ "text": "Voltar", "next": "start_gamificacao" }]
+  },
+  "gamificacao_relatorios": {
+    "message": "A aba 'Relatórios' mostra quais vouchers foram resgatados, quais estão pendentes e quais itens são os mais populares, ajudando a entender o engajamento com o programa.",
+    "options": [{ "text": "Voltar", "next": "start_gamificacao" }]
+  },
+  "start_notificacoes": {
+    "message": "Você está na Central de Notificações. Daqui, você pode enviar comunicados para seus clientes. Como posso ajudar?",
+    "options": [
+      { "text": "Como enviar uma notificação?", "next": "notificacoes_enviar" },
+      { "text": "Posso ver as notificações que enviei?", "next": "notificacoes_historico" },
+      { "text": "Voltar", "next": "start" }
+    ]
+  },
+  "notificacoes_enviar": {
+    "message": "Clique em 'Nova Notificação'. Você pode escolher o público (todos, só alunos, etc.), escrever sua mensagem e enviar. É ótimo para avisar sobre promoções ou feriados.",
+    "options": [{ "text": "Voltar", "next": "start_notificacoes" }]
+  },
+  "notificacoes_historico": {
+    "message": "Sim, a tela principal de Notificações mostra um histórico de todos os comunicados que você já enviou, para quem foram e quando.",
+    "options": [{ "text": "Voltar", "next": "start_notificacoes" }]
   },
   "end": {
     "message": "Fico feliz em ajudar! Se precisar de mais alguma coisa, é só chamar.",

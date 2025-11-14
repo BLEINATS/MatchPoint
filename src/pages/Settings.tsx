@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Building, FileText, BarChart2, CheckCircle, Save, ArrowLeft, User, Lock, CreditCard, DollarSign, Bell, Users as UsersIcon, Star, Clock, LifeBuoy } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
-import { Arena, Profile, Plan, Subscription } from '../types';
+import { Arena, Profile, Plan, Subscription, AlunoLevel } from '../types';
 import Button from '../components/Forms/Button';
 import ProfileTab from '../components/Settings/ProfileTab';
 import ClientProfileSettingsTab from '../components/Settings/ClientProfileSettingsTab';
@@ -20,8 +20,9 @@ import TeamSettingsTab from '../components/Settings/TeamSettingsTab';
 import FaturamentoTab from '../components/Settings/FaturamentoTab';
 import { localApi } from '../lib/localApi';
 import SupportTab from '../components/Settings/SupportTab';
+import NiveisAlunosTab from './Settings/NiveisAlunosTab';
 
-type AdminTabType = 'profile' | 'operation' | 'documents' | 'payments' | 'planos_aulas' | 'team' | 'plan' | 'faturamento';
+type AdminTabType = 'profile' | 'operation' | 'documents' | 'payments' | 'planos_aulas' | 'niveis_alunos' | 'team' | 'plan' | 'faturamento';
 type ClientTabType = 'my-profile' | 'notifications' | 'security' | 'documents';
 type StaffTabType = 'planos_aulas';
 
@@ -36,6 +37,7 @@ const Settings: React.FC = () => {
   
   const [arenaFormData, setArenaFormData] = useState<Partial<Arena>>({});
   const [profileFormData, setProfileFormData] = useState<Partial<Profile>>({});
+  const [alunoLevels, setAlunoLevels] = useState<AlunoLevel[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
 
@@ -51,6 +53,7 @@ const Settings: React.FC = () => {
     { id: 'documents', label: 'Documentos', icon: FileText },
     { id: 'payments', label: 'Pagamentos', icon: CreditCard },
     { id: 'planos_aulas', label: 'Planos de Aulas', icon: DollarSign },
+    { id: 'niveis_alunos', label: 'Níveis de Alunos', icon: BarChart2 },
     { id: 'faturamento', label: 'Faturamento', icon: BarChart2 },
     { id: 'team', label: 'Equipe', icon: UsersIcon },
     { id: 'plan', label: 'Plano e Assinatura', icon: Star },
@@ -90,6 +93,23 @@ const Settings: React.FC = () => {
         initialData.available_sports = DEFAULT_SPORTS_LIST;
       }
       setArenaFormData(initialData);
+
+      const loadLevels = async () => {
+        const { data } = await localApi.select<AlunoLevel>('aluno_levels', arena.id);
+        if (data && data.length > 0) {
+          setAlunoLevels(data);
+        } else {
+          const defaultLevels: Omit<AlunoLevel, 'id' | 'arena_id'>[] = [
+            { name: 'Iniciante', color: 'blue' },
+            { name: 'Intermediário', color: 'green' },
+            { name: 'Avançado', color: 'orange' },
+            { name: 'Competição', color: 'red' },
+          ];
+          const { data: seededData } = await localApi.upsert('aluno_levels', defaultLevels, arena.id, true);
+          setAlunoLevels(seededData || []);
+        }
+      };
+      loadLevels();
     }
     if (profile) {
       setProfileFormData(profile);
@@ -114,12 +134,13 @@ const Settings: React.FC = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      if (isAdmin) {
+      if (isAdmin && arena) {
         const cleanedData = {
           ...arenaFormData,
           available_sports: (arenaFormData.available_sports || []).map(s => typeof s === 'string' ? s.trim() : '').filter(Boolean)
         };
         await updateArena(cleanedData);
+        await localApi.upsert('aluno_levels', alunoLevels, arena.id, true);
       } else {
         await updateProfile(profileFormData);
       }
@@ -142,6 +163,7 @@ const Settings: React.FC = () => {
         case 'documents': return <DocumentsTabAdmin formData={arenaFormData} setFormData={setArenaFormData} />;
         case 'payments': return <PaymentSettingsTab formData={arenaFormData} setFormData={setArenaFormData} />;
         case 'planos_aulas': return <PlanosAulasTab />;
+        case 'niveis_alunos': return <NiveisAlunosTab levels={alunoLevels} setLevels={setAlunoLevels} />;
         case 'faturamento': return <FaturamentoTab formData={arenaFormData} setFormData={setArenaFormData} />;
         case 'team': return <TeamSettingsTab />;
         case 'plan': return <PlanTab plans={plans} currentSubscription={currentSubscription || null} arena={arena} />;
@@ -171,7 +193,7 @@ const Settings: React.FC = () => {
     );
   }
   
-  const canSave = isAdmin ? (activeTab === 'profile' || activeTab === 'operation' || activeTab === 'documents' || activeTab === 'payments' || activeTab === 'faturamento') : (activeTab === 'my-profile' || activeTab === 'notifications' || activeTab === 'security');
+  const canSave = isAdmin ? (activeTab !== 'plan' && activeTab !== 'team' && activeTab !== 'planos_aulas' && activeTab !== 'support') : (activeTab === 'my-profile' || activeTab === 'notifications' || activeTab === 'security');
 
   return (
     <Layout>

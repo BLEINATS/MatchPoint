@@ -236,13 +236,13 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   }, [selectedClient]);
 
   const allSportsOptions = useMemo(() => {
-    const arena = allArenas.find(a => a.id === arenaId);
+    const arena = allArenas ? allArenas.find(a => a.id === arenaId) : undefined;
     const defaultSports = [
         'Beach Tennis', 'Futevôlei', 'Vôlei de Praia', 'Futebol Society', 
         'Tênis', 'Padel', 'Funcional', 'Basquete', 'Handebol', 'Pickleball', 'Futsal'
     ];
     const arenaSports = arena?.available_sports || [];
-    const quadraSports = quadras.flatMap(q => q.sports).filter(Boolean);
+    const quadraSports = quadras ? quadras.flatMap(q => q.sports || []).filter(Boolean) : [];
     return [...new Set([...defaultSports, ...arenaSports, ...quadraSports])].sort((a, b) => a.localeCompare(b));
   }, [allArenas, quadras, arenaId]);
 
