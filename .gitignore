@@ -131,3 +131,6 @@ dist
 
 # Replit debugger
 .breakpoints
+
+# Asaas API configuration (contains sensitive API keys)
+.asaas-config.json

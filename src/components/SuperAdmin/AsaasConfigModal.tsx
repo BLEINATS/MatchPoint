@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Key, Check, AlertCircle } from 'lucide-react';
-import { localApi } from '../../lib/localApi';
-import { AsaasConfig } from '../../types';
+import asaasProxyService from '../../lib/asaasProxyService';
 import { useToast } from '../../context/ToastContext';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
@@ -26,11 +25,13 @@ export default function AsaasConfigModal({ isOpen, onClose, onSave }: AsaasConfi
   }, [isOpen]);
 
   const loadCurrentConfig = async () => {
-    const { data } = await localApi.select<AsaasConfig>('asaas_config', 'all');
-    if (data && data.length > 0) {
-      const config = data[0];
-      setApiKey(config.api_key);
-      setIsProduction(config.is_production);
+    try {
+      const config = await asaasProxyService.getConfig();
+      if (config.configured) {
+        setIsProduction(!config.isSandbox);
+      }
+    } catch (error) {
+      console.log('Nenhuma configuração salva');
     }
   };
 
@@ -44,42 +45,25 @@ export default function AsaasConfigModal({ isOpen, onClose, onSave }: AsaasConfi
     setTestResult(null);
 
     try {
-      const response = await fetch(
-        `${isProduction ? 'https://api.asaas.com/v3' : 'https://sandbox.asaas.com/api/v3'}/customers?limit=1`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'access_token': apiKey,
-          },
-        }
-      );
-
-      if (response.ok) {
-        setTestResult({ success: true, message: 'Conexão bem-sucedida! API Key válida.' });
-      } else {
-        const error = await response.json();
-        setTestResult({ success: false, message: `Erro: ${error.errors?.[0]?.description || 'API Key inválida'}` });
-      }
-    } catch (error) {
-      setTestResult({ success: false, message: 'Erro ao conectar com Asaas. Verifique sua conexão.' });
+      const result = await asaasProxyService.saveConfig(apiKey, !isProduction);
+      setTestResult({ 
+        success: result.success, 
+        message: result.success ? 'Conexão bem-sucedida! API Key válida e salva.' : (result.error || 'Erro ao testar conexão')
+      });
+    } catch (error: any) {
+      setTestResult({ success: false, message: error.message || 'Erro ao conectar com Asaas. Verifique sua conexão.' });
     } finally {
       setIsTesting(false);
     }
   };
 
   const handleSave = async () => {
-    if (!apiKey.trim()) {
-      addToast({ message: 'Por favor, insira a API Key', type: 'error' });
+    if (!testResult?.success) {
+      addToast({ message: 'Por favor, teste a conexão antes de salvar', type: 'error' });
       return;
     }
 
     try {
-      const config: Omit<AsaasConfig, 'id' | 'created_at' | 'updated_at'> = {
-        api_key: apiKey,
-        is_production: isProduction,
-      };
-
-      await localApi.upsert('asaas_config', [config], 'all', true);
       addToast({ message: 'Configuração do Asaas salva com sucesso!', type: 'success' });
       onSave();
       onClose();

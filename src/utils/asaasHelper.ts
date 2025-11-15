@@ -1,8 +1,7 @@
 import { localApi } from '../lib/localApi';
-import { AsaasService } from '../lib/asaasService';
-import { Arena, Plan, Subscription, AsaasConfig } from '../types';
+import asaasProxyService from '../lib/asaasProxyService';
+import { Arena, Plan, Subscription } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { addDays, addMonths, addYears } from 'date-fns';
 
 export interface CreateSubscriptionOptions {
   arena: Arena;
@@ -25,20 +24,19 @@ export interface CreateSubscriptionOptions {
   };
 }
 
-export const getAsaasService = async (): Promise<AsaasService | null> => {
-  const { data: configs } = await localApi.select<AsaasConfig>('asaas_config', 'all');
-  if (!configs || configs.length === 0) {
-    return null;
+export const checkAsaasConfig = async (): Promise<boolean> => {
+  try {
+    const config = await asaasProxyService.getConfig();
+    return config.configured;
+  } catch (error) {
+    return false;
   }
-  
-  const config = configs[0];
-  return new AsaasService(config.api_key, config.is_production);
 };
 
 export const createAsaasSubscription = async (options: CreateSubscriptionOptions): Promise<{ success: boolean; payment?: any; error?: string }> => {
   try {
-    const asaas = await getAsaasService();
-    if (!asaas) {
+    const configured = await checkAsaasConfig();
+    if (!configured) {
       return { success: false, error: 'Asaas não configurado. Configure a API key primeiro.' };
     }
 
@@ -57,7 +55,7 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
         externalReference: arena.id,
       };
 
-      const customer = await asaas.createCustomer(customerData);
+      const customer = await asaasProxyService.createCustomer(customerData);
       asaasCustomerId = customer.id!;
 
       // Atualizar arena com customer ID
@@ -99,7 +97,7 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
       externalReference: arena.id,
     };
 
-    const asaasSubscription = await asaas.createSubscription(subscriptionData);
+    const asaasSubscription = await asaasProxyService.createSubscription(subscriptionData);
 
     // Criar o primeiro pagamento (charge)
     let payment = null;
@@ -110,13 +108,11 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
         value: plan.price,
         dueDate: nextDueDate.toISOString().split('T')[0],
         description: `Primeira cobrança - Plano ${plan.name}`,
+        creditCard,
+        creditCardHolderInfo,
       };
 
-      payment = await asaas.createPaymentWithCreditCard(
-        paymentData,
-        creditCard,
-        creditCardHolderInfo
-      );
+      payment = await asaasProxyService.createPayment(paymentData);
     } else {
       // Para boleto e PIX, criar o pagamento normal
       const paymentData = {
@@ -127,12 +123,12 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
         description: `Primeira cobrança - Plano ${plan.name}`,
       };
 
-      payment = await asaas.createPayment(paymentData);
+      payment = await asaasProxyService.createPayment(paymentData);
 
       // Se for PIX, buscar o QR Code
       if (billingType === 'PIX' && payment.id) {
         try {
-          const pixData = await asaas.getPixQrCode(payment.id);
+          const pixData = await asaasProxyService.getPixQrCode(payment.id);
           payment.pixQrCode = pixData;
         } catch (error) {
           console.error('Erro ao buscar QR Code PIX:', error);
@@ -167,8 +163,8 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
 
 export const cancelAsaasSubscription = async (subscriptionId: string): Promise<{ success: boolean; error?: string }> => {
   try {
-    const asaas = await getAsaasService();
-    if (!asaas) {
+    const configured = await checkAsaasConfig();
+    if (!configured) {
       return { success: false, error: 'Asaas não configurado' };
     }
 
@@ -178,8 +174,6 @@ export const cancelAsaasSubscription = async (subscriptionId: string): Promise<{
     if (!subscription || !subscription.asaas_subscription_id) {
       return { success: false, error: 'Assinatura não encontrada ou não vinculada ao Asaas' };
     }
-
-    await asaas.deleteSubscription(subscription.asaas_subscription_id);
 
     const updatedSub: Subscription = {
       ...subscription,
