@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { CheckCircle, BarChart2, Star, Lock, Calendar, DollarSign, AlertTriangle } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckCircle, BarChart2, Star, Calendar, DollarSign, AlertTriangle, CreditCard } from 'lucide-react';
 import Button from '../Forms/Button';
 import { Plan, Subscription, Arena } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
@@ -7,6 +7,7 @@ import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useSubscriptionStatus } from '../../hooks/useSubscriptionStatus';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
+import PaymentModal from '../SuperAdmin/PaymentModal';
 
 interface PlanTabProps {
   plans: Plan[];
@@ -47,15 +48,29 @@ const PriceDisplay: React.FC<{ plan: Plan | undefined }> = ({ plan }) => {
 
 const PlanTab: React.FC<PlanTabProps> = ({ plans, arena, currentSubscription }) => {
   const { plan: currentPlan, nextBillingDate, isTrial, isPastDue } = useSubscriptionStatus();
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   
   const otherPlans = plans.filter(p => p.id !== currentPlan?.id && p.is_active);
 
   const billingDateLabel = (isTrial || currentPlan?.duration_days) ? 'Expira em:' : 'Próxima cobrança em:';
   const formattedNextBillingDate = (nextBillingDate && isValid(nextBillingDate)) ? format(nextBillingDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : null;
 
+  const handleUpgradePlan = (plan: Plan) => {
+    setSelectedPlan(plan);
+    setIsPaymentModalOpen(true);
+  };
+
+  const handlePaymentSuccess = () => {
+    setIsPaymentModalOpen(false);
+    setSelectedPlan(null);
+    window.location.reload();
+  };
+
   return (
-    <div className="space-y-12">
-      <Section title="Plano e Faturamento" icon={BarChart2}>
+    <>
+      <div className="space-y-12">
+        <Section title="Plano e Faturamento" icon={BarChart2}>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           {/* Plano Atual */}
           {currentPlan ? (
@@ -107,35 +122,53 @@ const PlanTab: React.FC<PlanTabProps> = ({ plans, arena, currentSubscription }) 
               )}
               <h4 className="text-2xl font-bold text-brand-gray-900 dark:text-white">{plan.name}</h4>
               <p className="text-brand-gray-600 dark:text-brand-gray-400 mb-6">Faça o upgrade para desbloquear mais recursos.</p>
-              <div className="mb-2">
+              <div className="mb-6">
                 <PriceDisplay plan={plan} />
               </div>
-               <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400 mb-6">Contate o suporte para alterar seu plano.</p>
               <ul className="space-y-3 text-sm mb-8">
                 {plan.features.map((feature, i) => (
                   <li key={i} className="flex items-center"><CheckCircle className="h-4 w-4 text-green-500 mr-2" />{feature}</li>
                 ))}
               </ul>
-              <Button className="w-full" disabled>
-                <Lock className="h-4 w-4 mr-2" />
-                Contatar Suporte
+              <Button 
+                className="w-full" 
+                onClick={() => handleUpgradePlan(plan)}
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Contratar Plano
               </Button>
             </div>
           ))}
         </div>
       </Section>
     </div>
+
+    {selectedPlan && arena && (
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedPlan(null);
+        }}
+        arena={arena}
+        plan={selectedPlan}
+        onSuccess={handlePaymentSuccess}
+      />
+    )}
+    </>
   );
 };
 
-const Section: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode }> = ({ title, icon: Icon, children }) => (
-  <div>
-    <h3 className="text-lg font-semibold text-brand-gray-900 dark:text-white mb-6 flex items-center">
-      <Icon className="h-5 w-5 mr-2 text-brand-blue-500" />
-      {title}
-    </h3>
-    <div className="space-y-4">{children}</div>
-  </div>
-);
+const Section: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode }> = ({ title, icon: Icon, children }) => {
+  return (
+    <div>
+      <h3 className="text-lg font-semibold text-brand-gray-900 dark:text-white mb-6 flex items-center">
+        <Icon className="h-5 w-5 mr-2 text-brand-blue-500" />
+        {title}
+      </h3>
+      <div className="space-y-4">{children}</div>
+    </div>
+  );
+};
 
 export default PlanTab;

@@ -98,10 +98,13 @@ A integração completa com o gateway de pagamento Asaas permite que o Super Adm
 - ✅ Suporte a pagamentos via **Boleto Bancário** (com URL para visualização/impressão)
 - ✅ Suporte a pagamentos via **PIX** (com QR Code e código copia-e-cola)
 - ✅ Suporte a pagamentos via **Cartão de Crédito**
-- ✅ Painel com estatísticas e filtros de assinaturas
+- ✅ Painel com estatísticas e filtros de assinaturas (SuperAdmin)
 - ✅ Gerenciamento de status de assinaturas
+- ✅ **Contratação de planos pelo dono da arena** (Settings > Plano e Faturamento)
 
 ### Como Testar:
+
+**Como Super Admin:**
 1. Acesse o sistema como Super Admin (email: `superadmin@matchplay.com`)
 2. No menu lateral, clique em "Super Admin"
 3. Clique no botão "Configurar Asaas" no topo da página
@@ -109,6 +112,14 @@ A integração completa com o gateway de pagamento Asaas permite que o Super Adm
 5. Teste a conexão
 6. Na aba "Assinaturas Asaas", visualize e gerencie assinaturas
 7. Use o botão "Trocar Plano" em uma arena para simular criação de assinatura
+
+**Como Dono da Arena:**
+1. Acesse o sistema como Admin/Dono de arena
+2. Vá em "Configurações" no menu lateral
+3. Na aba "Plano e Faturamento", visualize seu plano atual
+4. Clique em "Contratar Plano" em um dos planos disponíveis
+5. Selecione o método de pagamento (Boleto, PIX ou Cartão)
+6. Complete o pagamento conforme o método escolhido
 
 ### Campos Adicionados:
 - `Arena.asaas_customer_id`: ID do cliente no Asaas
