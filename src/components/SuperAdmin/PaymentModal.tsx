@@ -266,17 +266,17 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, arena, plan }
 
           {/* Resultado do pagamento */}
           {paymentResult && (
-            <div className={`p-4 rounded-lg flex items-start gap-3 ${
+            <div className={`p-4 rounded-lg ${
               paymentResult.success
                 ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
                 : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
             }`}>
-              {paymentResult.success ? (
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-              )}
-              <div className="flex-1">
+              <div className="flex items-start gap-3 mb-3">
+                {paymentResult.success ? (
+                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                )}
                 <p className={`text-sm font-medium ${
                   paymentResult.success
                     ? 'text-green-800 dark:text-green-200'
@@ -284,17 +284,89 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, arena, plan }
                 }`}>
                   {paymentResult.message}
                 </p>
-                {paymentResult.success && paymentResult.payment?.invoiceUrl && (
-                  <a
-                    href={paymentResult.payment.invoiceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-block"
-                  >
-                    Ver fatura →
-                  </a>
-                )}
               </div>
+              
+              {paymentResult.success && paymentResult.payment && (
+                <div className="space-y-3 mt-4">
+                  {/* Boleto */}
+                  {paymentResult.payment.bankSlipUrl && (
+                    <div className="bg-white dark:bg-gray-900 p-3 rounded border border-gray-200 dark:border-gray-700">
+                      <p className="text-sm font-medium mb-2">Boleto Bancário:</p>
+                      <a
+                        href={paymentResult.payment.bankSlipUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                      >
+                        <FileText className="w-4 h-4" />
+                        Visualizar/Imprimir Boleto
+                      </a>
+                      {paymentResult.payment.dueDate && (
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                          Vencimento: {new Date(paymentResult.payment.dueDate).toLocaleDateString('pt-BR')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* PIX */}
+                  {paymentResult.payment.pixQrCode && (
+                    <div className="bg-white dark:bg-gray-900 p-3 rounded border border-gray-200 dark:border-gray-700">
+                      <p className="text-sm font-medium mb-3">Pagar com PIX:</p>
+                      {paymentResult.payment.pixQrCode.encodedImage && (
+                        <div className="flex justify-center mb-3">
+                          <img 
+                            src={`data:image/png;base64,${paymentResult.payment.pixQrCode.encodedImage}`}
+                            alt="QR Code PIX"
+                            className="w-48 h-48"
+                          />
+                        </div>
+                      )}
+                      {paymentResult.payment.pixQrCode.payload && (
+                        <div className="space-y-2">
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            Ou copie o código PIX:
+                          </p>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={paymentResult.payment.pixQrCode.payload}
+                              readOnly
+                              className="flex-1 px-3 py-2 text-xs border rounded bg-gray-50 dark:bg-gray-800"
+                            />
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(paymentResult.payment.pixQrCode.payload);
+                                addToast({ message: 'Código PIX copiado!', type: 'success' });
+                              }}
+                              className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-xs"
+                            >
+                              Copiar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {paymentResult.payment.pixQrCode.expirationDate && (
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                          Expira em: {new Date(paymentResult.payment.pixQrCode.expirationDate).toLocaleString('pt-BR')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Invoice URL (para outros casos) */}
+                  {paymentResult.payment.invoiceUrl && !paymentResult.payment.bankSlipUrl && (
+                    <a
+                      href={paymentResult.payment.invoiceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-block"
+                    >
+                      Ver fatura completa →
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

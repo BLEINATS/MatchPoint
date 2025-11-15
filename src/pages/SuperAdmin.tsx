@@ -271,14 +271,15 @@ const SuperAdminPage: React.FC = () => {
         ) : (
           <>
             {activeTab === 'dashboard' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <StatCard icon={Building} label="Total de Arenas" value={dashboardStats.totalArenas} />
-              <StatCard icon={CheckCircle} label="Assinaturas Ativas" value={dashboardStats.activeSubscriptions} />
-              <StatCard icon={DollarSign} label="MRR (Receita Mensal)" value={formatCurrency(dashboardStats.mrr)} />
-              <StatCard icon={Users} label="Novas Arenas (Mês)" value={dashboardStats.newSignups} />
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <StatCard icon={Building} label="Total de Arenas" value={dashboardStats.totalArenas} />
+                <StatCard icon={CheckCircle} label="Assinaturas Ativas" value={dashboardStats.activeSubscriptions} />
+                <StatCard icon={DollarSign} label="MRR (Receita Mensal)" value={formatCurrency(dashboardStats.mrr)} />
+                <StatCard icon={Users} label="Novas Arenas (Mês)" value={dashboardStats.newSignups} />
+              </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
               <div className="xl:col-span-2 bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 overflow-hidden">
                 <h3 className="text-xl font-semibold p-6">Arenas Cadastradas</h3>
                 <div className="overflow-x-auto">
@@ -356,6 +357,7 @@ const SuperAdminPage: React.FC = () => {
                 </div>
               </div>
             </div>
+            </>
             )}
 
             {activeTab === 'subscriptions' && (

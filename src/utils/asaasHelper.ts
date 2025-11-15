@@ -45,7 +45,7 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
     const { arena, plan, billingType, creditCard, creditCardHolderInfo } = options;
 
     // Buscar ou criar cliente no Asaas
-    let asaasCustomerId = arena.asaas_api_key; // Reutilizar campo para guardar customer ID
+    let asaasCustomerId = arena.asaas_customer_id;
     
     if (!asaasCustomerId) {
       // Criar cliente no Asaas
@@ -61,7 +61,7 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
       asaasCustomerId = customer.id!;
 
       // Atualizar arena com customer ID
-      const updatedArena = { ...arena, asaas_api_key: asaasCustomerId };
+      const updatedArena = { ...arena, asaas_customer_id: asaasCustomerId };
       await localApi.upsert('arenas', [updatedArena], 'all');
     }
 
@@ -101,7 +101,7 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
 
     const asaasSubscription = await asaas.createSubscription(subscriptionData);
 
-    // Se for cartão de crédito, processar primeiro pagamento
+    // Criar o primeiro pagamento (charge)
     let payment = null;
     if (billingType === 'CREDIT_CARD' && creditCard && creditCardHolderInfo) {
       const paymentData = {
@@ -117,6 +117,27 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
         creditCard,
         creditCardHolderInfo
       );
+    } else {
+      // Para boleto e PIX, criar o pagamento normal
+      const paymentData = {
+        customer: asaasCustomerId,
+        billingType,
+        value: plan.price,
+        dueDate: nextDueDate.toISOString().split('T')[0],
+        description: `Primeira cobrança - Plano ${plan.name}`,
+      };
+
+      payment = await asaas.createPayment(paymentData);
+
+      // Se for PIX, buscar o QR Code
+      if (billingType === 'PIX' && payment.id) {
+        try {
+          const pixData = await asaas.getPixQrCode(payment.id);
+          payment.pixQrCode = pixData;
+        } catch (error) {
+          console.error('Erro ao buscar QR Code PIX:', error);
+        }
+      }
     }
 
     // Atualizar subscription local

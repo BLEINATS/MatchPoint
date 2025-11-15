@@ -114,6 +114,7 @@ export interface Arena {
   privacy_policy?: string | null;
   created_at: string;
   asaas_api_key?: string;
+  asaas_customer_id?: string;
   status?: 'active' | 'suspended';
   plan_id?: string;
   billing_day?: number;
