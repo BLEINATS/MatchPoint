@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building, User, CheckCircle, XCircle, Loader2, DollarSign, Users, BarChart2, Plus, Edit, Trash2 } from 'lucide-react';
+import { Building, User, CheckCircle, XCircle, Loader2, DollarSign, Users, BarChart2, Plus, Edit, Trash2, Settings } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -13,6 +13,8 @@ import { formatCurrency } from '../utils/formatters';
 import ConfirmationModal from '../components/Shared/ConfirmationModal';
 import PlanModal from '../components/SuperAdmin/PlanModal';
 import ChangePlanModal from '../components/SuperAdmin/ChangePlanModal';
+import AsaasConfigModal from '../components/SuperAdmin/AsaasConfigModal';
+import SubscriptionsPanel from '../components/SuperAdmin/SubscriptionsPanel';
 import { v4 as uuidv4 } from 'uuid';
 
 const calculateNextBillingDate = (sub: Subscription, plan: Plan): Date | null => {
@@ -50,6 +52,7 @@ const SuperAdminPage: React.FC = () => {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'subscriptions'>('dashboard');
 
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
@@ -62,6 +65,8 @@ const SuperAdminPage: React.FC = () => {
 
   const [isChangePlanModalOpen, setIsChangePlanModalOpen] = useState(false);
   const [arenaToChangePlan, setArenaToChangePlan] = useState<Arena | null>(null);
+  
+  const [isAsaasConfigOpen, setIsAsaasConfigOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -223,14 +228,49 @@ const SuperAdminPage: React.FC = () => {
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Painel Super Admin</h1>
-          <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Gerenciamento de todas as arenas da plataforma MatchPlay.</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Painel Super Admin</h1>
+              <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Gerenciamento de todas as arenas da plataforma MatchPlay.</p>
+            </div>
+            <Button onClick={() => setIsAsaasConfigOpen(true)} variant="outline">
+              <Settings className="w-4 h-4 mr-2" />
+              Configurar Asaas
+            </Button>
+          </div>
         </motion.div>
+
+        {/* Tabs */}
+        <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'dashboard'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab('subscriptions')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'subscriptions'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              }`}
+            >
+              Assinaturas Asaas
+            </button>
+          </nav>
+        </div>
 
         {isLoading ? (
           <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 text-brand-blue-500 animate-spin" /></div>
         ) : (
           <>
+            {activeTab === 'dashboard' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <StatCard icon={Building} label="Total de Arenas" value={dashboardStats.totalArenas} />
               <StatCard icon={CheckCircle} label="Assinaturas Ativas" value={dashboardStats.activeSubscriptions} />
@@ -316,9 +356,22 @@ const SuperAdminPage: React.FC = () => {
                 </div>
               </div>
             </div>
+            )}
+
+            {activeTab === 'subscriptions' && (
+              <SubscriptionsPanel />
+            )}
           </>
         )}
       </div>
+      <AsaasConfigModal
+        isOpen={isAsaasConfigOpen}
+        onClose={() => setIsAsaasConfigOpen(false)}
+        onSave={() => {
+          addToast({ message: 'Configuração Asaas atualizada!', type: 'success' });
+          loadData();
+        }}
+      />
       <ConfirmationModal
         isOpen={isToggleConfirmOpen}
         onClose={() => setIsToggleConfirmOpen(false)}

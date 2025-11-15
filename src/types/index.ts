@@ -77,6 +77,18 @@ export interface Subscription {
   status: 'active' | 'past_due' | 'canceled';
   start_date: string;
   end_date: string | null;
+  asaas_subscription_id?: string | null;
+  asaas_customer_id?: string | null;
+  last_payment_date?: string | null;
+  next_payment_date?: string | null;
+}
+
+export interface AsaasConfig {
+  id: string;
+  api_key: string;
+  is_production: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Arena {
