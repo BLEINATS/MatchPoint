@@ -18,5 +18,12 @@ export default defineConfig({
       clientPort: 443,
       protocol: 'wss',
     },
+    proxy: {
+      '/api/asaas': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 });

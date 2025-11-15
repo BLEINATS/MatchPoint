@@ -226,7 +226,7 @@ export class AsaasService {
 
   // Webhook verification
   verifyWebhook(webhookEvent: AsaasWebhookEvent): boolean {
-    return webhookEvent && webhookEvent.event && webhookEvent.payment;
+    return !!(webhookEvent && webhookEvent.event && webhookEvent.payment);
   }
 
   // Helper: Get environment info

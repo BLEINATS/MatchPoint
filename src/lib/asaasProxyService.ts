@@ -1,7 +1,7 @@
 import axios from 'axios';
-import type { AsaasCustomer, AsaasPayment, AsaasSubscription, AsaasCreditCard, AsaasCreditCardHolderInfo } from './asaasService';
+import type { AsaasCustomer, AsaasPayment, AsaasSubscription } from './asaasService';
 
-const PROXY_BASE_URL = 'http://localhost:3001/api/asaas';
+const PROXY_BASE_URL = '/api/asaas';
 
 export class AsaasProxyService {
   async saveConfig(apiKey: string, isSandbox: boolean): Promise<{ success: boolean; message?: string; error?: string }> {

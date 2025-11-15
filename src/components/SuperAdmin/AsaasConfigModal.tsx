@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Key, Check, AlertCircle } from 'lucide-react';
 import asaasProxyService from '../../lib/asaasProxyService';
 import { useToast } from '../../context/ToastContext';

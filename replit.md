@@ -79,7 +79,8 @@ A integração completa com o gateway de pagamento Asaas permite que o Super Adm
 ### Arquitetura:
 - **Backend Proxy** (`server.js`): Servidor Express na porta 3001 que faz proxy das chamadas para API do Asaas
 - **API Key Storage**: Armazenada de forma segura no backend (`.asaas-config.json`, não versionado no Git)
-- **Frontend**: Comunica-se apenas com o proxy, nunca diretamente com Asaas (evita problemas de CORS)
+- **Frontend**: Comunica-se apenas com o proxy através de `/api/asaas`, nunca diretamente com Asaas (evita problemas de CORS)
+- **Vite Proxy**: Configurado para redirecionar requisições de `/api/asaas` para `http://localhost:3001` durante desenvolvimento
 
 ### Componentes Implementados:
 1. **AsaasProxyService** (`src/lib/asaasProxyService.ts`): Cliente que se comunica com o proxy backend
