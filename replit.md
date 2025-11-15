@@ -45,9 +45,16 @@ The application is configured to run on Replit with:
 - Initial seed data is loaded on first run
 
 ## Running the Project
-The dev workflow is already configured and runs automatically:
+O projeto possui dois workflows configurados que rodam automaticamente:
 ```bash
+# Frontend (Vite) - porta 5000
 npm run dev
+
+# Backend (Proxy Asaas) - porta 3001
+npm run server
+
+# Ou rodar ambos simultaneamente
+npm run start
 ```
 
 ## Build for Production
@@ -69,12 +76,19 @@ npm run build
 
 A integração completa com o gateway de pagamento Asaas permite que o Super Admin configure e gerencie cobranças das arenas de forma profissional.
 
+### Arquitetura:
+- **Backend Proxy** (`server.js`): Servidor Express na porta 3001 que faz proxy das chamadas para API do Asaas
+- **API Key Storage**: Armazenada de forma segura no backend (`.asaas-config.json`, não versionado no Git)
+- **Frontend**: Comunica-se apenas com o proxy, nunca diretamente com Asaas (evita problemas de CORS)
+
 ### Componentes Implementados:
-1. **AsaasService** (`src/lib/asaasService.ts`): Biblioteca completa de integração com API do Asaas
-2. **AsaasConfigModal** (`src/components/SuperAdmin/AsaasConfigModal.tsx`): Configuração de API key com teste de conexão
-3. **SubscriptionsPanel** (`src/components/SuperAdmin/SubscriptionsPanel.tsx`): Painel de gerenciamento de assinaturas
-4. **PaymentModal** (`src/components/SuperAdmin/PaymentModal.tsx`): Processamento de pagamentos
-5. **asaasHelper** (`src/utils/asaasHelper.ts`): Funções auxiliares para gestão de assinaturas
+1. **AsaasProxyService** (`src/lib/asaasProxyService.ts`): Cliente que se comunica com o proxy backend
+2. **AsaasService** (`src/lib/asaasService.ts`): Biblioteca original de integração (tipos e interfaces)
+3. **Server Proxy** (`server.js`): Servidor Express que intermedia chamadas para Asaas
+4. **AsaasConfigModal** (`src/components/SuperAdmin/AsaasConfigModal.tsx`): Configuração de API key com teste de conexão
+5. **SubscriptionsPanel** (`src/components/SuperAdmin/SubscriptionsPanel.tsx`): Painel de gerenciamento de assinaturas
+6. **PaymentModal** (`src/components/SuperAdmin/PaymentModal.tsx`): Processamento de pagamentos
+7. **asaasHelper** (`src/utils/asaasHelper.ts`): Funções auxiliares para gestão de assinaturas
 
 ### Funcionalidades:
 - ✅ Configuração de API key (sandbox/produção) com teste de conexão
@@ -112,3 +126,8 @@ A integração completa com o gateway de pagamento Asaas permite que o Super Adm
   - Componentes de configuração e gerenciamento no SuperAdmin
   - Suporte completo a boleto, PIX e cartão de crédito
   - Painel de gerenciamento de assinaturas com filtros e estatísticas
+- **Implementado servidor proxy Node.js/Express para resolver problema de CORS**
+  - Backend serverless rodando na porta 3001
+  - API key armazenada de forma segura no backend (arquivo .asaas-config.json)
+  - Frontend comunica-se com proxy que faz chamadas para API do Asaas
+  - Solução corrige erro "Erro ao conectar com Asaas" causado por política CORS
