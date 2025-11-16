@@ -93,6 +93,10 @@ export class AsaasProxyService {
       throw new Error(error.response?.data?.error || 'Erro ao buscar QR Code PIX');
     }
   }
+
+  getBankSlipPdfUrl(paymentId: string): string {
+    return `${PROXY_BASE_URL}/payments/${paymentId}/bankSlip`;
+  }
 }
 
 export default new AsaasProxyService();
