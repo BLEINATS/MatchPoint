@@ -28,7 +28,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
 import CreatableSelect from '../Forms/CreatableSelect';
 import ArenaPaymentModal from '../Shared/ArenaPaymentModal';
-import { checkAsaasConfig } from '../../utils/arenaPaymentHelper';
+import { checkAsaasConfig, checkAsaasConfigForArena } from '../../utils/arenaPaymentHelper';
 
 const timeToMinutes = (timeStr: string): number => {
   if (!timeStr || !timeStr.includes(':')) return -1;
@@ -777,7 +777,23 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         dataToSave.newSportCreated = formData.sport_type;
     }
 
-    onSave(isEditing ? { ...reservation, ...dataToSave } as Reserva : dataToSave as Reserva);
+    const currentArena = allArenas.find(a => a.id === arenaId);
+    const arenaHasAsaas = currentArena ? checkAsaasConfigForArena(currentArena) : false;
+    const requiresPayment = !isEditing && valorAPagar > 0 && !isManuallyPaid && formData.type !== 'bloqueio';
+    
+    if (arenaHasAsaas && asaasConfigured && requiresPayment && currentArena) {
+      const reservationToSave = isEditing ? { ...reservation, ...dataToSave } as Reserva : {
+        ...dataToSave,
+        id: dataToSave.id || uuidv4(),
+        arena_id: arenaId,
+        created_at: new Date().toISOString(),
+      } as Reserva;
+      
+      setSavedReservation(reservationToSave);
+      setShowPaymentModal(true);
+    } else {
+      onSave(isEditing ? { ...reservation, ...dataToSave } as Reserva : dataToSave as Reserva);
+    }
   };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -1047,7 +1063,39 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
             setSavedReservation(null);
             onClose();
           }}
-          onSuccess={() => {
+          onSuccess={(paymentInfo) => {
+            if (!savedReservation) return;
+            
+            const updatedReservation = { ...savedReservation };
+            updatedReservation.asaas_payment_id = paymentInfo.paymentId;
+            
+            if (paymentInfo.isRealPayment) {
+              if (paymentInfo.billingType === 'CREDIT_CARD' && paymentInfo.status === 'CONFIRMED') {
+                updatedReservation.status = 'confirmada';
+                updatedReservation.payment_status = 'pago';
+                updatedReservation.payment_deadline = null;
+                addToast({ message: 'Pagamento confirmado! Reserva criada com sucesso.', type: 'success' });
+              } else {
+                updatedReservation.status = 'aguardando_pagamento';
+                updatedReservation.payment_status = 'pendente';
+                const currentArena = allArenas.find(a => a.id === arenaId);
+                const paymentWindow = currentArena?.single_booking_payment_window_minutes || 30;
+                updatedReservation.payment_deadline = addMinutes(new Date(), paymentWindow).toISOString();
+                addToast({ 
+                  message: paymentInfo.billingType === 'BOLETO' 
+                    ? 'Boleto gerado! Aguardando pagamento para confirmar reserva.' 
+                    : 'PIX gerado! Aguardando pagamento para confirmar reserva.', 
+                  type: 'info' 
+                });
+              }
+            } else {
+              updatedReservation.status = 'confirmada';
+              updatedReservation.payment_status = 'pago';
+              updatedReservation.payment_deadline = null;
+              addToast({ message: 'Reserva criada (modo simulação).', type: 'success' });
+            }
+            
+            onSave(updatedReservation);
             setShowPaymentModal(false);
             setSavedReservation(null);
             onClose();

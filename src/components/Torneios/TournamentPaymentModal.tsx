@@ -5,7 +5,7 @@ import Button from '../Forms/Button';
 import { Torneio, Participant, Profile, Arena } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import ArenaPaymentModal from '../Shared/ArenaPaymentModal';
-import { checkAsaasConfig } from '../../utils/arenaPaymentHelper';
+import { checkAsaasConfig, checkAsaasConfigForArena } from '../../utils/arenaPaymentHelper';
 
 interface TournamentPaymentModalProps {
   isOpen: boolean;
@@ -43,7 +43,8 @@ const TournamentPaymentModal: React.FC<TournamentPaymentModalProps> = ({
   const amountToPay = category?.registration_fee || 0;
 
   const handlePaymentMethodSelect = (method: 'pix' | 'cartao') => {
-    if (asaasConfigured && arena) {
+    const arenaHasAsaas = arena ? checkAsaasConfigForArena(arena) : false;
+    if (asaasConfigured && arenaHasAsaas && arena) {
       setShowRealPayment(true);
     } else {
       onConfirm(method);
@@ -114,9 +115,9 @@ const TournamentPaymentModal: React.FC<TournamentPaymentModalProps> = ({
             setShowRealPayment(false);
             onClose();
           }}
-          onSuccess={() => {
+          onSuccess={(paymentInfo) => {
             setShowRealPayment(false);
-            onConfirm('pix');
+            onConfirm(paymentInfo.billingType === 'CREDIT_CARD' ? 'cartao' : 'pix');
           }}
           arena={arena}
           customer={playerProfile}
