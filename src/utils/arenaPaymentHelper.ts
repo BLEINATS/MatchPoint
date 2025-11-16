@@ -34,6 +34,81 @@ export const checkAsaasConfigForArena = (arena: Arena): boolean => {
   return !!arena.asaas_api_key && arena.asaas_api_key.trim().length > 0;
 };
 
+const validateCPFChecksum = (cpf: string): boolean => {
+  if (cpf.length !== 11) return false;
+  
+  const invalidCPFs = [
+    '00000000000', '11111111111', '22222222222', '33333333333',
+    '44444444444', '55555555555', '66666666666', '77777777777',
+    '88888888888', '99999999999'
+  ];
+  
+  if (invalidCPFs.includes(cpf)) return false;
+  
+  let sum = 0;
+  let remainder;
+  
+  for (let i = 1; i <= 9; i++) {
+    sum += parseInt(cpf.substring(i - 1, i)) * (11 - i);
+  }
+  
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cpf.substring(9, 10))) return false;
+  
+  sum = 0;
+  for (let i = 1; i <= 10; i++) {
+    sum += parseInt(cpf.substring(i - 1, i)) * (12 - i);
+  }
+  
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cpf.substring(10, 11))) return false;
+  
+  return true;
+};
+
+const validateCNPJChecksum = (cnpj: string): boolean => {
+  if (cnpj.length !== 14) return false;
+  
+  const invalidCNPJs = [
+    '00000000000000', '11111111111111', '22222222222222', '33333333333333',
+    '44444444444444', '55555555555555', '66666666666666', '77777777777777',
+    '88888888888888', '99999999999999'
+  ];
+  
+  if (invalidCNPJs.includes(cnpj)) return false;
+  
+  let size = cnpj.length - 2;
+  let numbers = cnpj.substring(0, size);
+  const digits = cnpj.substring(size);
+  let sum = 0;
+  let pos = size - 7;
+  
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  
+  let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (result !== parseInt(digits.charAt(0))) return false;
+  
+  size = size + 1;
+  numbers = cnpj.substring(0, size);
+  sum = 0;
+  pos = size - 7;
+  
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  
+  result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (result !== parseInt(digits.charAt(1))) return false;
+  
+  return true;
+};
+
 export const validateCustomerCPF = (customer: Aluno | Profile): { valid: boolean; cpf?: string; error?: string } => {
   let cpf = '';
   
@@ -58,16 +133,17 @@ export const validateCustomerCPF = (customer: Aluno | Profile): { valid: boolean
   }
   
   if (cpf.length === 11) {
-    const invalidCPFs = [
-      '00000000000', '11111111111', '22222222222', '33333333333',
-      '44444444444', '55555555555', '66666666666', '77777777777',
-      '88888888888', '99999999999'
-    ];
-    
-    if (invalidCPFs.includes(cpf)) {
+    if (!validateCPFChecksum(cpf)) {
       return {
         valid: false,
-        error: 'CPF inválido. Por favor, cadastre um CPF válido antes de realizar o pagamento.'
+        error: 'CPF inválido (dígitos verificadores incorretos). Por favor, verifique o CPF cadastrado.'
+      };
+    }
+  } else if (cpf.length === 14) {
+    if (!validateCNPJChecksum(cpf)) {
+      return {
+        valid: false,
+        error: 'CNPJ inválido (dígitos verificadores incorretos). Por favor, verifique o CNPJ cadastrado.'
       };
     }
   }
