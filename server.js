@@ -249,7 +249,7 @@ app.get('/api/asaas/payments/:id/bankSlip', async (req, res) => {
     }
 
     const baseUrl = getAsaasUrl(asaasConfig.isSandbox);
-    const pdfUrl = `${baseUrl}/payments/${id}/identificationField`;
+    const pdfUrl = `${baseUrl}/payments/${id}/bankSlipPdf`;
     
     const options = {
       method: 'GET',
@@ -261,8 +261,12 @@ app.get('/api/asaas/payments/:id/bankSlip', async (req, res) => {
     const response = await fetch(pdfUrl, options);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.errors?.[0]?.description || 'Erro ao buscar boleto');
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const errorData = await response.json();
+        throw new Error(errorData.errors?.[0]?.description || 'Erro ao buscar boleto');
+      }
+      throw new Error('Erro ao buscar boleto PDF');
     }
 
     const pdfBuffer = await response.arrayBuffer();

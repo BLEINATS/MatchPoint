@@ -22,6 +22,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, arena, plan }
   const [paymentDetails, setPaymentDetails] = useState<any>(null);
   const [pixData, setPixData] = useState<any>(null);
   const [isFetchingDetails, setIsFetchingDetails] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const { addToast } = useToast();
 
   // Dados do cartão
@@ -43,11 +44,33 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, arena, plan }
     phone: arena.contact_phone || '',
   });
 
+  const fetchPaymentDetails = async (paymentId: string) => {
+    setIsFetchingDetails(true);
+    setDetailsError(null);
+    try {
+      const details = await asaasProxyService.getPayment(paymentId);
+      setPaymentDetails(details);
+
+      if (paymentMethod === 'PIX') {
+        const pix = await asaasProxyService.getPixQrCode(paymentId);
+        setPixData(pix);
+      }
+    } catch (error: any) {
+      const errorMsg = error.message || 'Erro ao buscar detalhes do pagamento';
+      console.error('Erro ao buscar detalhes do pagamento:', error);
+      setDetailsError(errorMsg);
+      addToast({ message: errorMsg, type: 'error' });
+    } finally {
+      setIsFetchingDetails(false);
+    }
+  };
+
   const handleProcessPayment = async () => {
     setIsProcessing(true);
     setPaymentResult(null);
     setPaymentDetails(null);
     setPixData(null);
+    setDetailsError(null);
 
     try {
       const options: any = {
@@ -87,20 +110,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, arena, plan }
         });
 
         if (result.payment?.id) {
-          setIsFetchingDetails(true);
-          try {
-            const details = await asaasProxyService.getPayment(result.payment.id);
-            setPaymentDetails(details);
-
-            if (paymentMethod === 'PIX') {
-              const pix = await asaasProxyService.getPixQrCode(result.payment.id);
-              setPixData(pix);
-            }
-          } catch (error) {
-            console.error('Erro ao buscar detalhes do pagamento:', error);
-          } finally {
-            setIsFetchingDetails(false);
-          }
+          await fetchPaymentDetails(result.payment.id);
         }
 
         addToast({ message: 'Assinatura criada com sucesso!', type: 'success' });
@@ -313,6 +323,42 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, arena, plan }
                 <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mt-3">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Carregando detalhes do pagamento...</span>
+                </div>
+              )}
+
+              {detailsError && paymentResult.payment?.id && (
+                <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                  <div className="flex items-start gap-2 mb-3">
+                    <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                        Não foi possível carregar os detalhes do pagamento
+                      </p>
+                      <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                        {detailsError}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => fetchPaymentDetails(paymentResult.payment.id)}
+                      disabled={isFetchingDetails}
+                      size="sm"
+                    >
+                      {isFetchingDetails ? 'Tentando...' : 'Tentar Novamente'}
+                    </Button>
+                    {paymentResult.payment.bankSlipUrl && (
+                      <a
+                        href={paymentResult.payment.bankSlipUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                      >
+                        <FileText className="w-4 h-4" />
+                        Ver no Asaas
+                      </a>
+                    )}
+                  </div>
                 </div>
               )}
               
