@@ -57,16 +57,23 @@ export default function ArenaPaymentModal({
     phone: customer.phone || '',
   });
 
-  const fetchPaymentDetails = async (paymentId: string) => {
+  const fetchPaymentDetails = async (paymentId: string, localPaymentData?: any) => {
     setIsFetchingDetails(true);
     setDetailsError(null);
     try {
-      const details = await asaasProxyService.getPayment(paymentId);
-      setPaymentDetails(details);
+      if (paymentId.startsWith('local_') && localPaymentData) {
+        setPaymentDetails(localPaymentData);
+        if (paymentMethod === 'PIX' && localPaymentData.pixQrCode) {
+          setPixData(localPaymentData.pixQrCode);
+        }
+      } else {
+        const details = await asaasProxyService.getPayment(paymentId);
+        setPaymentDetails(details);
 
-      if (paymentMethod === 'PIX') {
-        const pix = await asaasProxyService.getPixQrCode(paymentId);
-        setPixData(pix);
+        if (paymentMethod === 'PIX') {
+          const pix = await asaasProxyService.getPixQrCode(paymentId);
+          setPixData(pix);
+        }
       }
     } catch (error: any) {
       const errorMsg = error.message || 'Erro ao buscar detalhes do pagamento';
@@ -127,7 +134,7 @@ export default function ArenaPaymentModal({
         });
 
         if (result.payment?.id) {
-          await fetchPaymentDetails(result.payment.id);
+          await fetchPaymentDetails(result.payment.id, result.payment);
         }
 
         addToast({ message: 'Pagamento criado com sucesso!', type: 'success' });
