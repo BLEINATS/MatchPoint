@@ -399,15 +399,25 @@ const TorneioPublico: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
-  const handleConfirmPayment = async (method: 'pix' | 'cartao' | 'dinheiro') => {
+  const handleConfirmPayment = async (paymentInfo: { method: 'pix' | 'cartao' | 'dinheiro'; paymentId?: string; isRealPayment: boolean; status?: string }) => {
     if (!torneio || !participantToPay || !arena || !profile) return;
     setIsProcessingPayment(true);
     try {
+        const { method, paymentId, isRealPayment, status } = paymentInfo;
+        
+        const playerPaymentStatus = isRealPayment 
+          ? (method === 'cartao' && status === 'CONFIRMED' ? 'pago' : 'pendente')
+          : 'pago';
+        
         const updatedParticipants = torneio.participants.map(p => {
             if (p.id === participantToPay.id) {
                 const updatedPlayers = p.players.map(player => {
                     if (player.profile_id === profile.id) {
-                        return { ...player, payment_status: 'pago' as 'pago' };
+                        return { 
+                          ...player, 
+                          payment_status: playerPaymentStatus as 'pago' | 'pendente',
+                          asaas_payment_id: paymentId || null
+                        };
                     }
                     return player;
                 });
@@ -435,16 +445,21 @@ const TorneioPublico: React.FC = () => {
         const category = torneio.categories.find(c => c.id === participantToPay.categoryId);
         const amount = category?.registration_fee || 0;
         
-        await localApi.upsert('finance_transactions', [{
-            arena_id: arena.id,
-            description: `Inscrição Torneio: ${torneio.name} - ${profile.name} (Equipe: ${participantToPay.name})`,
-            amount: amount,
-            type: 'receita' as 'receita',
-            category: 'Torneio',
-            date: new Date().toISOString().split('T')[0],
-        }], arena.id);
+        if (playerPaymentStatus === 'pago') {
+          await localApi.upsert('finance_transactions', [{
+              arena_id: arena.id,
+              description: `Inscrição Torneio: ${torneio.name} - ${profile.name} (Equipe: ${participantToPay.name})`,
+              amount: amount,
+              type: 'receita' as 'receita',
+              category: 'Torneio',
+              date: new Date().toISOString().split('T')[0],
+          }], arena.id);
+        }
 
-        addToast({ message: 'Pagamento confirmado com sucesso!', type: 'success' });
+        const message = isRealPayment
+          ? (playerPaymentStatus === 'pago' ? 'Pagamento confirmado!' : 'Aguardando confirmação do pagamento.')
+          : 'Pagamento confirmado (simulação)!';
+        addToast({ message, type: 'success' });
         loadData();
     } catch (error: any) {
         addToast({ message: `Erro ao confirmar pagamento: ${error.message}`, type: 'error' });

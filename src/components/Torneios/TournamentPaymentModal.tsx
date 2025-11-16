@@ -10,7 +10,7 @@ import { checkAsaasConfig, checkAsaasConfigForArena } from '../../utils/arenaPay
 interface TournamentPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (method: 'pix' | 'cartao' | 'dinheiro') => void;
+  onConfirm: (paymentInfo: { method: 'pix' | 'cartao' | 'dinheiro'; paymentId?: string; isRealPayment: boolean; status?: string }) => void;
   torneio: Torneio;
   participant: Participant;
   playerProfile: Profile;
@@ -47,7 +47,7 @@ const TournamentPaymentModal: React.FC<TournamentPaymentModalProps> = ({
     if (asaasConfigured && arenaHasAsaas && arena) {
       setShowRealPayment(true);
     } else {
-      onConfirm(method);
+      onConfirm({ method, isRealPayment: false });
     }
   };
 
@@ -117,7 +117,12 @@ const TournamentPaymentModal: React.FC<TournamentPaymentModalProps> = ({
           }}
           onSuccess={(paymentInfo) => {
             setShowRealPayment(false);
-            onConfirm(paymentInfo.billingType === 'CREDIT_CARD' ? 'cartao' : 'pix');
+            onConfirm({
+              method: paymentInfo.billingType === 'CREDIT_CARD' ? 'cartao' : 'pix',
+              paymentId: paymentInfo.paymentId,
+              isRealPayment: paymentInfo.isRealPayment,
+              status: paymentInfo.status
+            });
           }}
           arena={arena}
           customer={playerProfile}
