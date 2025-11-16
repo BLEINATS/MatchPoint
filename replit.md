@@ -158,8 +158,50 @@ Sistema completo de processamento de pagamentos para alunos/clientes da arena (r
 1. **Com Asaas configurado**: Pagamentos reais são processados via gateway Asaas
 2. **Sem Asaas**: Sistema simula pagamentos automaticamente com dados mockados realistas
 
+### Validação Obrigatória de Pagamento:
+**Implementado em**: November 16, 2025
+
+Sistema de validação que **bloqueia a criação de reservas e inscrições em torneios até confirmação de pagamento** quando Asaas está configurado na arena.
+
+#### Comportamento por Tipo de Pagamento:
+1. **Cartão de Crédito**:
+   - Status retornado pelo Asaas: `CONFIRMED`
+   - Reserva criada imediatamente com `status='confirmada'`, `payment_status='pago'`
+   - Inscrição marcada como `payment_status='pago'` imediatamente
+   - Transação financeira registrada
+
+2. **Boleto / PIX**:
+   - Status retornado pelo Asaas: `PENDING`
+   - Reserva criada com `status='aguardando_pagamento'`, `payment_status='pendente'`
+   - Inscrição marcada como `payment_status='pendente'`
+   - Transação financeira **não** registrada (aguarda webhook de confirmação)
+   - Quando webhook do Asaas confirmar pagamento → atualiza para 'pago' e registra transação
+
+3. **Modo Simulação** (sem Asaas configurado):
+   - Todos os pagamentos marcados como `status='confirmada'`, `payment_status='pago'`
+   - Funciona perfeitamente para testes e arenas sem integração Asaas
+
+#### Arquivos Modificados:
+- `arenaPaymentHelper.ts`: `checkAsaasConfigForArena()` valida `Arena.asaas_api_key`
+- `ArenaPaymentModal.tsx`: Callback retorna `{ paymentId, isRealPayment, status }`
+- `ReservationModal.tsx`: Intercepta fluxo e exige pagamento antes de criar reserva
+- `TournamentPaymentModal.tsx`: Interface atualizada para processar callback com status
+- `TorneioPublico.tsx` (3 versões): Handlers atualizam status baseado em tipo de pagamento
+
+#### Próximos Passos (Recomendado):
+- Implementar webhook handlers para atualizar reservas/torneios pendentes quando Asaas confirmar PIX/boleto
+- Adicionar endpoint `/api/asaas/webhook` no `server.js` para receber notificações do Asaas
+- Criar serviço para atualizar status de `pendente` → `pago` automaticamente
+
 ## Recent Changes
 **November 16, 2025**
+- **✅ Validação obrigatória de pagamento implementada e aprovada pelo architect**
+  - Reservas e torneios agora bloqueiam até confirmação real via Asaas quando configurado
+  - Cartão aprovado: status confirmado imediatamente
+  - Boleto/PIX: status aguardando_pagamento até webhook confirmar
+  - asaas_payment_id persistido em reservas e participantes de torneios
+  - Transação financeira só registrada após pagamento confirmado
+  - Fallback local funciona perfeitamente sem Asaas configurado
 - **Implementado sistema completo de pagamento para Arena Admin**
   - arenaPaymentHelper.ts: Helper para criar cobranças e clientes no Asaas
   - ArenaPaymentModal.tsx: Componente reutilizável para processar pagamentos
