@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { X, CreditCard, FileText, QrCode, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { X, CreditCard, FileText, QrCode, Loader2, CheckCircle, AlertCircle, Copy, Download } from 'lucide-react';
 import { Arena, Plan } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { createAsaasSubscription } from '../../utils/asaasHelper';
+import asaasProxyService from '../../lib/asaasProxyService';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -18,6 +19,9 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, arena, plan }
   const [paymentMethod, setPaymentMethod] = useState<'BOLETO' | 'PIX' | 'CREDIT_CARD'>('BOLETO');
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentResult, setPaymentResult] = useState<{ success: boolean; message: string; payment?: any } | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState<any>(null);
+  const [pixData, setPixData] = useState<any>(null);
+  const [isFetchingDetails, setIsFetchingDetails] = useState(false);
   const { addToast } = useToast();
 
   // Dados do cartão
@@ -42,6 +46,8 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, arena, plan }
   const handleProcessPayment = async () => {
     setIsProcessing(true);
     setPaymentResult(null);
+    setPaymentDetails(null);
+    setPixData(null);
 
     try {
       const options: any = {
@@ -51,7 +57,6 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, arena, plan }
       };
 
       if (paymentMethod === 'CREDIT_CARD') {
-        // Validar dados do cartão
         if (!cardData.holderName || !cardData.number || !cardData.expiryMonth || !cardData.expiryYear || !cardData.ccv) {
           addToast({ message: 'Preencha todos os dados do cartão', type: 'error' });
           setIsProcessing(false);
@@ -80,6 +85,24 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, arena, plan }
             : 'PIX gerado com sucesso!',
           payment: result.payment,
         });
+
+        if (result.payment?.id) {
+          setIsFetchingDetails(true);
+          try {
+            const details = await asaasProxyService.getPayment(result.payment.id);
+            setPaymentDetails(details);
+
+            if (paymentMethod === 'PIX') {
+              const pix = await asaasProxyService.getPixQrCode(result.payment.id);
+              setPixData(pix);
+            }
+          } catch (error) {
+            console.error('Erro ao buscar detalhes do pagamento:', error);
+          } finally {
+            setIsFetchingDetails(false);
+          }
+        }
+
         addToast({ message: 'Assinatura criada com sucesso!', type: 'success' });
         onSuccess();
       } else {
@@ -285,85 +308,172 @@ export default function PaymentModal({ isOpen, onClose, onSuccess, arena, plan }
                   {paymentResult.message}
                 </p>
               </div>
+
+              {isFetchingDetails && (
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mt-3">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Carregando detalhes do pagamento...</span>
+                </div>
+              )}
               
-              {paymentResult.success && paymentResult.payment && (
-                <div className="space-y-3 mt-4">
+              {paymentResult.success && paymentDetails && (
+                <div className="space-y-4 mt-4">
                   {/* Boleto */}
-                  {paymentResult.payment.bankSlipUrl && (
-                    <div className="bg-white dark:bg-gray-900 p-3 rounded border border-gray-200 dark:border-gray-700">
-                      <p className="text-sm font-medium mb-2">Boleto Bancário:</p>
-                      <a
-                        href={paymentResult.payment.bankSlipUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
-                      >
-                        <FileText className="w-4 h-4" />
-                        Visualizar/Imprimir Boleto
-                      </a>
-                      {paymentResult.payment.dueDate && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                          Vencimento: {new Date(paymentResult.payment.dueDate).toLocaleDateString('pt-BR')}
-                        </p>
+                  {paymentMethod === 'BOLETO' && paymentDetails.identificationField && (
+                    <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText className="w-5 h-5 text-blue-600" />
+                        <h4 className="font-semibold text-gray-900 dark:text-white">Boleto Bancário</h4>
+                      </div>
+                      
+                      {paymentDetails.dueDate && (
+                        <div className="mb-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded text-sm">
+                          <p className="text-yellow-800 dark:text-yellow-200">
+                            <strong>Vencimento:</strong> {new Date(paymentDetails.dueDate).toLocaleDateString('pt-BR')}
+                          </p>
+                          <p className="text-yellow-800 dark:text-yellow-200">
+                            <strong>Valor:</strong> R$ {paymentDetails.value?.toFixed(2)}
+                          </p>
+                        </div>
                       )}
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">
+                            Linha Digitável:
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={paymentDetails.identificationField}
+                              readOnly
+                              className="flex-1 px-3 py-2 text-sm font-mono border rounded bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                            />
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(paymentDetails.identificationField);
+                                addToast({ message: 'Linha digitável copiada!', type: 'success' });
+                              }}
+                              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
+                            >
+                              <Copy className="w-4 h-4" />
+                              Copiar
+                            </button>
+                          </div>
+                        </div>
+
+                        <a
+                          href={asaasProxyService.getBankSlipPdfUrl(paymentDetails.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                        >
+                          <Download className="w-4 h-4" />
+                          Baixar/Imprimir Boleto (PDF)
+                        </a>
+
+                        {paymentDetails.bankSlipUrl && (
+                          <a
+                            href={paymentDetails.bankSlipUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 ml-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
+                          >
+                            <FileText className="w-4 h-4" />
+                            Ver no Asaas
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )}
 
                   {/* PIX */}
-                  {paymentResult.payment.pixQrCode && (
-                    <div className="bg-white dark:bg-gray-900 p-3 rounded border border-gray-200 dark:border-gray-700">
-                      <p className="text-sm font-medium mb-3">Pagar com PIX:</p>
-                      {paymentResult.payment.pixQrCode.encodedImage && (
-                        <div className="flex justify-center mb-3">
+                  {paymentMethod === 'PIX' && pixData && (
+                    <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center gap-2 mb-4">
+                        <QrCode className="w-5 h-5 text-green-600" />
+                        <h4 className="font-semibold text-gray-900 dark:text-white">Pagamento via PIX</h4>
+                      </div>
+
+                      {paymentDetails.value && (
+                        <div className="mb-3 p-2 bg-green-50 dark:bg-green-900/20 rounded text-sm">
+                          <p className="text-green-800 dark:text-green-200">
+                            <strong>Valor:</strong> R$ {paymentDetails.value.toFixed(2)}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {pixData.encodedImage && (
+                        <div className="flex justify-center mb-4 p-4 bg-white dark:bg-gray-800 rounded">
                           <img 
-                            src={`data:image/png;base64,${paymentResult.payment.pixQrCode.encodedImage}`}
+                            src={`data:image/png;base64,${pixData.encodedImage}`}
                             alt="QR Code PIX"
-                            className="w-48 h-48"
+                            className="w-64 h-64"
                           />
                         </div>
                       )}
-                      {paymentResult.payment.pixQrCode.payload && (
+                      
+                      {pixData.payload && (
                         <div className="space-y-2">
-                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block">
                             Ou copie o código PIX:
-                          </p>
+                          </label>
                           <div className="flex gap-2">
                             <input
                               type="text"
-                              value={paymentResult.payment.pixQrCode.payload}
+                              value={pixData.payload}
                               readOnly
-                              className="flex-1 px-3 py-2 text-xs border rounded bg-gray-50 dark:bg-gray-800"
+                              className="flex-1 px-3 py-2 text-xs font-mono border rounded bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600"
                             />
                             <button
                               onClick={() => {
-                                navigator.clipboard.writeText(paymentResult.payment.pixQrCode.payload);
+                                navigator.clipboard.writeText(pixData.payload);
                                 addToast({ message: 'Código PIX copiado!', type: 'success' });
                               }}
-                              className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-xs"
+                              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
                             >
+                              <Copy className="w-4 h-4" />
                               Copiar
                             </button>
                           </div>
                         </div>
                       )}
-                      {paymentResult.payment.pixQrCode.expirationDate && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                          Expira em: {new Date(paymentResult.payment.pixQrCode.expirationDate).toLocaleString('pt-BR')}
+                      
+                      {pixData.expirationDate && (
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded">
+                          ⏰ Expira em: {new Date(pixData.expirationDate).toLocaleString('pt-BR')}
                         </p>
                       )}
                     </div>
                   )}
 
-                  {/* Invoice URL (para outros casos) */}
-                  {paymentResult.payment.invoiceUrl && !paymentResult.payment.bankSlipUrl && (
-                    <a
-                      href={paymentResult.payment.invoiceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-block"
-                    >
-                      Ver fatura completa →
-                    </a>
+                  {/* Cartão de Crédito */}
+                  {paymentMethod === 'CREDIT_CARD' && paymentDetails && (
+                    <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center gap-2 mb-4">
+                        <CreditCard className="w-5 h-5 text-purple-600" />
+                        <h4 className="font-semibold text-gray-900 dark:text-white">Pagamento Processado</h4>
+                      </div>
+
+                      <div className="space-y-2 text-sm">
+                        <p className="text-gray-700 dark:text-gray-300">
+                          <strong>Status:</strong> <span className="text-green-600 dark:text-green-400">{paymentDetails.status === 'CONFIRMED' ? 'Confirmado' : paymentDetails.status}</span>
+                        </p>
+                        {paymentDetails.value && (
+                          <p className="text-gray-700 dark:text-gray-300">
+                            <strong>Valor:</strong> R$ {paymentDetails.value.toFixed(2)}
+                          </p>
+                        )}
+                        {paymentDetails.creditCard && (
+                          <p className="text-gray-700 dark:text-gray-300">
+                            <strong>Cartão:</strong> **** **** **** {paymentDetails.creditCard.creditCardNumber?.slice(-4)}
+                          </p>
+                        )}
+                        <p className="text-green-600 dark:text-green-400 font-medium mt-3">
+                          ✓ Assinatura ativada com sucesso!
+                        </p>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
