@@ -33,6 +33,8 @@ export interface CreditCardInfo {
   last4: string;
   brand: string;
   cardholder_name: string;
+  asaas_token?: string;
+  created_at?: string;
 }
 
 export interface Profile {
@@ -212,6 +214,8 @@ export interface Aluno {
   attendance_history?: { date: string; turma_id: string; time: string; status: 'presente' | 'falta' }[];
   join_date: string;
   created_at: string;
+  asaas_customer_id?: string | null;
+  credit_cards?: CreditCardInfo[];
   avatar_url?: string;
   credit_balance?: number;
   gamification_points?: number;
@@ -219,7 +223,6 @@ export interface Aluno {
   gamification_levels?: { name: string } | null;
   gamification_point_transactions?: { points: number }[];
   last_credit_reset_date?: string | null;
-  asaas_customer_id?: string | null;
 }
 
 export interface Professor {

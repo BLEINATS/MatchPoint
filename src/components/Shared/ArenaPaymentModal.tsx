@@ -40,6 +40,11 @@ export default function ArenaPaymentModal({
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const { addToast } = useToast();
 
+  const savedCards = customer.credit_cards || [];
+  const [useNewCard, setUseNewCard] = useState(savedCards.length === 0);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(savedCards.length > 0 ? savedCards[0].id : null);
+  const [saveCard, setSaveCard] = useState(true);
+
   const [cardData, setCardData] = useState({
     holderName: '',
     number: '',
@@ -48,10 +53,20 @@ export default function ArenaPaymentModal({
     ccv: '',
   });
 
+  const getCpfCnpj = () => {
+    let cpf = '';
+    if ('cpf' in customer && customer.cpf) {
+      cpf = String(customer.cpf);
+    } else if ('cpf_cnpj' in customer && customer.cpf_cnpj) {
+      cpf = String(customer.cpf_cnpj);
+    }
+    return cpf;
+  };
+
   const [holderInfo, setHolderInfo] = useState({
     name: customer.name || '',
     email: customer.email || '',
-    cpfCnpj: (('cpf' in customer) ? customer.cpf : ('cpf_cnpj' in customer ? customer.cpf_cnpj : '')) || '',
+    cpfCnpj: getCpfCnpj(),
     postalCode: '',
     addressNumber: '',
     phone: customer.phone || '',
@@ -104,20 +119,31 @@ export default function ArenaPaymentModal({
       };
 
       if (paymentMethod === 'CREDIT_CARD') {
-        if (!cardData.holderName || !cardData.number || !cardData.expiryMonth || !cardData.expiryYear || !cardData.ccv) {
-          addToast({ message: 'Preencha todos os dados do cartão', type: 'error' });
-          setIsProcessing(false);
-          return;
-        }
+        if (useNewCard) {
+          if (!cardData.holderName || !cardData.number || !cardData.expiryMonth || !cardData.expiryYear || !cardData.ccv) {
+            addToast({ message: 'Preencha todos os dados do cartão', type: 'error' });
+            setIsProcessing(false);
+            return;
+          }
 
-        if (!holderInfo.name || !holderInfo.email || !holderInfo.cpfCnpj || !holderInfo.postalCode || !holderInfo.addressNumber || !holderInfo.phone) {
-          addToast({ message: 'Preencha todos os dados do titular do cartão', type: 'error' });
-          setIsProcessing(false);
-          return;
-        }
+          if (!holderInfo.name || !holderInfo.email || !holderInfo.cpfCnpj || !holderInfo.postalCode || !holderInfo.addressNumber || !holderInfo.phone) {
+            addToast({ message: 'Preencha todos os dados do titular do cartão', type: 'error' });
+            setIsProcessing(false);
+            return;
+          }
 
-        options.creditCard = cardData;
-        options.creditCardHolderInfo = holderInfo;
+          options.creditCard = cardData;
+          options.creditCardHolderInfo = holderInfo;
+          options.saveCard = saveCard;
+        } else {
+          const selectedCard = savedCards.find(c => c.id === selectedCardId);
+          if (!selectedCard?.asaas_token) {
+            addToast({ message: 'Selecione um cartão válido', type: 'error' });
+            setIsProcessing(false);
+            return;
+          }
+          options.creditCardToken = selectedCard.asaas_token;
+        }
       }
 
       const result = await createArenaPayment(options);
@@ -249,83 +275,173 @@ export default function ArenaPaymentModal({
           {/* Formulário de cartão de crédito */}
           {paymentMethod === 'CREDIT_CARD' && (
             <div className="space-y-4 border-t pt-4">
-              <h4 className="font-medium text-gray-900 dark:text-white">Dados do Cartão</h4>
-              <div className="grid grid-cols-1 gap-4">
-                <Input
-                  label="Nome no Cartão"
-                  value={cardData.holderName}
-                  onChange={(e) => setCardData({ ...cardData, holderName: e.target.value })}
-                  placeholder="NOME COMPLETO"
-                />
-                <Input
-                  label="Número do Cartão"
-                  value={cardData.number}
-                  onChange={(e) => setCardData({ ...cardData, number: e.target.value.replace(/\D/g, '') })}
-                  placeholder="0000 0000 0000 0000"
-                  maxLength={16}
-                />
-                <div className="grid grid-cols-3 gap-3">
-                  <Input
-                    label="Mês"
-                    value={cardData.expiryMonth}
-                    onChange={(e) => setCardData({ ...cardData, expiryMonth: e.target.value.replace(/\D/g, '') })}
-                    placeholder="MM"
-                    maxLength={2}
-                  />
-                  <Input
-                    label="Ano"
-                    value={cardData.expiryYear}
-                    onChange={(e) => setCardData({ ...cardData, expiryYear: e.target.value.replace(/\D/g, '') })}
-                    placeholder="AAAA"
-                    maxLength={4}
-                  />
-                  <Input
-                    label="CVV"
-                    value={cardData.ccv}
-                    onChange={(e) => setCardData({ ...cardData, ccv: e.target.value.replace(/\D/g, '') })}
-                    placeholder="123"
-                    maxLength={4}
-                    type="password"
-                  />
+              {/* Seleção entre cartões salvos e novo cartão */}
+              {savedCards.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900 dark:text-white">Método de Pagamento</h4>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setUseNewCard(false)}
+                      className={`flex-1 p-3 rounded-lg border-2 transition-all ${
+                        !useNewCard
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <CreditCard className="w-5 h-5 mx-auto mb-1" />
+                      <p className="text-sm font-medium">Cartão Salvo</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUseNewCard(true)}
+                      className={`flex-1 p-3 rounded-lg border-2 transition-all ${
+                        useNewCard
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <CreditCard className="w-5 h-5 mx-auto mb-1" />
+                      <p className="text-sm font-medium">Novo Cartão</p>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <h4 className="font-medium text-gray-900 dark:text-white mt-6">Dados do Titular</h4>
-              <div className="grid grid-cols-1 gap-4">
-                <Input
-                  label="Nome Completo"
-                  value={holderInfo.name}
-                  onChange={(e) => setHolderInfo({ ...holderInfo, name: e.target.value })}
-                />
-                <Input
-                  label="Email"
-                  value={holderInfo.email}
-                  onChange={(e) => setHolderInfo({ ...holderInfo, email: e.target.value })}
-                  type="email"
-                />
-                <Input
-                  label="CPF/CNPJ"
-                  value={holderInfo.cpfCnpj}
-                  onChange={(e) => setHolderInfo({ ...holderInfo, cpfCnpj: e.target.value })}
-                />
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    label="CEP"
-                    value={holderInfo.postalCode}
-                    onChange={(e) => setHolderInfo({ ...holderInfo, postalCode: e.target.value })}
-                  />
-                  <Input
-                    label="Número"
-                    value={holderInfo.addressNumber}
-                    onChange={(e) => setHolderInfo({ ...holderInfo, addressNumber: e.target.value })}
-                  />
+              {/* Lista de cartões salvos */}
+              {!useNewCard && savedCards.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900 dark:text-white">Selecione um Cartão</h4>
+                  <div className="space-y-2">
+                    {savedCards.map((card) => (
+                      <button
+                        key={card.id}
+                        type="button"
+                        onClick={() => setSelectedCardId(card.id)}
+                        className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                          selectedCardId === card.id
+                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <CreditCard className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                {card.brand} •••• {card.last4}
+                              </p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {card.cardholder_name}
+                              </p>
+                            </div>
+                          </div>
+                          {selectedCardId === card.id && (
+                            <CheckCircle className="w-5 h-5 text-purple-600" />
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <Input
-                  label="Telefone"
-                  value={holderInfo.phone}
-                  onChange={(e) => setHolderInfo({ ...holderInfo, phone: e.target.value })}
-                />
-              </div>
+              )}
+
+              {/* Formulário de novo cartão */}
+              {useNewCard && (
+                <div className="space-y-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white">Dados do Cartão</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <Input
+                      label="Nome no Cartão"
+                      value={cardData.holderName}
+                      onChange={(e) => setCardData({ ...cardData, holderName: e.target.value })}
+                      placeholder="NOME COMPLETO"
+                    />
+                    <Input
+                      label="Número do Cartão"
+                      value={cardData.number}
+                      onChange={(e) => setCardData({ ...cardData, number: e.target.value.replace(/\D/g, '') })}
+                      placeholder="0000 0000 0000 0000"
+                      maxLength={16}
+                    />
+                    <div className="grid grid-cols-3 gap-3">
+                      <Input
+                        label="Mês"
+                        value={cardData.expiryMonth}
+                        onChange={(e) => setCardData({ ...cardData, expiryMonth: e.target.value.replace(/\D/g, '') })}
+                        placeholder="MM"
+                        maxLength={2}
+                      />
+                      <Input
+                        label="Ano"
+                        value={cardData.expiryYear}
+                        onChange={(e) => setCardData({ ...cardData, expiryYear: e.target.value.replace(/\D/g, '') })}
+                        placeholder="AAAA"
+                        maxLength={4}
+                      />
+                      <Input
+                        label="CVV"
+                        value={cardData.ccv}
+                        onChange={(e) => setCardData({ ...cardData, ccv: e.target.value.replace(/\D/g, '') })}
+                        placeholder="123"
+                        maxLength={4}
+                        type="password"
+                      />
+                    </div>
+                  </div>
+
+                  <h4 className="font-medium text-gray-900 dark:text-white mt-6">Dados do Titular</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <Input
+                      label="Nome Completo"
+                      value={holderInfo.name}
+                      onChange={(e) => setHolderInfo({ ...holderInfo, name: e.target.value })}
+                    />
+                    <Input
+                      label="Email"
+                      value={holderInfo.email}
+                      onChange={(e) => setHolderInfo({ ...holderInfo, email: e.target.value })}
+                      type="email"
+                    />
+                    <Input
+                      label="CPF/CNPJ"
+                      value={holderInfo.cpfCnpj}
+                      onChange={(e) => setHolderInfo({ ...holderInfo, cpfCnpj: e.target.value })}
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        label="CEP"
+                        value={holderInfo.postalCode}
+                        onChange={(e) => setHolderInfo({ ...holderInfo, postalCode: e.target.value })}
+                      />
+                      <Input
+                        label="Número"
+                        value={holderInfo.addressNumber}
+                        onChange={(e) => setHolderInfo({ ...holderInfo, addressNumber: e.target.value })}
+                      />
+                    </div>
+                    <Input
+                      label="Telefone"
+                      value={holderInfo.phone}
+                      onChange={(e) => setHolderInfo({ ...holderInfo, phone: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Checkbox para salvar cartão */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="saveCard"
+                      checked={saveCard}
+                      onChange={(e) => setSaveCard(e.target.checked)}
+                      className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                    />
+                    <label htmlFor="saveCard" className="text-sm text-gray-700 dark:text-gray-300">
+                      Salvar este cartão para pagamentos futuros
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

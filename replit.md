@@ -195,6 +195,16 @@ Sistema de validação que **bloqueia a criação de reservas e inscrições em 
 
 ## Recent Changes
 **November 16, 2025**
+- **✅ Validação de CPF obrigatória e Cartões Salvos implementados**
+  - Validação de CPF: sistema agora valida se cliente tem CPF cadastrado antes de processar pagamento
+  - Erro claro se CPF não cadastrado: "CPF não cadastrado. Por favor, cadastre seu CPF antes de realizar o pagamento"
+  - Removido CPF fake '00000000000' que causava erro no Asaas
+  - Tokenização de cartões: cartões salvos automaticamente após primeiro pagamento bem-sucedido
+  - Interface para selecionar cartão salvo ou adicionar novo cartão
+  - Cartões salvos incluem: bandeira, últimos 4 dígitos, nome do titular, token Asaas
+  - Checkbox "Salvar este cartão para pagamentos futuros" em novos cartões
+  - Pagamentos futuros usando token: não precisa reinserir dados do cartão
+  - Tipos atualizados: CreditCardInfo com asaas_token, Aluno e Profile com credit_cards[]
 - **✅ Validação obrigatória de pagamento implementada e aprovada pelo architect**
   - Reservas e torneios agora bloqueiam até confirmação real via Asaas quando configurado
   - Cartão aprovado: status confirmado imediatamente
