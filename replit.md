@@ -198,7 +198,8 @@ Sistema de validação que **bloqueia a criação de reservas e inscrições em 
 - **✅ Validação de CPF obrigatória e Cartões Salvos implementados**
   - Validação de CPF: sistema agora valida se cliente tem CPF cadastrado antes de processar pagamento
   - Erro claro se CPF não cadastrado: "CPF não cadastrado. Por favor, cadastre seu CPF antes de realizar o pagamento"
-  - Removido CPF fake '00000000000' que causava erro no Asaas
+  - **Validação robusta**: bloqueia CPFs fake com dígitos repetidos (00000000000, 11111111111, etc.)
+  - CPF normalizado: remove formatação (pontos e traços) antes de enviar ao Asaas
   - Tokenização de cartões: cartões salvos automaticamente após primeiro pagamento bem-sucedido
   - Interface para selecionar cartão salvo ou adicionar novo cartão
   - Cartões salvos incluem: bandeira, últimos 4 dígitos, nome do titular, token Asaas
