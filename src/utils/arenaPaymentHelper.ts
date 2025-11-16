@@ -49,10 +49,17 @@ export const createArenaPayment = async (options: CreateArenaPaymentOptions): Pr
     let asaasCustomerId = ('asaas_customer_id' in customer) ? customer.asaas_customer_id : undefined;
     
     if (!asaasCustomerId) {
+      let cpfCnpj = '00000000000';
+      if ('cpf' in customer && customer.cpf) {
+        cpfCnpj = String(customer.cpf);
+      } else if ('cpf_cnpj' in customer && customer.cpf_cnpj) {
+        cpfCnpj = String(customer.cpf_cnpj);
+      }
+      
       const customerData = {
         name: customer.name,
         email: customer.email || `${customer.id}@matchplay.com`,
-        cpfCnpj: ('cpf' in customer) ? customer.cpf : ('cpf_cnpj' in customer ? customer.cpf_cnpj : '00000000000'),
+        cpfCnpj: cpfCnpj,
         phone: customer.phone || '',
         externalReference: customer.id,
       };

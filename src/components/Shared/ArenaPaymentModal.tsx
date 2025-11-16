@@ -51,7 +51,7 @@ export default function ArenaPaymentModal({
   const [holderInfo, setHolderInfo] = useState({
     name: customer.name || '',
     email: customer.email || '',
-    cpfCnpj: ('cpf' in customer ? customer.cpf : 'cpf_cnpj' in customer ? customer.cpf_cnpj : '') || '',
+    cpfCnpj: (('cpf' in customer) ? customer.cpf : ('cpf_cnpj' in customer ? customer.cpf_cnpj : '')) || '',
     postalCode: '',
     addressNumber: '',
     phone: customer.phone || '',
