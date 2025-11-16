@@ -128,6 +128,15 @@ A integração completa com o gateway de pagamento Asaas permite que o Super Adm
 - `Subscription.next_payment_date`: Próxima data de cobrança
 
 ## Recent Changes
+**November 16, 2025**
+- **Implementado processamento de pagamento 100% local**
+  - PaymentModal refatorado para processar pagamentos sem depender de links externos
+  - Boleto: exibe linha digitável com botão copiar + download PDF local
+  - PIX: mostra QR Code grande + código copia-e-cola + timer de expiração
+  - Cartão: confirmação com status e detalhes do pagamento
+  - Tratamento robusto de erros com botão "Tentar Novamente" e fallback para Asaas
+  - Endpoint /api/asaas/payments/:id/bankSlip corrigido para retornar PDF real
+
 **November 15, 2025**
 - Initial Replit setup
 - Configured Vite to run on port 5000 with 0.0.0.0 host
