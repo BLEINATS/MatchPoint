@@ -48,6 +48,7 @@ export interface Profile {
   birth_date?: string | null;
   gender?: 'masculino' | 'feminino' | 'outro' | 'nao_informado' | null;
   cpf?: string | null;
+  cpf_cnpj?: string | null;
   created_at: string;
   credit_cards?: CreditCardInfo[];
   notification_preferences?: {
@@ -55,6 +56,7 @@ export interface Profile {
     friend_requests?: boolean;
     arena_news?: boolean;
   };
+  asaas_customer_id?: string | null;
 }
 
 export interface Plan {
@@ -217,6 +219,7 @@ export interface Aluno {
   gamification_levels?: { name: string } | null;
   gamification_point_transactions?: { points: number }[];
   last_credit_reset_date?: string | null;
+  asaas_customer_id?: string | null;
 }
 
 export interface Professor {
@@ -394,6 +397,7 @@ export interface Reserva {
   invites_closed?: boolean;
   attendance?: Record<string, 'presente' | 'falta' | 'pendente' | 'cancelada'>;
   monthly_payments?: Record<string, { status: 'pago' | 'pendente'; method?: 'local' | 'sistema' | 'pix' | 'cartao' | 'dinheiro'; paid_at?: string }>;
+  asaas_payment_id?: string | null;
 }
 
 // Alias para compatibilidade

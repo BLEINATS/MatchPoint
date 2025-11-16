@@ -40,7 +40,7 @@ const TournamentPaymentModal: React.FC<TournamentPaymentModalProps> = ({
   if (!participant) return null;
 
   const category = torneio.categories.find(c => c.id === participant.categoryId);
-  const amountToPay = category?.registration_fee || torneio.registration_fee || 0;
+  const amountToPay = category?.registration_fee || 0;
 
   const handlePaymentMethodSelect = (method: 'pix' | 'cartao') => {
     if (asaasConfigured && arena) {
@@ -74,7 +74,7 @@ const TournamentPaymentModal: React.FC<TournamentPaymentModalProps> = ({
                 </p>
                 {category && (
                   <p className="text-sm text-brand-gray-500 dark:text-brand-gray-400">
-                    Categoria: <strong>{category.name}</strong>
+                    Categoria: <strong>{category.group} - {category.level}</strong>
                   </p>
                 )}
                 <p className="text-sm font-medium mt-4">
@@ -121,8 +121,8 @@ const TournamentPaymentModal: React.FC<TournamentPaymentModalProps> = ({
           arena={arena}
           customer={playerProfile}
           amount={amountToPay}
-          description={`Inscrição ${torneio.name}${category ? ` - ${category.name}` : ''}`}
-          dueDate={torneio.start_date}
+          description={`Inscrição ${torneio.name}${category ? ` - ${category.group} ${category.level}` : ''}`}
+          dueDate={category?.start_date || new Date().toISOString().split('T')[0]}
           externalReference={`tournament_${torneio.id}_participant_${participant.id}`}
         />
       )}
