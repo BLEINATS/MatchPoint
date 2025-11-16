@@ -27,6 +27,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
 import CreatableSelect from '../Forms/CreatableSelect';
+import ArenaPaymentModal from '../Shared/ArenaPaymentModal';
+import { checkAsaasConfig } from '../../utils/arenaPaymentHelper';
 
 const timeToMinutes = (timeStr: string): number => {
   if (!timeStr || !timeStr.includes(':')) return -1;
@@ -89,6 +91,10 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   const [proRataOccurrences, setProRataOccurrences] = useState<number | null>(null);
   const [isRecurringIndefinite, setIsRecurringIndefinite] = useState(false);
   
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [savedReservation, setSavedReservation] = useState<Reserva | null>(null);
+  const [asaasConfigured, setAsaasConfigured] = useState(false);
+  
   const [formData, setFormData] = useState({
     date: format(selectedDate, 'yyyy-MM-dd'),
     start_time: '09:00',
@@ -115,6 +121,12 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
   const isEditing = !!reservation;
   const isInitialized = useRef(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      checkAsaasConfig().then(setAsaasConfigured).catch(() => setAsaasConfigured(false));
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && !isInitialized.current) {
@@ -839,9 +851,10 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
   const isBlockMode = formData.type === 'bloqueio';
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50" onClick={onClose}>
+    <>
+      <AnimatePresence>
+        {isOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50" onClick={onClose}>
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -1021,10 +1034,40 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                 </Button>
               </div>
             </div>
-          </motion.div>
-        </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
+      {showPaymentModal && savedReservation && (
+        <ArenaPaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setSavedReservation(null);
+            onClose();
+          }}
+          onSuccess={() => {
+            setShowPaymentModal(false);
+            setSavedReservation(null);
+            onClose();
+          }}
+          arena={allArenas.find(a => a.id === arenaId)!}
+          customer={
+            clientProfile || userProfile || {
+              id: 'temp',
+              name: formData.clientName || 'Cliente',
+              email: '',
+              phone: formData.clientPhone || '',
+            } as any
+          }
+          amount={valorAPagar}
+          description={`Reserva - ${quadras.find(q => q.id === formData.quadra_id)?.name} - ${formData.date} ${formData.start_time}`}
+          dueDate={formData.date}
+          externalReference={savedReservation.id}
+        />
       )}
-    </AnimatePresence>
+    </>
   );
 };
 
