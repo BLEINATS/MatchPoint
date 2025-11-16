@@ -240,6 +240,42 @@ app.get('/api/asaas/payments/:id/pixQrCode', async (req, res) => {
   }
 });
 
+app.get('/api/asaas/payments/:id/bankSlip', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!asaasConfig.apiKey) {
+      return res.status(500).json({ error: 'API key não configurada no servidor' });
+    }
+
+    const baseUrl = getAsaasUrl(asaasConfig.isSandbox);
+    const pdfUrl = `${baseUrl}/payments/${id}/identificationField`;
+    
+    const options = {
+      method: 'GET',
+      headers: {
+        'access_token': asaasConfig.apiKey,
+      },
+    };
+
+    const response = await fetch(pdfUrl, options);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.errors?.[0]?.description || 'Erro ao buscar boleto');
+    }
+
+    const pdfBuffer = await response.arrayBuffer();
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="boleto-${id}.pdf"`);
+    res.send(Buffer.from(pdfBuffer));
+  } catch (error) {
+    console.error('Erro ao buscar boleto PDF:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor proxy Asaas rodando na porta ${PORT}`);
 });
