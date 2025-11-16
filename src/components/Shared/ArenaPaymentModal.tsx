@@ -11,7 +11,7 @@ import { formatCurrency } from '../../utils/formatters';
 interface ArenaPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (paymentInfo: { paymentId: string; billingType: string; isRealPayment: boolean; status: string }) => void;
   arena: Arena;
   customer: Aluno | Profile;
   amount: number;
@@ -137,8 +137,20 @@ export default function ArenaPaymentModal({
           await fetchPaymentDetails(result.payment.id, result.payment);
         }
 
-        addToast({ message: 'Pagamento criado com sucesso!', type: 'success' });
-        onSuccess();
+        const message = result.isRealPayment
+          ? (paymentMethod === 'CREDIT_CARD' 
+              ? 'Pagamento confirmado!' 
+              : 'Aguardando confirmação do pagamento')
+          : 'Pagamento simulado criado com sucesso!';
+        
+        addToast({ message, type: 'success' });
+        
+        onSuccess({
+          paymentId: result.payment?.id || '',
+          billingType: paymentMethod,
+          isRealPayment: result.isRealPayment,
+          status: result.payment?.status || 'PENDING'
+        });
       } else {
         setPaymentResult({
           success: false,

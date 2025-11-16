@@ -28,6 +28,10 @@ export interface CreateArenaPaymentOptions {
   };
 }
 
+export const checkAsaasConfigForArena = (arena: Arena): boolean => {
+  return !!arena.asaas_api_key && arena.asaas_api_key.trim().length > 0;
+};
+
 export const checkAsaasConfig = async (): Promise<boolean> => {
   try {
     const config = await asaasProxyService.getConfig();
@@ -37,12 +41,15 @@ export const checkAsaasConfig = async (): Promise<boolean> => {
   }
 };
 
-export const createArenaPayment = async (options: CreateArenaPaymentOptions): Promise<{ success: boolean; payment?: any; error?: string }> => {
+export const createArenaPayment = async (options: CreateArenaPaymentOptions): Promise<{ success: boolean; payment?: any; error?: string; isRealPayment: boolean }> => {
   try {
-    const configured = await checkAsaasConfig();
     const { arena, customer, description, amount, billingType, dueDate, externalReference, creditCard, creditCardHolderInfo } = options;
     
-    if (!configured) {
+    const arenaHasAsaas = checkAsaasConfigForArena(arena);
+    const globalAsaasConfigured = await checkAsaasConfig();
+    const shouldUseAsaas = arenaHasAsaas && globalAsaasConfigured;
+    
+    if (!shouldUseAsaas) {
       const mockPaymentId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const mockPayment = {
         id: mockPaymentId,
@@ -62,7 +69,8 @@ export const createArenaPayment = async (options: CreateArenaPaymentOptions): Pr
       
       return {
         success: true,
-        payment: mockPayment
+        payment: mockPayment,
+        isRealPayment: false
       };
     }
 
@@ -135,10 +143,11 @@ export const createArenaPayment = async (options: CreateArenaPaymentOptions): Pr
         value: payment.value,
         dueDate: payment.dueDate,
         billingType: payment.billingType,
-      }
+      },
+      isRealPayment: true
     };
   } catch (error: any) {
     console.error('Erro ao criar pagamento:', error);
-    return { success: false, error: error.message || 'Erro ao processar pagamento' };
+    return { success: false, error: error.message || 'Erro ao processar pagamento', isRealPayment: false };
   }
 };
