@@ -127,14 +127,49 @@ A integração completa com o gateway de pagamento Asaas permite que o Super Adm
 - `Subscription.asaas_customer_id`: ID do cliente vinculado
 - `Subscription.next_payment_date`: Próxima data de cobrança
 
+## Sistema de Pagamento para Arena Admin
+**Implementado em**: November 16, 2025
+
+Sistema completo de processamento de pagamentos para alunos/clientes da arena (reservas, torneios, etc.) com suporte a Asaas e modo simulação local.
+
+### Arquitetura:
+- **arenaPaymentHelper** (`src/utils/arenaPaymentHelper.ts`): Helper para criar cobranças e clientes no Asaas
+- **ArenaPaymentModal** (`src/components/Shared/ArenaPaymentModal.tsx`): Componente reutilizável para processar pagamentos
+- **Integração com ReservationModal**: Pagamento de reservas de quadras
+- **Integração com TournamentPaymentModal**: Pagamento de inscrições em torneios
+- **Fallback Local**: Simulação completa quando Asaas não está configurado
+
+### Funcionalidades:
+- ✅ Criação automática de clientes no Asaas
+- ✅ Processamento de pagamentos via **Boleto, PIX e Cartão de Crédito**
+- ✅ **Modo Simulação**: Funciona perfeitamente sem Asaas configurado (dados mockados)
+- ✅ Boleto: linha digitável com botão copiar + download PDF
+- ✅ PIX: QR Code grande + código copia-e-cola + timer de expiração
+- ✅ Cartão: confirmação com status e detalhes do pagamento
+- ✅ Tratamento robusto de erros com retry e fallback
+
+### Campos Adicionados aos Tipos:
+- `Aluno.asaas_customer_id`: ID do cliente no Asaas
+- `Profile.asaas_customer_id`: ID do cliente no Asaas
+- `Profile.cpf_cnpj`: CPF/CNPJ para compatibilidade
+- `Reserva.asaas_payment_id`: ID do pagamento no Asaas
+
+### Como Usar:
+1. **Com Asaas configurado**: Pagamentos reais são processados via gateway Asaas
+2. **Sem Asaas**: Sistema simula pagamentos automaticamente com dados mockados realistas
+
 ## Recent Changes
 **November 16, 2025**
-- **Implementado processamento de pagamento 100% local**
+- **Implementado sistema completo de pagamento para Arena Admin**
+  - arenaPaymentHelper.ts: Helper para criar cobranças e clientes no Asaas
+  - ArenaPaymentModal.tsx: Componente reutilizável para processar pagamentos
+  - Integração com ReservationModal para pagamento de reservas
+  - Integração com TournamentPaymentModal para pagamento de torneios
+  - Fallback local completo: simula pagamentos quando Asaas não está configurado
+  - Boleto, PIX e Cartão funcionam 100% localmente sem depender de links externos
+  - Tipos atualizados com campos asaas_customer_id e asaas_payment_id
+- **Implementado processamento de pagamento 100% local para Super Admin**
   - PaymentModal refatorado para processar pagamentos sem depender de links externos
-  - Boleto: exibe linha digitável com botão copiar + download PDF local
-  - PIX: mostra QR Code grande + código copia-e-cola + timer de expiração
-  - Cartão: confirmação com status e detalhes do pagamento
-  - Tratamento robusto de erros com botão "Tentar Novamente" e fallback para Asaas
   - Endpoint /api/asaas/payments/:id/bankSlip corrigido para retornar PDF real
 
 **November 15, 2025**
