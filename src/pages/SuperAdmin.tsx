@@ -13,7 +13,6 @@ import ConfirmationModal from '../components/Shared/ConfirmationModal';
 import PlanModal from '../components/SuperAdmin/PlanModal';
 import ChangePlanModal from '../components/SuperAdmin/ChangePlanModal';
 import AsaasConfigModal from '../components/SuperAdmin/AsaasConfigModal';
-import PaymentModal from '../components/SuperAdmin/PaymentModal';
 import SubscriptionsPanel from '../components/SuperAdmin/SubscriptionsPanel';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -64,10 +63,6 @@ const SuperAdminPage: React.FC = () => {
 
   const [isChangePlanModalOpen, setIsChangePlanModalOpen] = useState(false);
   const [arenaToChangePlan, setArenaToChangePlan] = useState<Arena | null>(null);
-  
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentArena, setPaymentArena] = useState<Arena | null>(null);
-  const [paymentPlan, setPaymentPlan] = useState<Plan | null>(null);
   
   const [isAsaasConfigOpen, setIsAsaasConfigOpen] = useState(false);
 
@@ -180,74 +175,71 @@ const SuperAdminPage: React.FC = () => {
 
     setIsChangePlanModalOpen(false);
 
-    if (newPlan.price > 0) {
-      setPaymentArena(arenaToChangePlan);
-      setPaymentPlan(newPlan);
-      setIsPaymentModalOpen(true);
-      setArenaToChangePlan(null);
-      return;
-    }
+    try {
+      const currentSub = subscriptions.find(s => s.arena_id === arenaToChangePlan.id);
+      const startDate = currentSub ? new Date(currentSub.start_date) : new Date();
+      
+      let nextPaymentDate: Date | null = null;
+      let endDate: Date | null = null;
 
-    const currentSub = subscriptions.find(s => s.arena_id === arenaToChangePlan.id);
-    const startDate = new Date();
-    
-    let nextPaymentDate: Date | null = null;
-    let endDate: Date | null = null;
-
-    if (newPlan.trial_days || newPlan.duration_days) {
-      const duration = newPlan.trial_days || newPlan.duration_days || 7;
-      endDate = addDays(startDate, duration);
-      nextPaymentDate = endDate;
-    } else {
-      switch(newPlan.billing_cycle) {
-        case 'monthly':
-          nextPaymentDate = addMonths(startDate, 1);
-          break;
-        case 'quarterly':
-          nextPaymentDate = addMonths(startDate, 3);
-          break;
-        case 'semiannual':
-          nextPaymentDate = addMonths(startDate, 6);
-          break;
-        case 'annual':
-          nextPaymentDate = addYears(startDate, 1);
-          break;
-        default:
-          nextPaymentDate = addMonths(startDate, 1);
+      if (newPlan.trial_days || newPlan.duration_days) {
+        const duration = newPlan.trial_days || newPlan.duration_days || 7;
+        endDate = addDays(new Date(), duration);
+        nextPaymentDate = endDate;
+      } else {
+        const baseDate = currentSub ? new Date(currentSub.next_payment_date || currentSub.start_date) : new Date();
+        switch(newPlan.billing_cycle) {
+          case 'monthly':
+            nextPaymentDate = addMonths(baseDate, 1);
+            break;
+          case 'quarterly':
+            nextPaymentDate = addMonths(baseDate, 3);
+            break;
+          case 'semiannual':
+            nextPaymentDate = addMonths(baseDate, 6);
+            break;
+          case 'annual':
+            nextPaymentDate = addYears(baseDate, 1);
+            break;
+          default:
+            nextPaymentDate = addMonths(baseDate, 1);
+        }
       }
-    }
-    
-    if (currentSub) {
-      const updatedSub: Subscription = { 
-        ...currentSub, 
-        plan_id: newPlanId, 
-        start_date: startDate.toISOString(),
-        end_date: endDate?.toISOString() || null,
-        next_payment_date: nextPaymentDate?.toISOString() || null,
-        status: 'active'
-      };
-      await supabaseApi.upsert('subscriptions', [updatedSub], 'all');
-    } else {
-      const newSub: Subscription = {
-        id: `sub_${uuidv4()}`,
-        arena_id: arenaToChangePlan.id,
-        plan_id: newPlanId,
-        status: 'active',
-        start_date: startDate.toISOString(),
-        end_date: endDate?.toISOString() || null,
-        next_payment_date: nextPaymentDate?.toISOString() || null,
-        asaas_subscription_id: null,
-        asaas_customer_id: null,
-      };
-      await supabaseApi.upsert('subscriptions', [newSub], 'all');
-    }
-    
-    const updatedArena = { ...arenaToChangePlan, plan_id: newPlanId };
-    await supabaseApi.upsert('arenas', [updatedArena], 'all');
+      
+      if (currentSub) {
+        const updatedSub: Subscription = { 
+          ...currentSub, 
+          plan_id: newPlanId, 
+          end_date: endDate?.toISOString() || null,
+          next_payment_date: nextPaymentDate?.toISOString() || null,
+          status: 'active'
+        };
+        await supabaseApi.upsert('subscriptions', [updatedSub], 'all');
+      } else {
+        const newSub: Subscription = {
+          id: `sub_${uuidv4()}`,
+          arena_id: arenaToChangePlan.id,
+          plan_id: newPlanId,
+          status: 'active',
+          start_date: new Date().toISOString(),
+          end_date: endDate?.toISOString() || null,
+          next_payment_date: nextPaymentDate?.toISOString() || null,
+          asaas_subscription_id: null,
+          asaas_customer_id: null,
+        };
+        await supabaseApi.upsert('subscriptions', [newSub], 'all');
+      }
+      
+      const updatedArena = { ...arenaToChangePlan, plan_id: newPlanId };
+      await supabaseApi.upsert('arenas', [updatedArena], 'all');
 
-    addToast({ message: 'Plano da arena alterado com sucesso!', type: 'success' });
-    await loadData();
-    setArenaToChangePlan(null);
+      addToast({ message: 'Plano da arena alterado com sucesso!', type: 'success' });
+      await loadData();
+    } catch (error: any) {
+      addToast({ message: `Erro ao alterar plano: ${error.message}`, type: 'error' });
+    } finally {
+      setArenaToChangePlan(null);
+    }
   };
   
   const getBillingCycleLabel = (plan: Plan) => {
@@ -503,24 +495,6 @@ const SuperAdminPage: React.FC = () => {
         plans={plans}
         currentSubscription={subscriptions.find(s => s.arena_id === arenaToChangePlan?.id) || null}
       />
-      {paymentArena && paymentPlan && (
-        <PaymentModal
-          isOpen={isPaymentModalOpen}
-          onClose={() => {
-            setIsPaymentModalOpen(false);
-            setPaymentArena(null);
-            setPaymentPlan(null);
-          }}
-          arena={paymentArena}
-          plan={paymentPlan}
-          onSuccess={async () => {
-            setIsPaymentModalOpen(false);
-            setPaymentArena(null);
-            setPaymentPlan(null);
-            await loadData();
-          }}
-        />
-      )}
     </Layout>
   );
 };
