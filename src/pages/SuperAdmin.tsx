@@ -167,10 +167,50 @@ const SuperAdminPage: React.FC = () => {
   const handleChangePlan = async (newPlanId: string) => {
     if (!arenaToChangePlan) return;
     
+    const newPlan = plans.find(p => p.id === newPlanId);
+    if (!newPlan) {
+      addToast({ message: 'Plano não encontrado', type: 'error' });
+      return;
+    }
+
     const currentSub = subscriptions.find(s => s.arena_id === arenaToChangePlan.id);
+    const startDate = new Date();
+    
+    let nextPaymentDate: Date | null = null;
+    let endDate: Date | null = null;
+
+    if (newPlan.trial_days || newPlan.duration_days) {
+      const duration = newPlan.trial_days || newPlan.duration_days || 7;
+      endDate = addDays(startDate, duration);
+      nextPaymentDate = endDate;
+    } else {
+      switch(newPlan.billing_cycle) {
+        case 'monthly':
+          nextPaymentDate = addMonths(startDate, 1);
+          break;
+        case 'quarterly':
+          nextPaymentDate = addMonths(startDate, 3);
+          break;
+        case 'semiannual':
+          nextPaymentDate = addMonths(startDate, 6);
+          break;
+        case 'annual':
+          nextPaymentDate = addYears(startDate, 1);
+          break;
+        default:
+          nextPaymentDate = addMonths(startDate, 1);
+      }
+    }
     
     if (currentSub) {
-      const updatedSub = { ...currentSub, plan_id: newPlanId, start_date: new Date().toISOString() };
+      const updatedSub: Subscription = { 
+        ...currentSub, 
+        plan_id: newPlanId, 
+        start_date: startDate.toISOString(),
+        end_date: endDate?.toISOString() || null,
+        next_payment_date: nextPaymentDate?.toISOString() || null,
+        status: 'active'
+      };
       await supabaseApi.upsert('subscriptions', [updatedSub], 'all');
     } else {
       const newSub: Subscription = {
@@ -178,8 +218,11 @@ const SuperAdminPage: React.FC = () => {
         arena_id: arenaToChangePlan.id,
         plan_id: newPlanId,
         status: 'active',
-        start_date: new Date().toISOString(),
-        end_date: null,
+        start_date: startDate.toISOString(),
+        end_date: endDate?.toISOString() || null,
+        next_payment_date: nextPaymentDate?.toISOString() || null,
+        asaas_subscription_id: null,
+        asaas_customer_id: null,
       };
       await supabaseApi.upsert('subscriptions', [newSub], 'all');
     }

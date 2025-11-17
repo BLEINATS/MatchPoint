@@ -13,15 +13,22 @@ interface PlanStatusBannerProps {
 }
 
 const PlanStatusBanner: React.FC<PlanStatusBannerProps> = ({ arena, profile }) => {
-  const { plan, subscription, isExpired, isPastDue, isActive, nextBillingDate, isTrial } = useSubscriptionStatus();
+  const { plan, subscription, isExpired, isPastDue, isActive, nextBillingDate, isTrial, isLoading } = useSubscriptionStatus();
 
-  if (!subscription || !plan) {
+  if (isLoading) {
     return null;
   }
-  
+
   let config: { icon: React.ElementType, bgColor: string, textColor: string, message: string } | null = null;
   
-  if (isExpired) {
+  if (!subscription || !plan) {
+    config = {
+      icon: AlertTriangle,
+      bgColor: 'bg-orange-600',
+      textColor: 'text-white',
+      message: 'Você ainda não tem um plano ativo. Contrate agora para ativar todos os recursos!',
+    };
+  } else if (isExpired) {
     config = {
       icon: XCircle,
       bgColor: 'bg-red-600',

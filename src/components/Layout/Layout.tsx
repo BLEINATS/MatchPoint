@@ -14,12 +14,12 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, showHeader = true }) => {
   const { profile, selectedArenaContext } = useAuth();
-  const { isExpired } = useSubscriptionStatus();
+  const { isExpired, isLoading } = useSubscriptionStatus();
   const location = useLocation();
 
   const isAdminOrStaff = profile?.role === 'admin_arena' || profile?.role === 'funcionario';
   
-  const showBanner = isAdminOrStaff && selectedArenaContext && profile && !isExpired;
+  const showBanner = isAdminOrStaff && selectedArenaContext && profile && selectedArenaContext.status !== 'suspended';
   const showLockOverlay = isAdminOrStaff && isExpired && location.pathname !== '/settings';
   const showHelpChat = isAdminOrStaff;
 
