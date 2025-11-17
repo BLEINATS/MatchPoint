@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { Profile, PermissionLevel, ProfilePermissions } from '../../types';
 import { Loader2, Plus, Edit, Trash2, Shield, AlertTriangle } from 'lucide-react';
 import Button from '../../components/Forms/Button';
@@ -38,7 +38,7 @@ const TeamSettingsTab: React.FC = () => {
     if (!arena) return;
     setIsLoading(true);
     try {
-      const { data: allProfiles, error } = await localApi.select<Profile>('profiles', 'all');
+      const { data: allProfiles, error } = await supabaseApi.select<Profile>('profiles', 'all');
       if (error) throw error;
       
       const members = (allProfiles || []).filter(p => p.role === 'funcionario' && p.arena_id === arena.id);
@@ -63,7 +63,7 @@ const TeamSettingsTab: React.FC = () => {
         arena_id: arena.id, 
         role: 'funcionario' as 'funcionario' 
       };
-      await localApi.upsert('profiles', [payload], 'all');
+      await supabaseApi.upsert('profiles', [payload], 'all');
       
       if (!isEditing) {
         setTeamMemberCount(prev => prev + 1);
@@ -86,7 +86,7 @@ const TeamSettingsTab: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!memberToDelete) return;
     try {
-      await localApi.delete('profiles', [memberToDelete.id], 'all');
+      await supabaseApi.delete('profiles', [memberToDelete.id], 'all');
       setTeamMemberCount(prev => prev - 1);
       addToast({ message: 'Membro da equipe excluído com sucesso.', type: 'success' });
       await loadTeamMembers();

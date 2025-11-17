@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { RentalItem } from '../../types';
 import { Loader2, Plus, Edit, Trash2, Package } from 'lucide-react';
 import Button from '../Forms/Button';
@@ -30,7 +30,7 @@ const RentalItemsTab: React.FC<RentalItemsTabProps> = ({ canEdit }) => {
     }
     setIsLoading(true);
     try {
-      const { data, error } = await localApi.select<RentalItem>('rental_items', arena.id);
+      const { data, error } = await supabaseApi.select<RentalItem>('rental_items', arena.id);
       if (error) throw error;
       setItems((data || []).sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error: any) {
@@ -49,7 +49,7 @@ const RentalItemsTab: React.FC<RentalItemsTabProps> = ({ canEdit }) => {
     const isEditing = 'id' in itemData;
     
     try {
-      await localApi.upsert('rental_items', [{ ...itemData, arena_id: arena.id }], arena.id);
+      await supabaseApi.upsert('rental_items', [{ ...itemData, arena_id: arena.id }], arena.id);
       addToast({ message: `Item ${isEditing ? 'atualizado' : 'criado'} com sucesso!`, type: 'success' });
       await loadItems();
       setIsModalOpen(false);
@@ -67,7 +67,7 @@ const RentalItemsTab: React.FC<RentalItemsTabProps> = ({ canEdit }) => {
   const handleConfirmDelete = async () => {
     if (!itemToDelete || !arena) return;
     try {
-      await localApi.delete('rental_items', [itemToDelete.id], arena.id);
+      await supabaseApi.delete('rental_items', [itemToDelete.id], arena.id);
       addToast({ message: 'Item excluído com sucesso.', type: 'success' });
       await loadItems();
     } catch (error: any) {

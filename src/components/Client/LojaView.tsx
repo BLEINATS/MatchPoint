@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Product } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { Loader2, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 import Button from '../Forms/Button';
@@ -58,7 +58,7 @@ const LojaView: React.FC = () => {
     }
     setIsLoading(true);
     try {
-      const { data, error } = await localApi.select<Product>('products', arena.id);
+      const { data, error } = await supabaseApi.select<Product>('products', arena.id);
       if (error) throw error;
       
       const activeProducts = (data || []).filter(p => {

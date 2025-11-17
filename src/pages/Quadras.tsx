@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Quadra, PricingRule } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { localApi, localUploadPhoto, localDeletePhoto } from '../lib/localApi';
+import { localApi, localUploadPhoto, localDeletePhoto } from '../lib/supabaseApi';
 import QuadraFormTabs from '../components/Forms/QuadraFormTabs';
 import { useSubscriptionStatus } from '../hooks/useSubscriptionStatus';
 import Alert from '../components/Shared/Alert';
@@ -35,7 +35,7 @@ const Quadras: React.FC = () => {
     }
     setIsLoading(true);
     try {
-      const { data, error } = await localApi.select<Quadra>('quadras', arena.id);
+      const { data, error } = await supabaseApi.select<Quadra>('quadras', arena.id);
       if (error) throw error;
       setQuadras(data || []);
     } catch (error: any) {
@@ -101,7 +101,7 @@ const Quadras: React.FC = () => {
         pricing_rules: pricingRules
       };
       
-      await localApi.upsert('quadras', [finalQuadraPayload], arena.id);
+      await supabaseApi.upsert('quadras', [finalQuadraPayload], arena.id);
       
       await refreshResourceCounts();
 
@@ -129,7 +129,7 @@ const Quadras: React.FC = () => {
       for (const photoUrl of quadraToDelete.photos) {
         await localDeletePhoto(photoUrl);
       }
-      await localApi.delete('quadras', [quadraToDelete.id], arena.id);
+      await supabaseApi.delete('quadras', [quadraToDelete.id], arena.id);
       await refreshResourceCounts();
       addToast({ message: 'Quadra excluída com sucesso.', type: 'success' });
       fetchQuadras();

@@ -6,7 +6,7 @@ import Input from '../Forms/Input';
 import Button from '../Forms/Button';
 import { Building, User, Phone, Mail, Hash, Map, MapPin, Link as LinkIcon, Loader2, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { maskCEP, maskPhone, maskCPFOrCNPJ } from '../../utils/masks';
-import { localUploadPhoto, localDeletePhoto } from '../../lib/localApi';
+import { localUploadPhoto, localDeletePhoto } from '../../lib/supabaseApi';
 
 // Define types for IBGE API response
 interface IBGEState {

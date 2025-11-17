@@ -11,7 +11,7 @@ import { Torneio, Quadra, Reserva } from '../types';
 import TorneioModal from '../components/Torneios/TorneioModal';
 import TorneioCard from '../components/Torneios/TorneioCard';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { useToast } from '../context/ToastContext';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -29,9 +29,9 @@ const Torneios: React.FC = () => {
   const loadData = useCallback(async () => {
     if (arena) {
       const [torneiosRes, quadrasRes, reservasRes] = await Promise.all([
-        localApi.select<Torneio>('torneios', arena.id),
-        localApi.select<Quadra>('quadras', arena.id),
-        localApi.select<Reserva>('reservas', arena.id),
+        supabaseApi.select<Torneio>('torneios', arena.id),
+        supabaseApi.select<Quadra>('quadras', arena.id),
+        supabaseApi.select<Reserva>('reservas', arena.id),
       ]);
       setTorneios(torneiosRes.data || []);
       setQuadras(quadrasRes.data || []);
@@ -56,9 +56,9 @@ const Torneios: React.FC = () => {
         ? torneioData as Torneio
         : { ...torneioData, id: torneioId, arena_id: arena.id, created_at: new Date().toISOString(), participants: [], matches: [] } as Torneio;
 
-      await localApi.upsert('torneios', [newTorneio], arena.id);
+      await supabaseApi.upsert('torneios', [newTorneio], arena.id);
 
-      const { data: currentReservas } = await localApi.select<Reserva>('reservas', arena.id);
+      const { data: currentReservas } = await supabaseApi.select<Reserva>('reservas', arena.id);
       const otherReservas = currentReservas.filter(r => r.torneio_id !== torneioId);
       
       let finalReservas = [...otherReservas];
@@ -97,7 +97,7 @@ const Torneios: React.FC = () => {
         finalReservas = [...otherReservas, ...tournamentBlockReservations];
       }
       
-      await localApi.upsert('reservas', finalReservas, arena.id, true);
+      await supabaseApi.upsert('reservas', finalReservas, arena.id, true);
       
       addToast({ message: 'Torneio salvo e agenda sincronizada com sucesso!', type: 'success' });
       await loadData();
@@ -112,11 +112,11 @@ const Torneios: React.FC = () => {
     if (!arena || !window.confirm('Tem certeza que deseja excluir este torneio? Os bloqueios de horário e todos os dados do torneio serão removidos.')) return;
     
     try {
-      await localApi.delete('torneios', [id], arena.id);
+      await supabaseApi.delete('torneios', [id], arena.id);
       
-      const { data: currentReservas } = await localApi.select<Reserva>('reservas', arena.id);
+      const { data: currentReservas } = await supabaseApi.select<Reserva>('reservas', arena.id);
       const finalReservas = currentReservas.filter(r => r.torneio_id !== id);
-      await localApi.upsert('reservas', finalReservas, arena.id, true);
+      await supabaseApi.upsert('reservas', finalReservas, arena.id, true);
 
       addToast({ message: 'Torneio excluído com sucesso.', type: 'success' });
       await loadData();

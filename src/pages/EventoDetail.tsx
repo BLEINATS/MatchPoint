@@ -12,7 +12,7 @@ import ChecklistTab from '../components/Eventos/ChecklistTab';
 import FinanceiroTab from '../components/Eventos/FinanceiroTab';
 import { eachDayOfInterval, format } from 'date-fns';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { useToast } from '../context/ToastContext';
 import ConfirmationModal from '../components/Shared/ConfirmationModal';
 
@@ -40,9 +40,9 @@ const EventoDetail: React.FC = () => {
     if (arena && id) {
       try {
         const [eventosRes, quadrasRes, reservasRes] = await Promise.all([
-          localApi.select<Evento>('eventos', arena.id),
-          localApi.select<Quadra>('quadras', arena.id),
-          localApi.select<Reserva>('reservas', arena.id)
+          supabaseApi.select<Evento>('eventos', arena.id),
+          supabaseApi.select<Quadra>('quadras', arena.id),
+          supabaseApi.select<Reserva>('reservas', arena.id)
         ]);
         const currentEvento = eventosRes.data?.find(e => e.id === id);
         setEvento(currentEvento || null);
@@ -63,11 +63,11 @@ const EventoDetail: React.FC = () => {
 
     try {
       // 1. Save the event itself
-      await localApi.upsert('eventos', [eventoToSave], arena.id);
+      await supabaseApi.upsert('eventos', [eventoToSave], arena.id);
       setEvento(eventoToSave); // Update local state
 
       // 2. Manage reservation blocks
-      const { data: allReservas } = await localApi.select<Reserva>('reservas', arena.id);
+      const { data: allReservas } = await supabaseApi.select<Reserva>('reservas', arena.id);
       
       // Keep all reservations that are NOT related to this event
       const otherReservas = allReservas.filter(r => r.evento_id !== eventoToSave.id);
@@ -103,7 +103,7 @@ const EventoDetail: React.FC = () => {
       }
       
       // 4. Overwrite all reservations with the updated list
-      await localApi.upsert('reservas', finalReservas, arena.id, true);
+      await supabaseApi.upsert('reservas', finalReservas, arena.id, true);
 
     } catch (error: any) {
       addToast({ message: `Erro ao salvar evento: ${error.message}`, type: 'error' });
@@ -130,11 +130,11 @@ const EventoDetail: React.FC = () => {
     if (!arena || !evento) return;
     
     try {
-      const { data: currentReservas } = await localApi.select<Reserva>('reservas', arena.id);
+      const { data: currentReservas } = await supabaseApi.select<Reserva>('reservas', arena.id);
       const finalReservas = currentReservas.filter(r => r.evento_id !== evento.id);
-      await localApi.upsert('reservas', finalReservas, arena.id, true);
+      await supabaseApi.upsert('reservas', finalReservas, arena.id, true);
       
-      await localApi.delete('eventos', [evento.id], arena.id);
+      await supabaseApi.delete('eventos', [evento.id], arena.id);
       
       addToast({ message: 'Evento e bloqueios associados removidos com sucesso.', type: 'success' });
       navigate('/eventos');

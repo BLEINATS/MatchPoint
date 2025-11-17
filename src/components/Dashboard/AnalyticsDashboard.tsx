@@ -11,7 +11,7 @@ import { expandRecurringReservations, getReservationTypeDetails } from '../../ut
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { isSameDay, startOfMonth, endOfMonth, format, isWithinInterval, getDay, parse, addDays, differenceInMinutes, endOfDay, isBefore, startOfDay, isAfter, isPast, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Button from '../Forms/Button';
@@ -79,17 +79,17 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
     }
     try {
       const [quadrasRes, reservasRes, alunosRes, financeRes, torneiosRes, eventosRes, atletasRes, profsRes, turmasRes, vouchersRes, productsRes] = await Promise.all([
-        localApi.select<Quadra>('quadras', arena.id),
-        localApi.select<Reserva>('reservas', arena.id),
-        localApi.select<Aluno>('alunos', arena.id),
-        localApi.select<FinanceTransaction>('finance_transactions', arena.id),
-        localApi.select<Torneio>('torneios', arena.id),
-        localApi.select<Evento>('eventos', arena.id),
-        localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
-        localApi.select<Professor>('professores', arena.id),
-        localApi.select<Turma>('turmas', arena.id),
-        localApi.select<RedeemedVoucher>('redeemed_vouchers', arena.id),
-        localApi.select<Product>('products', arena.id),
+        supabaseApi.select<Quadra>('quadras', arena.id),
+        supabaseApi.select<Reserva>('reservas', arena.id),
+        supabaseApi.select<Aluno>('alunos', arena.id),
+        supabaseApi.select<FinanceTransaction>('finance_transactions', arena.id),
+        supabaseApi.select<Torneio>('torneios', arena.id),
+        supabaseApi.select<Evento>('eventos', arena.id),
+        supabaseApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
+        supabaseApi.select<Professor>('professores', arena.id),
+        supabaseApi.select<Turma>('turmas', arena.id),
+        supabaseApi.select<RedeemedVoucher>('redeemed_vouchers', arena.id),
+        supabaseApi.select<Product>('products', arena.id),
       ]);
       
       const now = new Date();
@@ -105,7 +105,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
       });
 
       if (updated) {
-          await localApi.upsert('reservas', reservationsData, arena.id, true);
+          await supabaseApi.upsert('reservas', reservationsData, arena.id, true);
           addToast({ message: 'Algumas reservas pendentes expiraram e foram canceladas.', type: 'info' });
       }
 
@@ -145,10 +145,10 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
             status: 'resgatado' as 'resgatado',
             redeemed_at: new Date().toISOString(),
         };
-        await localApi.upsert('redeemed_vouchers', [updatedVoucher], arena.id);
+        await supabaseApi.upsert('redeemed_vouchers', [updatedVoucher], arena.id);
 
         if (voucherToConfirm.product_id) {
-            const { data: allProducts } = await localApi.select<Product>('products', arena.id);
+            const { data: allProducts } = await supabaseApi.select<Product>('products', arena.id);
             const productToUpdate = allProducts.find(p => p.id === voucherToConfirm.product_id);
 
             if (productToUpdate) {
@@ -166,14 +166,14 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
                 }
 
                 if (stockUpdated) {
-                    await localApi.upsert('products', [productToUpdate], arena.id);
+                    await supabaseApi.upsert('products', [productToUpdate], arena.id);
                 }
             }
         }
 
         const aluno = alunos.find(a => a.id === voucherToConfirm.aluno_id);
         if (aluno && aluno.profile_id) {
-            await localApi.upsert('notificacoes', [{
+            await supabaseApi.upsert('notificacoes', [{
                 arena_id: arena.id,
                 profile_id: aluno.profile_id,
                 message: `Sua recompensa "${voucherToConfirm.reward_title}" foi entregue com sucesso!`,
@@ -347,7 +347,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
   const handleUpdateMasterReserva = async (updatedReserva: Reserva) => {
     if (!arena) return;
     try {
-      await localApi.upsert('reservas', [updatedReserva], arena.id);
+      await supabaseApi.upsert('reservas', [updatedReserva], arena.id);
       addToast({ message: 'Dados do mensalista atualizados!', type: 'success' });
       loadData();
     } catch (error: any) {
@@ -366,7 +366,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onReopenOnboard
   const handleConfirmDelete = async () => {
     if (!itemToDelete || !arena) return;
     try {
-      await localApi.delete('reservas', [itemToDelete.id], arena.id);
+      await supabaseApi.delete('reservas', [itemToDelete.id], arena.id);
       addToast({ message: 'Reserva recorrente excluída com sucesso.', type: 'success' });
       loadData();
     } catch (error: any) {

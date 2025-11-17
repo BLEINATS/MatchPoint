@@ -5,7 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import Input from '../Forms/Input';
 import Button from '../Forms/Button';
 import { User, Mail, Loader2, Image as ImageIcon, Trash2, Phone, Hash, Calendar } from 'lucide-react';
-import { localApi, localUploadPhoto, localDeletePhoto } from '../../lib/localApi';
+import { localApi, localUploadPhoto, localDeletePhoto } from '../../lib/supabaseApi';
 import { maskPhone, maskCPFOrCNPJ } from '../../utils/masks';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

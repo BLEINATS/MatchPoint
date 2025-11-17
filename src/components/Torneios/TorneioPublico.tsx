@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../Layout/Layout';
 import Button from '../Forms/Button';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { Torneio, Quadra, Participant, Arena, Profile, Aluno, Friendship, FinanceTransaction } from '../../types';
 import { Loader2, Trophy, Users, BarChart3, Info, Calendar, MapPin, DollarSign, Users2, User, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
@@ -70,7 +70,7 @@ const TorneioPublico: React.FC = () => {
       let arenaForTorneio: Arena | null = null;
 
       for (const currentArena of allArenas) {
-        const { data: torneiosInArena } = await localApi.select<Torneio>('torneios', currentArena.id);
+        const { data: torneiosInArena } = await supabaseApi.select<Torneio>('torneios', currentArena.id);
         const match = torneiosInArena.find(t => t.id === id);
         if (match) {
           foundTorneio = match;
@@ -82,7 +82,7 @@ const TorneioPublico: React.FC = () => {
       if (foundTorneio && arenaForTorneio) {
         setTorneio(foundTorneio);
         setArena(arenaForTorneio);
-        const { data: quadrasData } = await localApi.select<Quadra>('quadras', arenaForTorneio.id);
+        const { data: quadrasData } = await supabaseApi.select<Quadra>('quadras', arenaForTorneio.id);
         setQuadras(quadrasData || []);
       } else {
         setTorneio(null);
@@ -100,8 +100,8 @@ const TorneioPublico: React.FC = () => {
         if (!profile) return;
         try {
             const [friendshipsRes, profilesRes] = await Promise.all([
-                localApi.select<Friendship>('friendships', 'all'),
-                localApi.select<Profile>('profiles', 'all')
+                supabaseApi.select<Friendship>('friendships', 'all'),
+                supabaseApi.select<Profile>('profiles', 'all')
             ]);
 
             const userFriendships = (friendshipsRes.data || []).filter(f => f.status === 'accepted' && (f.user1_id === profile.id || f.user2_id === profile.id));
@@ -203,10 +203,10 @@ const TorneioPublico: React.FC = () => {
             participants: [...torneio.participants, newParticipant]
         };
 
-        await localApi.upsert('torneios', [updatedTorneio], arena.id);
+        await supabaseApi.upsert('torneios', [updatedTorneio], arena.id);
 
         if (partner) {
-            await localApi.upsert('notificacoes', [{
+            await supabaseApi.upsert('notificacoes', [{
                 profile_id: partner.id,
                 arena_id: arena.id,
                 message: `${profile.name} convidou você para o torneio "${torneio.name}".`,
@@ -273,13 +273,13 @@ const TorneioPublico: React.FC = () => {
 
         const updatedTorneio = { ...torneio, participants: updatedParticipants };
 
-        await localApi.upsert('torneios', [updatedTorneio], arena.id);
+        await supabaseApi.upsert('torneios', [updatedTorneio], arena.id);
 
         const category = torneio.categories.find(c => c.id === participantToPay.categoryId);
         const amount = category?.registration_fee || torneio.registration_fee || 0;
         
         if (playerPaymentStatus === 'pago') {
-          await localApi.upsert('finance_transactions', [{
+          await supabaseApi.upsert('finance_transactions', [{
               arena_id: arena.id,
               description: `Inscrição Torneio: ${torneio.name} - ${profile.name} (Equipe: ${participantToPay.name})`,
               amount: amount,

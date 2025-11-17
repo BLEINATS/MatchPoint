@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Aluno, CreditTransaction } from '../../types';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { useToast } from '../../context/ToastContext';
 import { Loader2, Plus, Minus, DollarSign, History } from 'lucide-react';
 import Button from '../Forms/Button';
@@ -24,7 +24,7 @@ const CreditsTab: React.FC<CreditsTabProps> = ({ aluno, onDataChange }) => {
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data: historyData } = await localApi.select<CreditTransaction>('credit_transactions', aluno.arena_id);
+      const { data: historyData } = await supabaseApi.select<CreditTransaction>('credit_transactions', aluno.arena_id);
       const alunoHistory = historyData
         .filter(h => h.aluno_id === aluno.id)
         .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime());
@@ -50,9 +50,9 @@ const CreditsTab: React.FC<CreditsTabProps> = ({ aluno, onDataChange }) => {
     setIsSubmitting(true);
     try {
       const updatedBalance = (aluno.credit_balance || 0) + amount;
-      await localApi.upsert('alunos', [{ ...aluno, credit_balance: updatedBalance }], aluno.arena_id);
+      await supabaseApi.upsert('alunos', [{ ...aluno, credit_balance: updatedBalance }], aluno.arena_id);
       
-      await localApi.upsert('credit_transactions', [{
+      await supabaseApi.upsert('credit_transactions', [{
         aluno_id: aluno.id,
         arena_id: aluno.arena_id,
         amount: amount,

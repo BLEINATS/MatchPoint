@@ -11,7 +11,7 @@ import { Arena, Quadra, Reserva, Aluno, Profile } from '../types';
 import { getReservationTypeDetails, expandRecurringReservations } from '../utils/reservationUtils';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
 import ReservationModal from '../components/Reservations/ReservationModal';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/formatters';
 import { awardPointsForReservation } from '../utils/gamificationUtils';
@@ -40,11 +40,11 @@ const ArenaPublic: React.FC = () => {
   const loadArenaData = useCallback(async (currentArena: Arena) => {
     setIsLoading(true);
     try {
-      const { data: quadrasData } = await localApi.select<Quadra>('quadras', currentArena.id);
+      const { data: quadrasData } = await supabaseApi.select<Quadra>('quadras', currentArena.id);
       setQuadras(quadrasData || []);
-      const { data: reservasData } = await localApi.select<Reserva>('reservas', currentArena.id);
+      const { data: reservasData } = await supabaseApi.select<Reserva>('reservas', currentArena.id);
       setReservas(reservasData || []);
-      const { data: alunosData } = await localApi.select<Aluno>('alunos', currentArena.id);
+      const { data: alunosData } = await supabaseApi.select<Aluno>('alunos', currentArena.id);
       setAlunos(alunosData || []);
     } catch (error: any) {
       addToast({ message: 'Não foi possível carregar os dados da arena.', type: 'error' });
@@ -113,7 +113,7 @@ const ArenaPublic: React.FC = () => {
       return;
     }
     try {
-        const { data: savedReservas } = await localApi.upsert('reservas', [{
+        const { data: savedReservas } = await supabaseApi.upsert('reservas', [{
           ...reservationData, 
           arena_id: arena.id,
           profile_id: profile.id,

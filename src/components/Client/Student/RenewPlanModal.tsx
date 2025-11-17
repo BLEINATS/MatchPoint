@@ -6,7 +6,7 @@ import Button from '../../Forms/Button';
 import { formatCurrency } from '../../../utils/formatters';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
-import { localApi } from '../../../lib/localApi';
+import { supabaseApi } from '../../../lib/localApi';
 import { format } from 'date-fns';
 
 interface RenewPlanModalProps {
@@ -48,9 +48,9 @@ const RenewPlanModal: React.FC<RenewPlanModalProps> = ({ isOpen, onClose, aluno,
             join_date: format(new Date(), 'yyyy-MM-dd'), // Reset join date on renewal
             last_credit_reset_date: new Date().toISOString(),
         };
-        await localApi.upsert('alunos', [updatedAluno], arena.id);
+        await supabaseApi.upsert('alunos', [updatedAluno], arena.id);
 
-        await localApi.upsert('finance_transactions', [{
+        await supabaseApi.upsert('finance_transactions', [{
             arena_id: arena.id,
             description: `Pagamento/Renovação Plano: ${selectedPlano.name} - ${aluno.name}`,
             amount: selectedPlano.price,

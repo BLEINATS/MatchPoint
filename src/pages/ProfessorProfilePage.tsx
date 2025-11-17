@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Professor, Turma, Quadra, Aluno } from '../types';
 import { Loader2, Calendar, DollarSign, BarChart2, User, ArrowLeft, Mail, Phone, Briefcase, Percent } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import ProfessorAgendaView from '../components/Alunos/ProfessorAgendaView';
 import ProfessorFinancialTab from '../components/Financeiro/ProfessorFinancialTab';
 import ProfessorPerformanceTab from '../components/Financeiro/ProfessorPerformanceTab';
@@ -36,9 +36,9 @@ const ProfessorProfileContent: React.FC<ProfessorProfileContentProps> = ({ profe
     setIsLoading(true);
     try {
       const [turmasRes, quadrasRes, alunosRes] = await Promise.all([
-        localApi.select<Turma>('turmas', selectedArenaContext.id),
-        localApi.select<Quadra>('quadras', selectedArenaContext.id),
-        localApi.select<Aluno>('alunos', selectedArenaContext.id),
+        supabaseApi.select<Turma>('turmas', selectedArenaContext.id),
+        supabaseApi.select<Quadra>('quadras', selectedArenaContext.id),
+        supabaseApi.select<Aluno>('alunos', selectedArenaContext.id),
       ]);
       setTurmas(turmasRes.data || []);
       setQuadras(quadrasRes.data || []);
@@ -68,7 +68,7 @@ const ProfessorProfileContent: React.FC<ProfessorProfileContentProps> = ({ profe
     if (!selectedArenaContext) return;
     
     try {
-      const { data: allAlunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
+      const { data: allAlunos } = await supabaseApi.select<Aluno>('alunos', selectedArenaContext.id);
       const updatedAlunos: Aluno[] = [];
 
       allAlunos.forEach(aluno => {
@@ -98,7 +98,7 @@ const ProfessorProfileContent: React.FC<ProfessorProfileContentProps> = ({ profe
       });
       
       if (updatedAlunos.length > 0) {
-        await localApi.upsert('alunos', updatedAlunos, selectedArenaContext.id);
+        await supabaseApi.upsert('alunos', updatedAlunos, selectedArenaContext.id);
       }
       
       addToast({ message: 'Frequência salva com sucesso!', type: 'success' });
@@ -224,7 +224,7 @@ const ProfessorProfilePage: React.FC = () => {
             }
             setIsLoading(true);
             try {
-                const { data: profsRes } = await localApi.select<Professor>('professores', selectedArenaContext.id);
+                const { data: profsRes } = await supabaseApi.select<Professor>('professores', selectedArenaContext.id);
                 const foundProfile = (profsRes || []).find(p => p.id === professorIdToLoad);
                 setProfessorProfile(foundProfile || null);
             } catch (error: any) {

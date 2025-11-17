@@ -11,7 +11,7 @@ import RenewPlanModal from './RenewPlanModal';
 import Button from '../../Forms/Button';
 import ConfirmationModal from '../../Shared/ConfirmationModal';
 import { useToast } from '../../../context/ToastContext';
-import { localApi } from '../../../lib/localApi';
+import { supabaseApi } from '../../../lib/localApi';
 import Alert from '../../Shared/Alert';
 import { useAuth } from '../../../context/AuthContext';
 
@@ -59,7 +59,7 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
           };
           
           try {
-            await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
+            await supabaseApi.upsert('alunos', [updatedAluno], aluno.arena_id);
             addToast({ message: 'Seus créditos de aula foram renovados para este mês!', type: 'info' });
             onDataChange();
           } catch (e) {
@@ -252,7 +252,7 @@ const AulasTab: React.FC<AulasTabProps> = ({ aluno, allAlunos, turmas, professor
             monthly_fee: 0,
             aulas_restantes: 0,
         };
-        await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
+        await supabaseApi.upsert('alunos', [updatedAluno], aluno.arena_id);
         addToast({ message: 'Seu plano foi cancelado.', type: 'success' });
         onDataChange();
     } catch (e) {

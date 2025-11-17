@@ -5,7 +5,7 @@ import { ArrowLeft, Plus, DollarSign, TrendingUp, TrendingDown, FileText, Loader
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { Reserva, FinanceTransaction, Professor, AtletaAluguel } from '../types';
 import Button from '../components/Forms/Button';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
@@ -105,11 +105,11 @@ const Financeiro: React.FC = () => {
     setIsLoading(true);
     try {
       const [reservasRes, transactionsRes, profsRes, atletasRes, turmasRes] = await Promise.all([
-        localApi.select<Reserva>('reservas', arena.id),
-        localApi.select<FinanceTransaction>('finance_transactions', arena.id),
-        localApi.select<Professor>('professores', arena.id),
-        localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
-        localApi.select<any>('turmas', arena.id),
+        supabaseApi.select<Reserva>('reservas', arena.id),
+        supabaseApi.select<FinanceTransaction>('finance_transactions', arena.id),
+        supabaseApi.select<Professor>('professores', arena.id),
+        supabaseApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
+        supabaseApi.select<any>('turmas', arena.id),
       ]);
       setReservas(reservasRes.data || []);
       setTransactions(transactionsRes.data || []);
@@ -130,7 +130,7 @@ const Financeiro: React.FC = () => {
   const handleSaveTransaction = async (transaction: Omit<FinanceTransaction, 'id' | 'arena_id' | 'created_at'> | FinanceTransaction) => {
     if (!arena) return;
     try {
-      await localApi.upsert('finance_transactions', [{ ...transaction, arena_id: arena.id }], arena.id);
+      await supabaseApi.upsert('finance_transactions', [{ ...transaction, arena_id: arena.id }], arena.id);
       addToast({ message: 'Transação salva com sucesso!', type: 'success' });
       await loadData();
       setIsModalOpen(false);
@@ -143,7 +143,7 @@ const Financeiro: React.FC = () => {
   const handleDeleteTransaction = async (id: string) => {
     if (!arena || !window.confirm('Tem certeza que deseja excluir esta transação?')) return;
     try {
-      await localApi.delete('finance_transactions', [id], arena.id);
+      await supabaseApi.delete('finance_transactions', [id], arena.id);
       addToast({ message: 'Transação excluída com sucesso.', type: 'success' });
       await loadData();
     } catch (error: any) {

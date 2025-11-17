@@ -1,4 +1,4 @@
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { Reserva, Aluno, GamificationSettings, GamificationPointTransaction, CreditTransaction, Quadra, GamificationAchievement, AlunoAchievement } from '../types';
 import { formatCurrency } from './formatters';
 import { differenceInHours, format, isBefore } from 'date-fns';
@@ -11,15 +11,15 @@ export const awardPointsForCompletedReservation = async (reserva: Reserva, arena
   if (!reserva.profile_id) return;
 
   try {
-    const { data: settingsData } = await localApi.select<GamificationSettings>('gamification_settings', arenaId);
+    const { data: settingsData } = await supabaseApi.select<GamificationSettings>('gamification_settings', arenaId);
     const settings = settingsData?.[0];
     if (!settings || !settings.is_enabled) return;
 
-    const { data: allAlunos } = await localApi.select<Aluno>('alunos', arenaId);
+    const { data: allAlunos } = await supabaseApi.select<Aluno>('alunos', arenaId);
     let aluno = allAlunos.find(a => a.profile_id === reserva.profile_id);
     if (!aluno) return;
 
-    const { data: transactions } = await localApi.select<GamificationPointTransaction>('gamification_point_transactions', arenaId);
+    const { data: transactions } = await supabaseApi.select<GamificationPointTransaction>('gamification_point_transactions', arenaId);
     const alreadyAwarded = transactions.some(t => t.related_reservation_id === reserva.id && (t.type === 'reservation_completed'));
     if (alreadyAwarded) return;
 
@@ -56,15 +56,15 @@ export const awardPointsForCompletedReservation = async (reserva: Reserva, arena
     }
 
     // Check for achievements
-    const { data: allUserReservas } = await localApi.select<Reserva>('reservas', arenaId);
+    const { data: allUserReservas } = await supabaseApi.select<Reserva>('reservas', arenaId);
     const userCompletedReservas = allUserReservas.filter(r => 
         r.profile_id === aluno?.profile_id && 
         (r.status === 'confirmada' || r.status === 'realizada')
     );
     const completedCount = userCompletedReservas.length;
 
-    const { data: achievements } = await localApi.select<GamificationAchievement>('gamification_achievements', arenaId);
-    const { data: unlockedAchievementsData } = await localApi.select<AlunoAchievement>('aluno_achievements', arenaId);
+    const { data: achievements } = await supabaseApi.select<GamificationAchievement>('gamification_achievements', arenaId);
+    const { data: unlockedAchievementsData } = await supabaseApi.select<AlunoAchievement>('aluno_achievements', arenaId);
     const unlockedForUser = unlockedAchievementsData.filter(ua => ua.aluno_id === aluno!.id);
     const unlockedIds = new Set(unlockedForUser.map(ua => ua.achievement_id));
 
@@ -106,10 +106,10 @@ export const awardPointsForCompletedReservation = async (reserva: Reserva, arena
 
     if (totalPointsToAdd > 0) {
       const updatedPoints = (aluno.gamification_points || 0) + totalPointsToAdd;
-      await localApi.upsert('alunos', [{ ...aluno, gamification_points: updatedPoints }], arenaId);
-      await localApi.upsert('gamification_point_transactions', newPointTransactions, arenaId);
+      await supabaseApi.upsert('alunos', [{ ...aluno, gamification_points: updatedPoints }], arenaId);
+      await supabaseApi.upsert('gamification_point_transactions', newPointTransactions, arenaId);
       if (newUnlockedAchievements.length > 0) {
-        await localApi.upsert('aluno_achievements', newUnlockedAchievements, arenaId);
+        await supabaseApi.upsert('aluno_achievements', newUnlockedAchievements, arenaId);
       }
     }
   } catch (error) {
@@ -133,7 +133,7 @@ export const processCancellation = async (
     return { creditRefunded: 0, pointsDeducted: 0 };
   }
 
-  const { data: allAlunos } = await localApi.select<Aluno>('alunos', arenaId);
+  const { data: allAlunos } = await supabaseApi.select<Aluno>('alunos', arenaId);
   const aluno = allAlunos.find(a => a.profile_id === profileId);
   if (!aluno) return { creditRefunded: 0, pointsDeducted: 0 };
 
@@ -166,13 +166,13 @@ export const processCancellation = async (
   if (finalCreditToRefund > 0) {
     const updatedAluno = { ...aluno };
     updatedAluno.credit_balance = (updatedAluno.credit_balance || 0) + finalCreditToRefund;
-    await localApi.upsert('alunos', [updatedAluno], arenaId);
+    await supabaseApi.upsert('alunos', [updatedAluno], arenaId);
 
     const quadraName = quadras.find(q => q.id === reserva.quadra_id)?.name || 'Quadra';
     const reservaDetails = `${quadraName} em ${format(parseDateStringAsLocal(reserva.date), 'dd/MM/yy')} às ${reserva.start_time.slice(0,5)}`;
     const newDescription = `Crédito (${finalRefundReason}): ${reservaDetails}`;
 
-    await localApi.upsert('credit_transactions', [{
+    await supabaseApi.upsert('credit_transactions', [{
       aluno_id: aluno.id,
       arena_id: arenaId,
       amount: finalCreditToRefund,

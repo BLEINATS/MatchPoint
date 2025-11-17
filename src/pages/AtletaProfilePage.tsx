@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { AtletaAluguel, Reserva, Aluno, Quadra, Arena } from '../types';
 import { Loader2, Calendar, List, DollarSign, Star, User, ArrowLeft, Mail, Phone, Briefcase, Percent } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import SolicitacoesTab from '../components/Atleta/SolicitacoesTab';
 import AtletaAgendaTab from '../components/Atleta/AtletaAgendaTab';
 import AtletaFinanceiroTab from '../components/Atleta/AtletaFinanceiroTab';
@@ -35,10 +35,10 @@ const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfi
     setIsLoading(true);
     try {
       const [reservasRes, quadrasRes, clientesRes, arenaRes] = await Promise.all([
-        localApi.select<Reserva>('reservas', selectedArenaContext.id),
-        localApi.select<Quadra>('quadras', selectedArenaContext.id),
-        localApi.select<Aluno>('alunos', selectedArenaContext.id),
-        localApi.select<Arena>('arenas', 'all'),
+        supabaseApi.select<Reserva>('reservas', selectedArenaContext.id),
+        supabaseApi.select<Quadra>('quadras', selectedArenaContext.id),
+        supabaseApi.select<Aluno>('alunos', selectedArenaContext.id),
+        supabaseApi.select<Arena>('arenas', 'all'),
       ]);
 
       const atletaReservas = (reservasRes.data || []).filter(r => r.atleta_aluguel_id === atletaProfile.id);
@@ -73,14 +73,14 @@ const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfi
         athlete_payment_deadline: newStatus === 'aceito' ? deadline.toISOString() : null,
       };
 
-      await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
+      await supabaseApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
 
       const notificationMessage = newStatus === 'aceito'
         ? `aceitou seu convite para o jogo.`
         : `não está disponível para o seu jogo.`;
       
       if (reserva.profile_id) {
-        await localApi.upsert('notificacoes', [{
+        await supabaseApi.upsert('notificacoes', [{
           profile_id: reserva.profile_id,
           arena_id: selectedArenaContext.id,
           message: notificationMessage,
@@ -102,7 +102,7 @@ const AtletaProfileContent: React.FC<AtletaProfileContentProps> = ({ atletaProfi
     if (!atletaProfile || !selectedArenaContext) return;
     try {
       const updatedProfile = { ...atletaProfile, ...updatedData };
-      await localApi.upsert('atletas_aluguel', [updatedProfile], selectedArenaContext.id);
+      await supabaseApi.upsert('atletas_aluguel', [updatedProfile], selectedArenaContext.id);
       setAtletaProfile(updatedProfile);
       addToast({ message: 'Perfil atualizado com sucesso!', type: 'success' });
     } catch (error: any) {
@@ -216,7 +216,7 @@ const AtletaProfilePage: React.FC = () => {
             }
             setIsLoading(true);
             try {
-                const { data: atletasRes } = await localApi.select<AtletaAluguel>('atletas_aluguel', selectedArenaContext.id);
+                const { data: atletasRes } = await supabaseApi.select<AtletaAluguel>('atletas_aluguel', selectedArenaContext.id);
                 const foundProfile = (atletasRes || []).find(p => p.id === atletaIdToLoad);
                 setAtletaProfile(foundProfile || null);
             } catch (error: any) {

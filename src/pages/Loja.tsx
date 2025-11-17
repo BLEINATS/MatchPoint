@@ -5,7 +5,7 @@ import { ArrowLeft, Plus, ShoppingBag, Loader2 } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { Product } from '../types';
 import Button from '../components/Forms/Button';
 import ProductCard from '../components/Loja/ProductCard';
@@ -31,7 +31,7 @@ const Loja: React.FC = () => {
     }
     setIsLoading(true);
     try {
-      const { data, error } = await localApi.select<Product>('products', arena.id);
+      const { data, error } = await supabaseApi.select<Product>('products', arena.id);
       if (error) throw error;
       setProducts(data || []);
     } catch (error: any) {
@@ -48,7 +48,7 @@ const Loja: React.FC = () => {
   const handleSaveProduct = async (productData: Omit<Product, 'id' | 'arena_id' | 'created_at'> | Product) => {
     if (!arena) return;
     try {
-      await localApi.upsert('products', [{ ...productData, arena_id: arena.id }], arena.id);
+      await supabaseApi.upsert('products', [{ ...productData, arena_id: arena.id }], arena.id);
       addToast({ message: 'Produto salvo com sucesso!', type: 'success' });
       await loadProducts();
       setIsModalOpen(false);
@@ -66,7 +66,7 @@ const Loja: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!productToDelete || !arena) return;
     try {
-      await localApi.delete('products', [productToDelete.id], arena.id);
+      await supabaseApi.delete('products', [productToDelete.id], arena.id);
       addToast({ message: 'Produto excluído com sucesso.', type: 'success' });
       await loadProducts();
     } catch (error: any) {

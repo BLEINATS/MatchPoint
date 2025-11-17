@@ -6,7 +6,7 @@ import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import { ToggleSwitch } from '../Gamification/ToggleSwitch';
 import { useToast } from '../../context/ToastContext';
-import { localUploadPhoto } from '../../lib/localApi';
+import { localUploadPhoto } from '../../lib/supabaseApi';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ProductModalProps {

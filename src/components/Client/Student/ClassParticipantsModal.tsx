@@ -7,7 +7,7 @@ import { ptBR } from 'date-fns/locale';
 import Button from '../../Forms/Button';
 import ConfirmationModal from '../../Shared/ConfirmationModal';
 import { useToast } from '../../../context/ToastContext';
-import { localApi } from '../../../lib/localApi';
+import { supabaseApi } from '../../../lib/localApi';
 import { useAuth } from '../../../context/AuthContext';
 import { parseDateStringAsLocal } from '../../../utils/dateUtils';
 
@@ -66,7 +66,7 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
   const handleBookClass = async () => {
     if (!arena) return;
     try {
-      const { data: allTurmas } = await localApi.select<Turma>('turmas', arena.id);
+      const { data: allTurmas } = await supabaseApi.select<Turma>('turmas', arena.id);
       const turmaToUpdate = allTurmas.find(t => t.id === turma.id);
       if (!turmaToUpdate) throw new Error("Turma não encontrada para matrícula.");
 
@@ -83,7 +83,7 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
       }
 
       const updatedTurma = { ...turmaToUpdate, matriculas };
-      await localApi.upsert('turmas', [updatedTurma], arena.id);
+      await supabaseApi.upsert('turmas', [updatedTurma], arena.id);
 
       const newBooking = { turma_id: turma.id, date: format(date, 'yyyy-MM-dd'), time };
       const updatedAulasAgendadas = [...(aluno.aulas_agendadas || []), newBooking];
@@ -91,7 +91,7 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
       if (!isUnlimited) {
         updatedAluno.aulas_restantes = Math.max(0, (aluno.aulas_restantes || 0) - 1);
       }
-      await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
+      await supabaseApi.upsert('alunos', [updatedAluno], aluno.arena_id);
       
       addToast({ message: 'Aula agendada com sucesso!', type: 'success' });
       onDataChange();
@@ -107,7 +107,7 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
     if (!arena) return;
     const dateString = format(date, 'yyyy-MM-dd');
     try {
-      const { data: allTurmas } = await localApi.select<Turma>('turmas', arena.id);
+      const { data: allTurmas } = await supabaseApi.select<Turma>('turmas', arena.id);
       const turmaToUpdate = allTurmas.find(t => t.id === turma.id);
       if (turmaToUpdate) {
         const dayOfWeek = getDay(date);
@@ -118,7 +118,7 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
           return m;
         });
         const updatedTurma = { ...turmaToUpdate, matriculas: updatedMatriculas };
-        await localApi.upsert('turmas', [updatedTurma], arena.id);
+        await supabaseApi.upsert('turmas', [updatedTurma], arena.id);
       }
 
       const updatedAulasAgendadas = (aluno.aulas_agendadas || []).filter(a => !(a.turma_id === turma.id && a.date === dateString && a.time === time));
@@ -126,7 +126,7 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
       if (!isUnlimited && aluno.aulas_restantes !== null) {
         updatedAluno.aulas_restantes = (aluno.aulas_restantes || 0) + 1;
       }
-      await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
+      await supabaseApi.upsert('alunos', [updatedAluno], aluno.arena_id);
       
       addToast({ message: 'Agendamento cancelado!', type: 'success' });
       onDataChange();
@@ -141,7 +141,7 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
   const handleSwapClass = async () => {
     if (!oldClassForSwap || !arena) return;
     try {
-      const { data: allTurmas } = await localApi.select<Turma>('turmas', arena.id);
+      const { data: allTurmas } = await supabaseApi.select<Turma>('turmas', arena.id);
       const turmasToUpdate: Turma[] = [];
 
       const oldTurmaToUpdate = allTurmas.find(t => t.id === oldClassForSwap.turma.id);
@@ -179,7 +179,7 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
       }
 
       if (turmasToUpdate.length > 0) {
-        await localApi.upsert('turmas', turmasToUpdate, arena.id);
+        await supabaseApi.upsert('turmas', turmasToUpdate, arena.id);
       }
       
       const oldDateString = format(oldClassForSwap.date, 'yyyy-MM-dd');
@@ -192,7 +192,7 @@ const ClassParticipantsModal: React.FC<ClassParticipantsModalProps> = ({ isOpen,
 
       const updatedAluno = { ...aluno, aulas_agendadas: updatedAulasAgendadas };
       
-      await localApi.upsert('alunos', [updatedAluno], aluno.arena_id);
+      await supabaseApi.upsert('alunos', [updatedAluno], aluno.arena_id);
       addToast({ message: 'Troca de horário realizada com sucesso!', type: 'success' });
       onDataChange();
     } catch(e: any) {

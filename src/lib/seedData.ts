@@ -1,4 +1,3 @@
-import { localApi } from './localApi';
 import { supabaseApi } from './supabaseApi';
 import { Arena, Profile, Quadra, PricingRule, PlanoAula, Aluno, Friendship, Reserva, GamificationSettings, GamificationLevel, GamificationReward, GamificationAchievement, Professor, Turma, Plan, Subscription, Product, Torneio } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -52,7 +51,7 @@ const seedDefaultProducts = async (arenaId: string) => {
             ]
         },
     ];
-    await localApi.upsert('products', products, arenaId, true);
+    await supabaseApi.upsert('products', products, arenaId, true);
 };
 
 export const seedInitialData = async () => {
@@ -66,7 +65,7 @@ export const seedInitialData = async () => {
   const anaProfile: Profile = { id: 'profile_ana_01', name: 'Ana Pereira', email: 'ana@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(21) 91234-5678', cpf: '222.333.444-55', birth_date: '1992-05-20', gender: 'feminino', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
   const brunoProfile: Profile = { id: 'profile_bruno_01', name: 'Bruno Lima', email: 'bruno@email.com', role: 'cliente', avatar_url: null, created_at: new Date().toISOString(), phone: '(31) 95555-4444', cpf: '333.444.555-66', birth_date: '1988-11-30', gender: 'masculino', notification_preferences: { game_invites: true, friend_requests: true, arena_news: true } };
   
-  await localApi.upsert('profiles', [adminProfile, superAdminProfile, viniProfile, anaProfile, brunoProfile], 'all', true);
+  await supabaseApi.upsert('profiles', [adminProfile, superAdminProfile, viniProfile, anaProfile, brunoProfile], 'all', true);
 
   // 2. SaaS Plans
   const basicPlan: Plan = { id: 'plan_basic_01', name: 'Básico', price: 59.90, billing_cycle: 'monthly', features: ['Até 5 quadras', 'Reservas online', 'Dashboard de gestão', 'Gestão de Clientes', '3 funcionários'], is_active: true };
@@ -91,7 +90,7 @@ export const seedInitialData = async () => {
     plan_id: basicPlan.id,
     single_booking_payment_window_minutes: 30,
   };
-  await localApi.upsert('arenas', [arena], 'all', true);
+  await supabaseApi.upsert('arenas', [arena], 'all', true);
 
   // 4. Subscription for the Arena
   const subscription: Subscription = {
@@ -127,7 +126,7 @@ export const seedInitialData = async () => {
     created_at: new Date().toISOString(),
     pricing_rules: createMinimalPricingRule(quadraId, arenaId),
   };
-  await localApi.upsert('quadras', [quadra], arenaId, true);
+  await supabaseApi.upsert('quadras', [quadra], arenaId, true);
 
   // 6. Professor
   const profId = `prof_${uuidv4()}`;
@@ -138,7 +137,7 @@ export const seedInitialData = async () => {
     specialties: ['Beach Tennis', 'Futevôlei'],
     status: 'ativo',
   };
-  await localApi.upsert('professores', [professor], arenaId, true);
+  await supabaseApi.upsert('professores', [professor], arenaId, true);
 
   // 7. Turma
   const turmaId = `turma_${uuidv4()}`;
@@ -155,14 +154,14 @@ export const seedInitialData = async () => {
     alunos_por_horario: 8,
     matriculas: [],
   };
-  await localApi.upsert('turmas', [turma], arenaId, true);
+  await supabaseApi.upsert('turmas', [turma], arenaId, true);
 
   // 8. Planos de Aula
   const planoMensal1x: PlanoAula = { id: `plano_${uuidv4()}`, arena_id: arenaId, name: 'Plano Mensal - 1x/semana', duration_type: 'mensal', price: 280, num_aulas: 4, description: 'Pacote com 4 aulas no mês.', is_active: true, created_at: new Date().toISOString() };
   const planoMensal2x: PlanoAula = { id: `plano_${uuidv4()}`, arena_id: arenaId, name: 'Plano Mensal - 2x/semana', duration_type: 'mensal', price: 480, num_aulas: 8, description: 'Pacote com 8 aulas no mês.', is_active: true, created_at: new Date().toISOString() };
   const planoAnualLivre: PlanoAula = { id: `plano_${uuidv4()}`, arena_id: arenaId, name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, num_aulas: null, description: 'Acesso livre a todas as turmas compatíveis durante o ano.', is_active: true, created_at: new Date().toISOString() };
   
-  await localApi.upsert('planos_aulas', [planoMensal1x, planoMensal2x, planoAnualLivre], arenaId, true);
+  await supabaseApi.upsert('planos_aulas', [planoMensal1x, planoMensal2x, planoAnualLivre], arenaId, true);
 
   // 9. Alunos e Clientes
   const alunos: Omit<Aluno, 'id' | 'created_at'>[] = [
@@ -200,14 +199,14 @@ export const seedInitialData = async () => {
       aulas_restantes: 0, aulas_agendadas: [], join_date: new Date().toISOString().split('T')[0], credit_balance: 0, gamification_points: 50,
     }
   ];
-  await localApi.upsert('alunos', alunos, arenaId, true);
+  await supabaseApi.upsert('alunos', alunos, arenaId, true);
 
   // 10. Friendships
   const friendships: Friendship[] = [
     { id: uuidv4(), user1_id: viniProfile.id, user2_id: anaProfile.id, status: 'accepted', requested_by: viniProfile.id, created_at: new Date().toISOString() },
     { id: uuidv4(), user1_id: brunoProfile.id, user2_id: viniProfile.id, status: 'pending', requested_by: brunoProfile.id, created_at: new Date().toISOString() },
   ];
-  await localApi.upsert('friendships', friendships, 'all', true);
+  await supabaseApi.upsert('friendships', friendships, 'all', true);
 
   // 11. Sample Reservation with Participants
   const sampleReservation: Reserva = {
@@ -233,7 +232,7 @@ export const seedInitialData = async () => {
     ],
     invites_closed: false,
   };
-  await localApi.upsert('reservas', [sampleReservation], arenaId, true);
+  await supabaseApi.upsert('reservas', [sampleReservation], arenaId, true);
   
   // 12. Gamification Settings
   const gamificationSettings: GamificationSettings = {
@@ -242,7 +241,7 @@ export const seedInitialData = async () => {
     points_per_reservation: 10,
     points_per_real: 1,
   };
-  await localApi.upsert('gamification_settings', [gamificationSettings], arenaId, true);
+  await supabaseApi.upsert('gamification_settings', [gamificationSettings], arenaId, true);
 
   // 13. Gamification Levels
   const levels: Omit<GamificationLevel, 'id'>[] = [
@@ -250,14 +249,14 @@ export const seedInitialData = async () => {
     { arena_id: arenaId, name: 'Prata', points_required: 1000, level_rank: 2 },
     { arena_id: arenaId, name: 'Ouro', points_required: 5000, level_rank: 3 },
   ];
-  await localApi.upsert('gamification_levels', levels, arenaId, true);
+  await supabaseApi.upsert('gamification_levels', levels, arenaId, true);
 
   // 14. Gamification Rewards
   const rewards: Omit<GamificationReward, 'id'>[] = [
     { arena_id: arenaId, title: 'Desconto de R$10', description: 'Use seus pontos para ganhar um desconto na sua próxima reserva.', points_cost: 500, type: 'discount', value: 10, quantity: null, is_active: true },
     { arena_id: arenaId, title: '1 Hora Grátis', description: 'Troque seus pontos por uma hora de jogo por nossa conta!', points_cost: 1200, type: 'free_hour', value: 1, quantity: 10, is_active: true },
   ];
-  await localApi.upsert('gamification_rewards', rewards, arenaId, true);
+  await supabaseApi.upsert('gamification_rewards', rewards, arenaId, true);
 
   // 15. Gamification Achievements
   const achievements: Omit<GamificationAchievement, 'id'>[] = [
@@ -266,7 +265,7 @@ export const seedInitialData = async () => {
     { arena_id: arenaId, name: 'Fidelidade Prata', description: 'Incrível! 50 reservas completadas.', type: 'loyalty_50', points_reward: 1000, icon: 'Award' },
     { arena_id: arenaId, name: 'Fidelidade Ouro', description: 'Lenda da arena! 100 reservas completadas.', type: 'loyalty_100', points_reward: 2500, icon: 'Trophy' },
   ];
-  await localApi.upsert('gamification_achievements', achievements, arenaId, true);
+  await supabaseApi.upsert('gamification_achievements', achievements, arenaId, true);
 
   // 16. Products
   const seedKeyProducts = `products_seeded_v2_${arenaId}`;
@@ -300,11 +299,11 @@ export const seedInitialData = async () => {
     expenses: [],
     sponsors: [],
   };
-  await localApi.upsert('torneios', [torneio], arenaId, true);
+  await supabaseApi.upsert('torneios', [torneio], arenaId, true);
 
   // Clear other tables
-  await localApi.upsert('atletas_aluguel', [], arenaId, true);
-  await localApi.upsert('finance_transactions', [], arenaId, true);
+  await supabaseApi.upsert('atletas_aluguel', [], arenaId, true);
+  await supabaseApi.upsert('finance_transactions', [], arenaId, true);
   
   console.log("Seeding with test users, gamification, and tournament complete.");
 };

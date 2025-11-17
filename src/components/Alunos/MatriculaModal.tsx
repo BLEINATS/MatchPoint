@@ -6,7 +6,7 @@ import Button from '../Forms/Button';
 import Input from '../Forms/Input';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import { useToast } from '../../context/ToastContext';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import AssignPlanModal from './AssignPlanModal';
 
 interface MatriculaModalProps {
@@ -97,7 +97,7 @@ const MatriculaModal: React.FC<MatriculaModalProps> = ({ isOpen, onClose, onSave
     };
 
     try {
-      await localApi.upsert('alunos', [updatedAluno], studentToAssignPlan.arena_id);
+      await supabaseApi.upsert('alunos', [updatedAluno], studentToAssignPlan.arena_id);
       
       setSelectedIds(prev => [...prev, studentToAssignPlan.id]);
       

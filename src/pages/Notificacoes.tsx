@@ -5,7 +5,7 @@ import { ArrowLeft, Plus, Send, Loader2, User } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { Notificacao, Aluno, Profile, Professor, AtletaAluguel } from '../types';
 import Button from '../components/Forms/Button';
 import { format } from 'date-fns';
@@ -33,11 +33,11 @@ const Notificacoes: React.FC = () => {
     setIsLoading(true);
     try {
       const [notifRes, alunosRes, profilesRes, profsRes, atletasRes] = await Promise.all([
-        localApi.select<Notificacao>('notificacoes', arena.id),
-        localApi.select<Aluno>('alunos', arena.id),
-        localApi.select<Profile>('profiles', 'all'),
-        localApi.select<Professor>('professores', arena.id),
-        localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
+        supabaseApi.select<Notificacao>('notificacoes', arena.id),
+        supabaseApi.select<Aluno>('alunos', arena.id),
+        supabaseApi.select<Profile>('profiles', 'all'),
+        supabaseApi.select<Professor>('professores', arena.id),
+        supabaseApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
       ]);
       
       let filteredNotifs = notifRes.data || [];
@@ -83,7 +83,7 @@ const Notificacoes: React.FC = () => {
       return;
     }
 
-    const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+    const { data: allProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
     const profilesMap = new Map((allProfiles || []).map(p => [p.id, p]));
 
     const newNotifications: Omit<Notificacao, 'id' | 'created_at'>[] = uniqueProfileIds
@@ -112,7 +112,7 @@ const Notificacoes: React.FC = () => {
     }
 
     try {
-      await localApi.upsert('notificacoes', newNotifications, arena.id);
+      await supabaseApi.upsert('notificacoes', newNotifications, arena.id);
       addToast({ message: `Notificação enviada para ${newNotifications.length} usuário(s)!`, type: 'success' });
       loadData();
       setIsModalOpen(false);

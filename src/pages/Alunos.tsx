@@ -5,7 +5,7 @@ import { ArrowLeft, Users, GraduationCap, BookOpen, Plus, Search, BadgeCheck, Ba
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { Aluno, Professor, Quadra, Turma, Reserva, AtletaAluguel, PlanoAula, GamificationPointTransaction, Profile, AlunoLevel } from '../types';
 import Button from '../components/Forms/Button';
 import Input from '../components/Forms/Input';
@@ -19,7 +19,7 @@ import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
 import { formatCurrency } from '../utils/formatters';
 import AtletaAluguelModal from '../components/Alunos/AtletaAluguelModal';
-import { localUploadPhoto } from '../lib/localApi';
+import { localUploadPhoto } from '../lib/supabaseApi';
 import ProfessorAgendaView from '../components/Alunos/ProfessorAgendaView';
 import { syncTurmaReservations } from '../utils/bookingSyncUtils';
 import { awardPointsForCompletedReservation } from '../utils/gamificationUtils';
@@ -84,15 +84,15 @@ const Alunos: React.FC = () => {
     }
     try {
       const [alunosRes, professoresRes, turmasRes, quadrasRes, atletasRes, planosRes, reservasRes, transactionsRes, levelsRes] = await Promise.all([
-        localApi.select<Aluno>('alunos', arena.id),
-        localApi.select<Professor>('professores', arena.id),
-        localApi.select<Turma>('turmas', arena.id),
-        localApi.select<Quadra>('quadras', arena.id),
-        localApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
-        localApi.select<PlanoAula>('planos_aulas', arena.id),
-        localApi.select<Reserva>('reservas', arena.id),
-        localApi.select<GamificationPointTransaction>('gamification_point_transactions', arena.id),
-        localApi.select<AlunoLevel>('aluno_levels', arena.id),
+        supabaseApi.select<Aluno>('alunos', arena.id),
+        supabaseApi.select<Professor>('professores', arena.id),
+        supabaseApi.select<Turma>('turmas', arena.id),
+        supabaseApi.select<Quadra>('quadras', arena.id),
+        supabaseApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
+        supabaseApi.select<PlanoAula>('planos_aulas', arena.id),
+        supabaseApi.select<Reserva>('reservas', arena.id),
+        supabaseApi.select<GamificationPointTransaction>('gamification_point_transactions', arena.id),
+        supabaseApi.select<AlunoLevel>('aluno_levels', arena.id),
       ]);
 
       const now = new Date();
@@ -112,7 +112,7 @@ const Alunos: React.FC = () => {
           for (const reserva of reservationsToProcess) {
             await awardPointsForCompletedReservation(reserva, arena.id);
           }
-          const { data: updatedAlunos } = await localApi.select<Aluno>('alunos', arena.id);
+          const { data: updatedAlunos } = await supabaseApi.select<Aluno>('alunos', arena.id);
           setAlunos(updatedAlunos || []);
         } else {
           setAlunos(alunosRes.data || []);
@@ -168,7 +168,7 @@ const Alunos: React.FC = () => {
             credit_balance: 'credit_balance' in alunoData ? alunoData.credit_balance : 0,
             gamification_points: 'gamification_points' in alunoData ? alunoData.gamification_points : 0,
         };
-        await localApi.upsert('alunos', [{ ...dataWithDefaults, arena_id: arena.id }], arena.id);
+        await supabaseApi.upsert('alunos', [{ ...dataWithDefaults, arena_id: arena.id }], arena.id);
         addToast({ message: `Cliente/Aluno salvo com sucesso!`, type: 'success' });
         await loadData();
         setIsAlunoModalOpen(false);
@@ -194,11 +194,11 @@ const Alunos: React.FC = () => {
     const tableName = type === 'turma' ? 'turmas' : type === 'professor' ? 'professores' : type === 'atleta' ? 'atletas_aluguel' : type === 'reserva' ? 'reservas' : 'alunos';
     try {
       if (type === 'turma' || type === 'reserva') {
-        const { data: allReservas } = await localApi.select<Reserva>('reservas', arena.id);
+        const { data: allReservas } = await supabaseApi.select<Reserva>('reservas', arena.id);
         const otherReservas = allReservas.filter(r => (type === 'turma' ? r.turma_id : r.id) !== id);
-        await localApi.upsert('reservas', otherReservas, arena.id, true);
+        await supabaseApi.upsert('reservas', otherReservas, arena.id, true);
       }
-      await localApi.delete(tableName, [id], arena.id);
+      await supabaseApi.delete(tableName, [id], arena.id);
       addToast({ message: `${type.charAt(0).toUpperCase() + type.slice(1)} excluído(a) com sucesso.`, type: 'success' });
       await loadData();
     } catch (error: any) {
@@ -217,7 +217,7 @@ const Alunos: React.FC = () => {
             const { publicUrl } = await localUploadPhoto(photoFile);
             finalAvatarUrl = publicUrl;
         }
-        await localApi.upsert('professores', [{ ...professorData, arena_id: arena.id, avatar_url: finalAvatarUrl }], arena.id);
+        await supabaseApi.upsert('professores', [{ ...professorData, arena_id: arena.id, avatar_url: finalAvatarUrl }], arena.id);
         addToast({ message: `Professor salvo com sucesso!`, type: 'success' });
         await loadData();
         setIsProfessorModalOpen(false);
@@ -240,7 +240,7 @@ const Alunos: React.FC = () => {
         let finalProfileId = atletaData.profile_id;
 
         if (!isEditing && !atletaData.profile_id && atletaData.email) {
-            const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+            const { data: allProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
             let existingProfile = allProfiles.find(p => p.email.toLowerCase() === atletaData.email!.toLowerCase());
 
             if (!existingProfile) {
@@ -251,7 +251,7 @@ const Alunos: React.FC = () => {
                     role: 'cliente',
                     phone: atletaData.phone,
                 };
-                const { data: createdProfiles } = await localApi.upsert('profiles', [newProfilePayload], 'all');
+                const { data: createdProfiles } = await supabaseApi.upsert('profiles', [newProfilePayload], 'all');
                 existingProfile = createdProfiles[0];
                 addToast({ message: `Conta de usuário criada para ${atletaData.name}.`, type: 'info' });
             }
@@ -259,7 +259,7 @@ const Alunos: React.FC = () => {
             if (existingProfile) {
                 finalProfileId = existingProfile.id;
                 
-                const { data: allAlunos } = await localApi.select<Aluno>('alunos', arena.id);
+                const { data: allAlunos } = await supabaseApi.select<Aluno>('alunos', arena.id);
                 const existingAluno = allAlunos.find(a => a.profile_id === finalProfileId);
 
                 if (!existingAluno) {
@@ -277,13 +277,13 @@ const Alunos: React.FC = () => {
                         aulas_agendadas: [],
                         join_date: new Date().toISOString().split('T')[0],
                     };
-                    await localApi.upsert('alunos', [newAlunoPayload], arena.id);
+                    await supabaseApi.upsert('alunos', [newAlunoPayload], arena.id);
                     addToast({ message: `${atletaData.name} também foi adicionado como cliente da arena.`, type: 'info' });
                 }
             }
         }
 
-        await localApi.upsert('atletas_aluguel', [{ ...atletaData, arena_id: arena.id, avatar_url: finalAvatarUrl, profile_id: finalProfileId }], arena.id);
+        await supabaseApi.upsert('atletas_aluguel', [{ ...atletaData, arena_id: arena.id, avatar_url: finalAvatarUrl, profile_id: finalProfileId }], arena.id);
         addToast({ message: `Atleta salvo com sucesso!`, type: 'success' });
         await loadData();
         setIsAtletaAluguelModalOpen(false);
@@ -296,14 +296,14 @@ const Alunos: React.FC = () => {
   const handleSaveTurma = async (turmaData: Omit<Turma, 'id' | 'arena_id' | 'created_at'> | Turma) => {
     if (!arena) return;
     try {
-        const { data: savedTurmas } = await localApi.upsert('turmas', [{ ...turmaData, arena_id: arena.id }], arena.id);
+        const { data: savedTurmas } = await supabaseApi.upsert('turmas', [{ ...turmaData, arena_id: arena.id }], arena.id);
         const savedTurma = savedTurmas[0];
         if (!savedTurma) throw new Error("Falha ao salvar a turma.");
         
-        const { data: allReservas } = await localApi.select<Reserva>('reservas', arena.id);
+        const { data: allReservas } = await supabaseApi.select<Reserva>('reservas', arena.id);
         const updatedReservas = syncTurmaReservations(savedTurma, allReservas);
         
-        await localApi.upsert('reservas', updatedReservas, arena.id, true);
+        await supabaseApi.upsert('reservas', updatedReservas, arena.id, true);
 
         addToast({ message: `Turma salva com sucesso!`, type: 'success' });
         await loadData();
@@ -317,7 +317,7 @@ const Alunos: React.FC = () => {
   const handleUpdateMasterReserva = async (updatedReserva: Reserva) => {
     if (!arena) return;
     try {
-      await localApi.upsert('reservas', [updatedReserva], arena.id);
+      await supabaseApi.upsert('reservas', [updatedReserva], arena.id);
       addToast({ message: 'Dados do mensalista atualizados!', type: 'success' });
       loadData();
     } catch (error: any) {
@@ -339,7 +339,7 @@ const Alunos: React.FC = () => {
     if (!arena) return;
     
     try {
-      const { data: allAlunos } = await localApi.select<Aluno>('alunos', arena.id);
+      const { data: allAlunos } = await supabaseApi.select<Aluno>('alunos', arena.id);
       const updatedAlunos: Aluno[] = [];
 
       allAlunos.forEach(aluno => {
@@ -369,7 +369,7 @@ const Alunos: React.FC = () => {
       });
       
       if (updatedAlunos.length > 0) {
-        await localApi.upsert('alunos', updatedAlunos, arena.id);
+        await supabaseApi.upsert('alunos', updatedAlunos, arena.id);
       }
       
       addToast({ message: 'Frequência salva com sucesso!', type: 'success' });

@@ -21,7 +21,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutGrid, Calendar, List, Plus, SlidersHorizontal, ArrowLeft, Loader2, ArrowUp, ArrowDown, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import Layout from '../components/Layout/Layout';
 import Button from '../components/Forms/Button';
 import Input from '../components/Forms/Input';
@@ -99,10 +99,10 @@ const Reservations: React.FC = () => {
     setIsLoading(true);
     try {
       const [quadrasRes, reservasRes, alunosRes, atletasRes] = await Promise.all([
-        localApi.select<Quadra>('quadras', selectedArenaContext.id),
-        localApi.select<Reserva>('reservas', selectedArenaContext.id),
-        localApi.select<Aluno>('alunos', selectedArenaContext.id),
-        localApi.select<AtletaAluguel>('atletas_aluguel', selectedArenaContext.id),
+        supabaseApi.select<Quadra>('quadras', selectedArenaContext.id),
+        supabaseApi.select<Reserva>('reservas', selectedArenaContext.id),
+        supabaseApi.select<Aluno>('alunos', selectedArenaContext.id),
+        supabaseApi.select<AtletaAluguel>('atletas_aluguel', selectedArenaContext.id),
       ]);
       
       const now = new Date();
@@ -118,7 +118,7 @@ const Reservations: React.FC = () => {
       });
 
       if (updated) {
-        await localApi.upsert('reservas', reservationsData, selectedArenaContext.id, true);
+        await supabaseApi.upsert('reservas', reservationsData, selectedArenaContext.id, true);
         addToast({ message: 'Algumas reservas pendentes expiraram e foram canceladas.', type: 'info' });
       }
 
@@ -245,7 +245,7 @@ const Reservations: React.FC = () => {
         if (existingAluno) {
           alunoForReservation = existingAluno;
         } else if (!isEditing) {
-          const { data: newAlunos } = await localApi.upsert('alunos', [{ arena_id: selectedArenaContext.id, name: clientName, phone: clientPhone || null, status: 'ativo', plan_name: 'Avulso', join_date: format(new Date(), 'yyyy-MM-dd') }], selectedArenaContext.id);
+          const { data: newAlunos } = await supabaseApi.upsert('alunos', [{ arena_id: selectedArenaContext.id, name: clientName, phone: clientPhone || null, status: 'ativo', plan_name: 'Avulso', join_date: format(new Date(), 'yyyy-MM-dd') }], selectedArenaContext.id);
           if (newAlunos && newAlunos[0]) {
             alunoForReservation = newAlunos[0];
           }
@@ -263,7 +263,7 @@ const Reservations: React.FC = () => {
         dataToUpsert.created_by_name = profile.name;
         if (dataToUpsert.total_price && dataToUpsert.total_price > 0 && dataToUpsert.payment_status === 'pendente') {
           dataToUpsert.status = 'aguardando_pagamento';
-          const { data: arenas } = await localApi.select<Arena>('arenas', 'all');
+          const { data: arenas } = await supabaseApi.select<Arena>('arenas', 'all');
           const currentArena = arenas.find(a => a.id === selectedArenaContext.id);
           const paymentWindow = currentArena?.single_booking_payment_window_minutes || 30;
           dataToUpsert.payment_deadline = addMinutes(new Date(), paymentWindow).toISOString();
@@ -286,7 +286,7 @@ const Reservations: React.FC = () => {
         dataToUpsert.recurringEndDate = null;
       }
     
-      const { data: savedReservas } = await localApi.upsert('reservas', [dataToUpsert], selectedArenaContext.id);
+      const { data: savedReservas } = await supabaseApi.upsert('reservas', [dataToUpsert], selectedArenaContext.id);
       const savedReserva = savedReservas[0];
   
       if (savedReserva && alunoForReservation) {
@@ -295,13 +295,13 @@ const Reservations: React.FC = () => {
     
         if (newlyAppliedCredit !== 0) {
             const updatedBalance = (alunoForReservation.credit_balance || 0) - newlyAppliedCredit;
-            await localApi.upsert('alunos', [{ ...alunoForReservation, credit_balance: updatedBalance }], selectedArenaContext.id);
+            await supabaseApi.upsert('alunos', [{ ...alunoForReservation, credit_balance: updatedBalance }], selectedArenaContext.id);
     
             if (newlyAppliedCredit > 0) {
                 const quadraName = quadras.find(q => q.id === savedReserva.quadra_id)?.name || 'Quadra';
                 const reservaDetails = `${quadraName} em ${format(parseDateStringAsLocal(savedReserva.date), 'dd/MM/yy')} às ${savedReserva.start_time.slice(0,5)}`;
                 const newDescription = `Pagamento da reserva: ${reservaDetails}`;
-                await localApi.upsert('credit_transactions', [{ 
+                await supabaseApi.upsert('credit_transactions', [{ 
                     aluno_id: alunoForReservation.id, 
                     arena_id: selectedArenaContext.id, 
                     amount: -newlyAppliedCredit, 
@@ -321,7 +321,7 @@ const Reservations: React.FC = () => {
   const handleUpdateMasterReserva = async (updatedReserva: Reserva) => {
     if (!selectedArenaContext) return;
     try {
-      await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
+      await supabaseApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
       addToast({ message: 'Dados do mensalista atualizados!', type: 'success' });
       loadData();
     } catch (error: any) {
@@ -348,7 +348,7 @@ const Reservations: React.FC = () => {
         const updatePayload: Partial<Reserva> = { status: 'cancelada' };
         if (reserva.total_price && reserva.total_price > 0) updatePayload.payment_status = 'pago';
         const updatedReserva = { ...reserva, ...updatePayload };
-        await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
+        await supabaseApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
         addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
         loadData();
     } catch (error: any) { addToast({ message: `Erro ao cancelar reserva: ${error.message}`, type: 'error' }); }
@@ -368,7 +368,7 @@ const Reservations: React.FC = () => {
             updatePayload.payment_status = 'pago';
         }
         const updatedReserva = { ...reserva, ...updatePayload };
-        await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
+        await supabaseApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
         
         addToast({ message: 'Reserva cancelada com sucesso!', type: 'success' });
         if (creditAmount > 0) addToast({ message: `${formatCurrency(creditAmount)} de crédito aplicado.`, type: 'info' });
@@ -424,7 +424,7 @@ const Reservations: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!itemToDelete || !selectedArenaContext) return;
     try {
-      await localApi.delete('reservas', [itemToDelete.id], selectedArenaContext.id);
+      await supabaseApi.delete('reservas', [itemToDelete.id], selectedArenaContext.id);
       addToast({ message: 'Reserva excluída com sucesso.', type: 'success' });
       loadData();
     } catch (error: any) {

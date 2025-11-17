@@ -5,7 +5,7 @@ import { ArrowLeft, Settings, Star, Gift, Trophy, Loader2, Save, CheckCircle, Ba
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { GamificationSettings, GamificationLevel, GamificationReward, GamificationAchievement, Product, RedeemedVoucher, Aluno } from '../types';
 import Button from '../components/Forms/Button';
 import GeneralSettings from '../components/Gamification/GeneralSettings';
@@ -37,13 +37,13 @@ const Gamification: React.FC = () => {
     setIsLoading(true);
     try {
       const [settingsRes, levelsRes, rewardsRes, achievementsRes, productsRes, vouchersRes, alunosRes] = await Promise.all([
-        localApi.select<GamificationSettings>('gamification_settings', arena.id),
-        localApi.select<GamificationLevel>('gamification_levels', arena.id),
-        localApi.select<GamificationReward>('gamification_rewards', arena.id),
-        localApi.select<GamificationAchievement>('gamification_achievements', arena.id),
-        localApi.select<Product>('products', arena.id),
-        localApi.select<RedeemedVoucher>('redeemed_vouchers', arena.id),
-        localApi.select<Aluno>('alunos', arena.id),
+        supabaseApi.select<GamificationSettings>('gamification_settings', arena.id),
+        supabaseApi.select<GamificationLevel>('gamification_levels', arena.id),
+        supabaseApi.select<GamificationReward>('gamification_rewards', arena.id),
+        supabaseApi.select<GamificationAchievement>('gamification_achievements', arena.id),
+        supabaseApi.select<Product>('products', arena.id),
+        supabaseApi.select<RedeemedVoucher>('redeemed_vouchers', arena.id),
+        supabaseApi.select<Aluno>('alunos', arena.id),
       ]);
 
       setSettings(settingsRes.data?.[0] || { arena_id: arena.id, is_enabled: false, points_per_real: 1, points_per_reservation: 10 });
@@ -73,11 +73,11 @@ const Gamification: React.FC = () => {
     setIsSaving(true);
     try {
       if (settings) {
-        await localApi.upsert('gamification_settings', [{ ...settings, arena_id: arena.id }], arena.id, true);
+        await supabaseApi.upsert('gamification_settings', [{ ...settings, arena_id: arena.id }], arena.id, true);
       }
-      await localApi.upsert('gamification_levels', levels.map(l => ({ ...l, arena_id: arena.id })), arena.id, true);
-      await localApi.upsert('gamification_rewards', rewards.map(r => ({ ...r, arena_id: arena.id })), arena.id, true);
-      await localApi.upsert('gamification_achievements', achievements.map(a => ({ ...a, arena_id: arena.id })), arena.id, true);
+      await supabaseApi.upsert('gamification_levels', levels.map(l => ({ ...l, arena_id: arena.id })), arena.id, true);
+      await supabaseApi.upsert('gamification_rewards', rewards.map(r => ({ ...r, arena_id: arena.id })), arena.id, true);
+      await supabaseApi.upsert('gamification_achievements', achievements.map(a => ({ ...a, arena_id: arena.id })), arena.id, true);
       
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 2000);

@@ -18,7 +18,7 @@ import DatePickerCalendar from '../components/Client/DatePickerCalendar';
 import ClientCancellationModal from '../components/Client/ClientCancellationModal';
 import ArenaInfoCard from '../components/Client/ArenaInfoCard';
 import ReservationDetailModal from '../components/Client/ReservationDetailModal';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { formatCurrency } from '../utils/formatters';
 import { processCancellation, awardPointsForCompletedReservation } from '../utils/gamificationUtils';
 import HirePlayerModal from '../components/Client/HirePlayerModal';
@@ -593,26 +593,26 @@ const ClientDashboard: React.FC = () => {
         setIsLoading(true);
         try {
         const [quadrasRes, allReservasRes, turmasRes, profsRes, atletasRes, creditRes, gamificationHistoryRes, gamificationSettingsRes, levelsRes, rewardsRes, achievementsRes, unlockedAchievementsRes, planosRes, allAlunosRes, friendshipsRes, profilesRes, financeTransactionsRes, tournamentsRes, vouchersRes, productsRes] = await Promise.all([
-            localApi.select<Quadra>('quadras', selectedArenaContext.id),
-            localApi.select<Reserva>('reservas', selectedArenaContext.id),
-            localApi.select<Turma>('turmas', selectedArenaContext.id),
-            localApi.select<Professor>('professores', selectedArenaContext.id),
-            localApi.select<AtletaAluguel>('atletas_aluguel', selectedArenaContext.id),
-            alunoProfileForSelectedArena ? localApi.select<CreditTransaction>('credit_transactions', selectedArenaContext.id) : Promise.resolve({ data: [] }),
-            alunoProfileForSelectedArena ? localApi.select<GamificationPointTransaction>('gamification_point_transactions', selectedArenaContext.id) : Promise.resolve({ data: [] }),
-            localApi.select<GamificationSettings>('gamification_settings', selectedArenaContext.id),
-            localApi.select<GamificationLevel>('gamification_levels', selectedArenaContext.id),
-            localApi.select<GamificationReward>('gamification_rewards', selectedArenaContext.id),
-            localApi.select<GamificationAchievement>('gamification_achievements', selectedArenaContext.id),
-            alunoProfileForSelectedArena ? localApi.select<AlunoAchievement>('aluno_achievements', selectedArenaContext.id) : Promise.resolve({ data: [] }),
-            localApi.select<PlanoAula>('planos_aulas', selectedArenaContext.id),
-            localApi.select<Aluno>('alunos', selectedArenaContext.id),
-            localApi.select<Friendship>('friendships', 'all'),
-            localApi.select<Profile>('profiles', 'all'),
-            localApi.select<FinanceTransaction>('finance_transactions', selectedArenaContext.id),
-            localApi.select<Torneio>('torneios', selectedArenaContext.id),
-            alunoProfileForSelectedArena ? localApi.select<RedeemedVoucher>('redeemed_vouchers', selectedArenaContext.id) : Promise.resolve({ data: [] }),
-            localApi.select<Product>('products', selectedArenaContext.id),
+            supabaseApi.select<Quadra>('quadras', selectedArenaContext.id),
+            supabaseApi.select<Reserva>('reservas', selectedArenaContext.id),
+            supabaseApi.select<Turma>('turmas', selectedArenaContext.id),
+            supabaseApi.select<Professor>('professores', selectedArenaContext.id),
+            supabaseApi.select<AtletaAluguel>('atletas_aluguel', selectedArenaContext.id),
+            alunoProfileForSelectedArena ? supabaseApi.select<CreditTransaction>('credit_transactions', selectedArenaContext.id) : Promise.resolve({ data: [] }),
+            alunoProfileForSelectedArena ? supabaseApi.select<GamificationPointTransaction>('gamification_point_transactions', selectedArenaContext.id) : Promise.resolve({ data: [] }),
+            supabaseApi.select<GamificationSettings>('gamification_settings', selectedArenaContext.id),
+            supabaseApi.select<GamificationLevel>('gamification_levels', selectedArenaContext.id),
+            supabaseApi.select<GamificationReward>('gamification_rewards', selectedArenaContext.id),
+            supabaseApi.select<GamificationAchievement>('gamification_achievements', selectedArenaContext.id),
+            alunoProfileForSelectedArena ? supabaseApi.select<AlunoAchievement>('aluno_achievements', selectedArenaContext.id) : Promise.resolve({ data: [] }),
+            supabaseApi.select<PlanoAula>('planos_aulas', selectedArenaContext.id),
+            supabaseApi.select<Aluno>('alunos', selectedArenaContext.id),
+            supabaseApi.select<Friendship>('friendships', 'all'),
+            supabaseApi.select<Profile>('profiles', 'all'),
+            supabaseApi.select<FinanceTransaction>('finance_transactions', selectedArenaContext.id),
+            supabaseApi.select<Torneio>('torneios', selectedArenaContext.id),
+            alunoProfileForSelectedArena ? supabaseApi.select<RedeemedVoucher>('redeemed_vouchers', selectedArenaContext.id) : Promise.resolve({ data: [] }),
+            supabaseApi.select<Product>('products', selectedArenaContext.id),
         ]);
         
         const now = new Date();
@@ -628,7 +628,7 @@ const ClientDashboard: React.FC = () => {
         });
 
         if (updated) {
-            await localApi.upsert('reservas', reservationsData, selectedArenaContext.id, true);
+            await supabaseApi.upsert('reservas', reservationsData, selectedArenaContext.id, true);
             addToast({ message: 'Algumas reservas pendentes expiraram e foram canceladas.', type: 'info' });
         }
 
@@ -738,7 +738,7 @@ const ClientDashboard: React.FC = () => {
     
         if (myCompletedReservations.length === 0) return;
     
-        const { data: transactions } = await localApi.select<GamificationPointTransaction>('gamification_point_transactions', selectedArenaContext.id);
+        const { data: transactions } = await supabaseApi.select<GamificationPointTransaction>('gamification_point_transactions', selectedArenaContext.id);
         const processedReservationIds = new Set(transactions
             .filter(t => t.type === 'reservation_completed')
             .map(t => t.related_reservation_id)
@@ -773,10 +773,10 @@ const ClientDashboard: React.FC = () => {
             const isEditing = 'id' in payload;
 
             if (isEditing) {
-                const { data } = await localApi.upsert('reservas', [payload], selectedArenaContext.id);
+                const { data } = await supabaseApi.upsert('reservas', [payload], selectedArenaContext.id);
                 savedReserva = data[0];
             } else {
-                const { data: arenas } = await localApi.select<Arena>('arenas', 'all');
+                const { data: arenas } = await supabaseApi.select<Arena>('arenas', 'all');
                 const currentArena = arenas.find(a => a.id === selectedArenaContext.id);
                 const paymentWindow = currentArena?.single_booking_payment_window_minutes || 30;
                 const newReservaPayload: Omit<Reserva, 'id' | 'created_at'> = {
@@ -784,22 +784,22 @@ const ClientDashboard: React.FC = () => {
                     status: (payload.total_price || 0) > 0 ? 'aguardando_pagamento' : 'confirmada',
                     payment_deadline: (payload.total_price || 0) > 0 ? addMinutes(new Date(), paymentWindow).toISOString() : null,
                 };
-                const { data } = await localApi.upsert('reservas', [newReservaPayload], selectedArenaContext.id);
+                const { data } = await supabaseApi.upsert('reservas', [newReservaPayload], selectedArenaContext.id);
                 savedReserva = data[0];
             }
 
             if (savedReserva && savedReserva.credit_used && savedReserva.credit_used > 0) {
                 const newlyAppliedCredit = savedReserva.credit_used - ((reservationData as any).originalCreditUsed || 0);
                 if (newlyAppliedCredit > 0 && alunoProfileForSelectedArena?.id) {
-                    const { data: allAlunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
+                    const { data: allAlunos } = await supabaseApi.select<Aluno>('alunos', selectedArenaContext.id);
                     const targetAluno = allAlunos.find(a => a.id === alunoProfileForSelectedArena!.id);
                     if (targetAluno) {
                         targetAluno.credit_balance = (targetAluno.credit_balance || 0) - newlyAppliedCredit;
-                        await localApi.upsert('alunos', [targetAluno], selectedArenaContext.id);
+                        await supabaseApi.upsert('alunos', [targetAluno], selectedArenaContext.id);
                         const quadraName = quadras.find(q => q.id === savedReserva.quadra_id)?.name || 'Quadra';
                         const reservaDetails = `${quadraName} em ${format(parseDateStringAsLocal(savedReserva.date), 'dd/MM/yy')} às ${savedReserva.start_time.slice(0,5)}`;
                         const newDescription = `Pagamento da reserva: ${reservaDetails}`;
-                        await localApi.upsert('credit_transactions', [{ 
+                        await supabaseApi.upsert('credit_transactions', [{ 
                             aluno_id: targetAluno.id, 
                             arena_id: selectedArenaContext.id, 
                             amount: -newlyAppliedCredit, 
@@ -813,7 +813,7 @@ const ClientDashboard: React.FC = () => {
 
             let toastMessage = 'Reserva criada com sucesso!';
             if (savedReserva.participants && savedReserva.participants.length > 1) {
-                const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+                const { data: allProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
                 const profilesMap = new Map((allProfiles || []).map(p => [p.id, p]));
 
                 const notifications = savedReserva.participants
@@ -838,7 +838,7 @@ const ClientDashboard: React.FC = () => {
                     .filter((n): n is NonNullable<typeof n> => n !== null);
             
                 if (notifications.length > 0) {
-                    await localApi.upsert('notificacoes', notifications, selectedArenaContext.id);
+                    await supabaseApi.upsert('notificacoes', notifications, selectedArenaContext.id);
                     toastMessage = `Reserva criada e ${notifications.length} convite(s) enviado(s)!`;
                 }
             }
@@ -860,7 +860,7 @@ const ClientDashboard: React.FC = () => {
     const handleUpdateReservation = async (updatedReserva: Reserva) => {
         if (!selectedArenaContext) return;
         try {
-        const { data: savedData } = await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
+        const { data: savedData } = await supabaseApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
         const newlySavedReserva = savedData[0];
         
         if (newlySavedReserva) {
@@ -891,12 +891,12 @@ const ClientDashboard: React.FC = () => {
 
         const ownerProfileId = reserva.profile_id;
         if (ownerProfileId && ownerProfileId !== profile.id) {
-            const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+            const { data: allProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
             const ownerProfile = allProfiles.find(p => p.id === ownerProfileId);
             const wantsGameInvites = ownerProfile?.notification_preferences?.game_invites ?? true;
 
             if (wantsGameInvites) {
-                await localApi.upsert('notificacoes', [{
+                await supabaseApi.upsert('notificacoes', [{
                     profile_id: ownerProfileId,
                     arena_id: selectedArenaContext.id,
                     message: `aceitou sua solicitação de amizade.`,
@@ -930,10 +930,10 @@ const ClientDashboard: React.FC = () => {
         };
     
         try {
-          await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
+          await supabaseApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
           
           if (atleta.profile_id) {
-            await localApi.upsert('notificacoes', [{
+            await supabaseApi.upsert('notificacoes', [{
               profile_id: atleta.profile_id,
               arena_id: selectedArenaContext.id,
               message: `${profile.name} convidou você para jogar em ${format(parseDateStringAsLocal(reserva.date), 'dd/MM')} às ${reserva.start_time.slice(0,5)}.`,
@@ -948,7 +948,7 @@ const ClientDashboard: React.FC = () => {
           if (isTroca && oldAtletaId) {
             const oldAtleta = atletas.find(a => a.id === oldAtletaId);
             if (oldAtleta && oldAtleta.profile_id) {
-                await localApi.upsert('notificacoes', [{
+                await supabaseApi.upsert('notificacoes', [{
                     profile_id: oldAtleta.profile_id,
                     arena_id: selectedArenaContext.id,
                     message: `Você foi substituído no jogo de ${reserva.clientName}.`,
@@ -992,7 +992,7 @@ const ClientDashboard: React.FC = () => {
     
         const { creditRefunded } = await processCancellation(reserva, selectedArenaContext.id, quadras);
     
-        await localApi.upsert('reservas', [{ ...reserva, status: 'cancelada' }], selectedArenaContext.id);
+        await supabaseApi.upsert('reservas', [{ ...reserva, status: 'cancelada' }], selectedArenaContext.id);
         
         let toastMessage = 'Reserva cancelada com sucesso!';
         if (creditRefunded > 0) {
@@ -1004,7 +1004,7 @@ const ClientDashboard: React.FC = () => {
             const reservaDetails = `${quadraName} em ${format(parseDateStringAsLocal(reserva.date), 'dd/MM/yy')} às ${reserva.start_time.slice(0,5)}`;
             const notificationMessage = `cancelou a reserva para ${reservaDetails}.`;
 
-            await localApi.upsert('notificacoes', [{
+            await supabaseApi.upsert('notificacoes', [{
                 arena_id: selectedArenaContext.id,
                 profile_id: selectedArenaContext.owner_id,
                 message: notificationMessage,
@@ -1064,7 +1064,7 @@ const ClientDashboard: React.FC = () => {
             };
         }
         
-        await localApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
+        await supabaseApi.upsert('reservas', [updatedReserva], selectedArenaContext.id);
         
         addToast({ message: 'Pagamento confirmado e reserva garantida!', type: 'success' });
         await handleDataChange();
@@ -1116,7 +1116,7 @@ const ClientDashboard: React.FC = () => {
         const updatedAtleta = { ...atleta, ratings: updatedRatings, avg_rating: newAvgRating };
 
         try {
-            await localApi.upsert('atletas_aluguel', [updatedAtleta], selectedArenaContext.id);
+            await supabaseApi.upsert('atletas_aluguel', [updatedAtleta], selectedArenaContext.id);
             addToast({ message: 'Avaliação enviada com sucesso!', type: 'success' });
             await loadData();
         } catch (error: any) {
@@ -1151,7 +1151,7 @@ const ClientDashboard: React.FC = () => {
         const updatedProfessor = { ...professorToUpdate, ratings: updatedRatings, avg_rating: newAvgRating };
 
         try {
-            await localApi.upsert('professores', [updatedProfessor], selectedArenaContext.id);
+            await supabaseApi.upsert('professores', [updatedProfessor], selectedArenaContext.id);
             addToast({ message: 'Avaliação enviada com sucesso!', type: 'success' });
             await loadData();
         } catch (error: any) {
@@ -1173,7 +1173,7 @@ const ClientDashboard: React.FC = () => {
             return;
         }
         try {
-            await localApi.upsert('notificacoes', [{
+            await supabaseApi.upsert('notificacoes', [{
                 profile_id: atletaToContact.profile_id,
                 arena_id: selectedArenaContext.id,
                 message,
@@ -1218,7 +1218,7 @@ const ClientDashboard: React.FC = () => {
             await handleUpdateReservation(updatedReserva);
     
             if (atleta && atleta.profile_id) {
-                await localApi.upsert('notificacoes', [{
+                await supabaseApi.upsert('notificacoes', [{
                     profile_id: atleta.profile_id,
                     arena_id: selectedArenaContext.id,
                     message: `Sua participação no jogo de ${reservationToDetail.clientName} foi cancelada.`,
@@ -1272,7 +1272,7 @@ const ClientDashboard: React.FC = () => {
         };
         await handleUpdateReservation(updatedReserva);
         if (atleta && atleta.profile_id && profile) {
-          await localApi.upsert('notificacoes', [{
+          await supabaseApi.upsert('notificacoes', [{
             arena_id: selectedArenaContext.id,
             profile_id: atleta.profile_id,
             message: `O prazo para pagamento do jogo com ${reserva.clientName} expirou e a contratação foi cancelada.`,
@@ -1309,7 +1309,7 @@ const ClientDashboard: React.FC = () => {
         const updatedTorneio = { ...torneioToUpdate, participants: updatedParticipants };
     
         try {
-          await localApi.upsert('torneios', [updatedTorneio], selectedArenaContext.id);
+          await supabaseApi.upsert('torneios', [updatedTorneio], selectedArenaContext.id);
           addToast({ message: `Convite ${status === 'accepted' ? 'aceito' : 'recusado'}!`, type: 'success' });
           loadData();
         } catch (error: any) {
@@ -1351,9 +1351,9 @@ const ClientDashboard: React.FC = () => {
 
             const updatedTorneio = { ...tournamentToInvite, participants: updatedParticipants };
             
-            await localApi.upsert('torneios', [updatedTorneio], selectedArenaContext.id);
+            await supabaseApi.upsert('torneios', [updatedTorneio], selectedArenaContext.id);
 
-            await localApi.upsert('notificacoes', [{
+            await supabaseApi.upsert('notificacoes', [{
                 profile_id: partnerId,
                 arena_id: selectedArenaContext.id,
                 message: `${profile.name} convidou você para formar uma dupla no torneio "${tournamentToInvite.name}".`,

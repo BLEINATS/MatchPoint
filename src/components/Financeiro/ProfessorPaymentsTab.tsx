@@ -5,7 +5,7 @@ import { format, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay,
 import { ptBR } from 'date-fns/locale';
 import Button from '../Forms/Button';
 import { CheckCircle, DollarSign, User, Calendar, Clock, Hash } from 'lucide-react';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmationModal from '../Shared/ConfirmationModal';
@@ -147,7 +147,7 @@ const ProfessorPaymentsTab: React.FC<ProfessorPaymentsTabProps> = ({ professores
         category: 'Pagamento de Professores',
         date: new Date().toISOString().split('T')[0],
       };
-      await localApi.upsert('finance_transactions', [expenseTransaction], arena.id);
+      await supabaseApi.upsert('finance_transactions', [expenseTransaction], arena.id);
       
       addToast({ message: 'Pagamento registrado com sucesso!', type: 'success' });
       onDataChange();

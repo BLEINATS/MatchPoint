@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import Button from '../Forms/Button';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { Notificacao } from '../../types';
 import NotificationsPanel from './NotificationsPanel';
 import { useToast } from '../../context/ToastContext';
@@ -80,7 +80,7 @@ const Header: React.FC<HeaderProps> = ({ onInicioClick }) => {
     }
 
     const fetchNotifications = async () => {
-      const { data, error } = await localApi.select<Notificacao>('notificacoes', selectedArenaContext.id);
+      const { data, error } = await supabaseApi.select<Notificacao>('notificacoes', selectedArenaContext.id);
 
       if (error) {
         console.error("Erro ao buscar notificações:", error);
@@ -111,7 +111,7 @@ const Header: React.FC<HeaderProps> = ({ onInicioClick }) => {
     const notificationToUpdate = notifications.find(n => n.id === id);
     if (!notificationToUpdate) return;
 
-    const { error } = await localApi.upsert('notificacoes', [{ ...notificationToUpdate, read: true }], selectedArenaContext.id);
+    const { error } = await supabaseApi.upsert('notificacoes', [{ ...notificationToUpdate, read: true }], selectedArenaContext.id);
     if (!error) {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
@@ -125,7 +125,7 @@ const Header: React.FC<HeaderProps> = ({ onInicioClick }) => {
     
     const updatedNotifications = unreadNotifications.map(n => ({ ...n, read: true }));
 
-    const { error } = await localApi.upsert('notificacoes', updatedNotifications, selectedArenaContext.id);
+    const { error } = await supabaseApi.upsert('notificacoes', updatedNotifications, selectedArenaContext.id);
     if (!error) {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
@@ -143,7 +143,7 @@ const Header: React.FC<HeaderProps> = ({ onInicioClick }) => {
     }
 
     try {
-      await localApi.delete('notificacoes', notificationIdsToDelete, selectedArenaContext.id);
+      await supabaseApi.delete('notificacoes', notificationIdsToDelete, selectedArenaContext.id);
       setNotifications([]);
       setUnreadCount(0);
       addToast({ message: 'Notificações limpas.', type: 'success' });

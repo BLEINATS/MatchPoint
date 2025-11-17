@@ -10,7 +10,7 @@ import EventoModal from '../components/Eventos/EventoModal';
 import KanbanBoard from '../components/Eventos/KanbanBoard';
 import { eachDayOfInterval, format } from 'date-fns';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { useToast } from '../context/ToastContext';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -36,9 +36,9 @@ const Eventos: React.FC = () => {
     setIsLoading(true);
     try {
       const [eventosRes, quadrasRes, reservasRes] = await Promise.all([
-        localApi.select<Evento>('eventos', arena.id),
-        localApi.select<Quadra>('quadras', arena.id),
-        localApi.select<Reserva>('reservas', arena.id),
+        supabaseApi.select<Evento>('eventos', arena.id),
+        supabaseApi.select<Quadra>('quadras', arena.id),
+        supabaseApi.select<Reserva>('reservas', arena.id),
       ]);
       
       setEventos(eventosRes.data || []);
@@ -81,9 +81,9 @@ const Eventos: React.FC = () => {
               payments: [],
             } as Evento;
 
-        await localApi.upsert('eventos', [newEvento], arena.id);
+        await supabaseApi.upsert('eventos', [newEvento], arena.id);
 
-        const { data: currentReservas } = await localApi.select<Reserva>('reservas', arena.id);
+        const { data: currentReservas } = await supabaseApi.select<Reserva>('reservas', arena.id);
         const otherReservas = currentReservas.filter(r => r.evento_id !== eventoId);
         let finalReservas = [...otherReservas];
 
@@ -114,7 +114,7 @@ const Eventos: React.FC = () => {
             }
         }
         
-        await localApi.upsert('reservas', finalReservas, arena.id, true);
+        await supabaseApi.upsert('reservas', finalReservas, arena.id, true);
 
         addToast({ message: 'Evento salvo com sucesso!', type: 'success' });
         await loadData();

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, ReactNode } from 'react';
 import { AuthContext } from './AuthContext';
 import { useToast } from './ToastContext';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { v4 as uuidv4 } from 'uuid';
 import { seedInitialData } from '../lib/seedData';
 import { format, isBefore } from 'date-fns';
@@ -25,7 +25,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const { addToast } = useToast();
 
   const setupUserContext = useCallback(async (profileToSetup: Profile) => {
-    const { data: allArenasData } = await localApi.select<Arena>('arenas', 'all');
+    const { data: allArenasData } = await supabaseApi.select<Arena>('arenas', 'all');
     const allArenas = allArenasData || [];
     setAllArenas(allArenas);
 
@@ -42,9 +42,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSelectedArenaContext(employeeArena || null);
     } else { // cliente, atleta, professor
         const [alunosRes, atletasRes, profsRes] = await Promise.all([
-            localApi.select<Aluno>('alunos', 'all'),
-            localApi.select<AtletaAluguel>('atletas_aluguel', 'all'),
-            localApi.select<Professor>('professores', 'all')
+            supabaseApi.select<Aluno>('alunos', 'all'),
+            supabaseApi.select<AtletaAluguel>('atletas_aluguel', 'all'),
+            supabaseApi.select<Professor>('professores', 'all')
         ]);
 
         const alunoArenaIds = (alunosRes.data || []).filter(a => a.profile_id === profileToSetup.id).map(a => a.arena_id);
@@ -74,8 +74,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (selectedArenaContext && (profile?.role === 'admin_arena' || profile?.role === 'funcionario')) {
         try {
             const [quadrasRes, profilesRes] = await Promise.all([
-                localApi.select<Quadra>('quadras', selectedArenaContext.id),
-                localApi.select<Profile>('profiles', 'all'),
+                supabaseApi.select<Quadra>('quadras', selectedArenaContext.id),
+                supabaseApi.select<Profile>('profiles', 'all'),
             ]);
             const quadrasCount = quadrasRes.data?.length || 0;
             const teamMemberCount = profilesRes.data?.filter(p => p.arena_id === selectedArenaContext.id && p.role === 'funcionario').length || 0;
@@ -127,7 +127,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const refreshAlunoProfile = useCallback(async () => {
     if (profile?.role === 'cliente' && selectedArenaContext) {
-        const { data: alunos } = await localApi.select<Aluno>('alunos', selectedArenaContext.id);
+        const { data: alunos } = await supabaseApi.select<Aluno>('alunos', selectedArenaContext.id);
         const alunoProfile = alunos.find(a => a.profile_id === profile.id);
         setAlunoProfileForSelectedArena(alunoProfile || null);
     }
@@ -142,8 +142,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         const [profRes, atletaRes] = await Promise.all([
-            localApi.select<Professor>('professores', selectedArenaContext.id),
-            localApi.select<AtletaAluguel>('atletas_aluguel', selectedArenaContext.id)
+            supabaseApi.select<Professor>('professores', selectedArenaContext.id),
+            supabaseApi.select<AtletaAluguel>('atletas_aluguel', selectedArenaContext.id)
         ]);
 
         const professorProfile = (profRes.data || []).find(p => p.profile_id === profile.id);
@@ -169,11 +169,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-      const { data: settingsData } = await localApi.select<GamificationSettings>('gamification_settings', selectedArenaContext.id);
+      const { data: settingsData } = await supabaseApi.select<GamificationSettings>('gamification_settings', selectedArenaContext.id);
       const settings = settingsData?.[0];
       if (!settings || !settings.is_enabled) return;
 
-      const { data: allReservas } = await localApi.select<Reserva>('reservas', selectedArenaContext.id);
+      const { data: allReservas } = await supabaseApi.select<Reserva>('reservas', selectedArenaContext.id);
       if (!allReservas || allReservas.length === 0) return;
 
       const now = new Date();
@@ -187,7 +187,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (completedReservations.length === 0) return;
 
-      const { data: transactions } = await localApi.select<GamificationPointTransaction>('gamification_point_transactions', selectedArenaContext.id);
+      const { data: transactions } = await supabaseApi.select<GamificationPointTransaction>('gamification_point_transactions', selectedArenaContext.id);
       const processedIds = new Set((transactions || []).filter(t => t.type === 'reservation_completed').map(t => t.related_reservation_id));
       
       const reservationsToProcess = completedReservations.filter(r => !r.id || !processedIds.has(r.id));
@@ -226,13 +226,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const signIn = async (email: string, password: string): Promise<Profile | null> => {
     setIsLoading(true);
     try {
-        let { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+        let { data: allProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
         allProfiles = allProfiles || [];
 
         if (email.toLowerCase() === 'superadmin@matchplay.com' && !allProfiles.some(p => p.email.toLowerCase() === 'superadmin@matchplay.com')) {
             const superAdminProfile: Profile = { id: 'profile_superadmin_01', name: 'Super Admin', email: 'superadmin@matchplay.com', role: 'super_admin', avatar_url: null, created_at: new Date().toISOString() };
-            await localApi.upsert('profiles', [superAdminProfile], 'all');
-            const { data: updatedProfiles } = await localApi.select<Profile>('profiles', 'all');
+            await supabaseApi.upsert('profiles', [superAdminProfile], 'all');
+            const { data: updatedProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
             allProfiles = updatedProfiles || [];
         }
 
@@ -267,7 +267,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateProfile = async (updatedProfile: Partial<Profile>) => {
     if (!profile) return;
     const newProfile = { ...profile, ...updatedProfile };
-    await localApi.upsert('profiles', [newProfile], 'all');
+    await supabaseApi.upsert('profiles', [newProfile], 'all');
     setProfile(newProfile);
     localStorage.setItem('loggedInUser', JSON.stringify(newProfile));
     addToast({ message: 'Perfil atualizado!', type: 'success' });
@@ -279,7 +279,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     const updatedArenas = allArenas.map(a => a.id === newArena.id ? newArena : a);
     
-    await localApi.upsert('arenas', updatedArenas, 'all');
+    await supabaseApi.upsert('arenas', updatedArenas, 'all');
     
     setAllArenas(updatedArenas);
     setArena(newArena);

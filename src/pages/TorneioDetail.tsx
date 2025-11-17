@@ -13,7 +13,7 @@ import TorneioOverviewTab from '../components/Torneios/TorneioOverviewTab';
 import ResultsTab from '../components/Torneios/ResultsTab';
 import TorneioModal from '../components/Torneios/TorneioModal';
 import ConfirmationModal from '../components/Shared/ConfirmationModal';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { generateBracket } from '../utils/eventUtils';
 import ParticipantModal from '../components/Torneios/ParticipantModal';
 import { v4 as uuidv4 } from 'uuid';
@@ -58,10 +58,10 @@ const TorneioDetail: React.FC = () => {
     if (arena && id) {
       try {
         const [torneiosRes, quadrasRes, alunosRes, reservasRes] = await Promise.all([
-          localApi.select<Torneio>('torneios', arena.id),
-          localApi.select<Quadra>('quadras', arena.id),
-          localApi.select<Aluno>('alunos', arena.id),
-          localApi.select<Reserva>('reservas', arena.id),
+          supabaseApi.select<Torneio>('torneios', arena.id),
+          supabaseApi.select<Quadra>('quadras', arena.id),
+          supabaseApi.select<Aluno>('alunos', arena.id),
+          supabaseApi.select<Reserva>('reservas', arena.id),
         ]);
         const currentTorneio = torneiosRes.data?.find(e => e.id === id);
         setTorneio(currentTorneio || null);
@@ -114,7 +114,7 @@ const TorneioDetail: React.FC = () => {
       return;
     }
 
-    const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+    const { data: allProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
     const profilesMap = new Map((allProfiles || []).map(p => [p.id, p]));
 
     const newNotifications: Omit<Notificacao, 'id' | 'created_at'>[] = Array.from(targetProfileIds)
@@ -143,7 +143,7 @@ const TorneioDetail: React.FC = () => {
     }
 
     try {
-      await localApi.upsert('notificacoes', newNotifications, arena.id);
+      await supabaseApi.upsert('notificacoes', newNotifications, arena.id);
       addToast({ message: `Comunicado enviado para ${newNotifications.length} participante(s) com conta.`, type: 'success' });
     } catch (error: any) {
       addToast({ message: `Erro ao enviar comunicado: ${error.message}`, type: 'error' });
@@ -158,7 +158,7 @@ const TorneioDetail: React.FC = () => {
         const torneioToSave = { ...torneio };
 
         const newPlayersToCreate: { name: string; phone?: string | null }[] = [];
-        const allExistingAlunos = (await localApi.select<Aluno>('alunos', arena.id)).data || [];
+        const allExistingAlunos = (await supabaseApi.select<Aluno>('alunos', arena.id)).data || [];
         
         torneioToSave.participants.forEach(participant => {
             participant.players.forEach(player => {
@@ -177,7 +177,7 @@ const TorneioDetail: React.FC = () => {
                 arena_id: arena.id, name: player.name, phone: player.phone || null,
                 status: 'ativo' as 'ativo', plan_name: 'Avulso', join_date: format(new Date(), 'yyyy-MM-dd'),
             }));
-            const { data: createdAlunos } = await localApi.upsert('alunos', newAlunosPayload, arena.id);
+            const { data: createdAlunos } = await supabaseApi.upsert('alunos', newAlunosPayload, arena.id);
             if (createdAlunos) {
                 const createdAlunosMap = new Map(createdAlunos.map(a => [a.name.toLowerCase(), a]));
                 torneioToSave.participants.forEach(participant => {
@@ -194,7 +194,7 @@ const TorneioDetail: React.FC = () => {
             }
         }
         
-        const { data: currentReservas } = await localApi.select<Reserva>('reservas', arena.id);
+        const { data: currentReservas } = await supabaseApi.select<Reserva>('reservas', arena.id);
         const otherReservas = currentReservas.filter(r => r.torneio_id !== torneio.id);
         let finalReservas = [...otherReservas];
 
@@ -232,9 +232,9 @@ const TorneioDetail: React.FC = () => {
             finalReservas = [...otherReservas, ...tournamentBlockReservations];
         }
         
-        await localApi.upsert('reservas', finalReservas, arena.id, true);
+        await supabaseApi.upsert('reservas', finalReservas, arena.id, true);
 
-        await localApi.upsert('torneios', [torneioToSave], arena.id);
+        await supabaseApi.upsert('torneios', [torneioToSave], arena.id);
 
         setHasUnsavedChanges(false);
         setShowSuccess(true);
@@ -251,11 +251,11 @@ const TorneioDetail: React.FC = () => {
   const handleDelete = async () => {
     if (!arena || !id) return;
     try {
-      await localApi.delete('torneios', [id], arena.id);
+      await supabaseApi.delete('torneios', [id], arena.id);
       
-      const { data: currentReservas } = await localApi.select<Reserva>('reservas', arena.id);
+      const { data: currentReservas } = await supabaseApi.select<Reserva>('reservas', arena.id);
       const finalReservas = currentReservas.filter(r => r.torneio_id !== id);
-      await localApi.upsert('reservas', finalReservas, arena.id, true);
+      await supabaseApi.upsert('reservas', finalReservas, arena.id, true);
 
       setHasUnsavedChanges(false);
       addToast({ message: 'Torneio excluído com sucesso.', type: 'success' });

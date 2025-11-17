@@ -5,7 +5,7 @@ import { ArrowLeft, Loader2, ChevronLeft, ChevronRight, DollarSign, TrendingUp, 
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { Reserva, FinanceTransaction, Torneio } from '../types';
 import Button from '../components/Forms/Button';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isWithinInterval } from 'date-fns';
@@ -46,9 +46,9 @@ const FinanceiroProfissional: React.FC = () => {
         setIsLoading(true);
         try {
             const [reservasRes, transactionsRes, torneiosRes] = await Promise.all([
-                localApi.select<Reserva>('reservas', arena.id),
-                localApi.select<FinanceTransaction>('finance_transactions', arena.id),
-                localApi.select<Torneio>('torneios', arena.id),
+                supabaseApi.select<Reserva>('reservas', arena.id),
+                supabaseApi.select<FinanceTransaction>('finance_transactions', arena.id),
+                supabaseApi.select<Torneio>('torneios', arena.id),
             ]);
             setReservas(reservasRes.data || []);
             setTransactions(transactionsRes.data || []);

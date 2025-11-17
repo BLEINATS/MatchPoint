@@ -10,7 +10,7 @@ import { maskPhone, maskCPFOrCNPJ } from '../../utils/masks';
 import { useToast } from '../../context/ToastContext';
 import GamificationTab from './GamificationTab';
 import CreditsTab from './CreditsTab';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { formatCurrency } from '../../utils/formatters';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import LevelBadge from '../Shared/LevelBadge';
@@ -53,7 +53,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   useEffect(() => {
     const fetchLevels = async () => {
       if (arena?.id) {
-        const { data } = await localApi.select<AlunoLevel>('aluno_levels', arena.id);
+        const { data } = await supabaseApi.select<AlunoLevel>('aluno_levels', arena.id);
         setAlunoLevels(data || []);
       }
     };
@@ -86,7 +86,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
   const refreshInternalData = useCallback(async () => {
     if (!initialData?.id || !initialData?.arena_id) return;
     try {
-      const { data } = await localApi.select<Aluno>('alunos', initialData.arena_id);
+      const { data } = await supabaseApi.select<Aluno>('alunos', initialData.arena_id);
       const updatedAluno = data.find(a => a.id === initialData.id);
       if (updatedAluno) {
         setInternalAluno(updatedAluno);
@@ -169,7 +169,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
 
     if (proRataInfo && (!isEditing || (isEditing && initialData?.plan_id !== formData.plan_id))) {
         if (arena) {
-            localApi.upsert('finance_transactions', [{
+            supabaseApi.upsert('finance_transactions', [{
                 arena_id: arena.id,
                 description: `Pagamento Pro-rata: ${selectedPlan?.name} - ${formData.name}`,
                 amount: proRataInfo.firstPayment,
@@ -204,7 +204,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
     }
     
     try {
-      await localApi.upsert('finance_transactions', [{
+      await supabaseApi.upsert('finance_transactions', [{
           arena_id: arena.id,
           description: `Renovação Plano: ${selectedPlan.name} - ${internalAluno.name}`,
           amount: selectedPlan.price,
@@ -216,7 +216,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
       const creditsToRenew = selectedPlan.num_aulas === null ? null : selectedPlan.num_aulas;
       const updatedAluno = { ...internalAluno, aulas_restantes: creditsToRenew };
       
-      await localApi.upsert('alunos', [updatedAluno], arena.id);
+      await supabaseApi.upsert('alunos', [updatedAluno], arena.id);
       
       addToast({ message: 'Créditos renovados e pagamento registrado!', type: 'success' });
       
@@ -284,12 +284,12 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
     }
 
     try {
-        const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+        const { data: allProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
         const existingProfile = allProfiles.find(p => p.email.toLowerCase() === internalAluno!.email!.toLowerCase());
 
         if (existingProfile) {
             const updatedAluno = { ...internalAluno, profile_id: existingProfile.id };
-            await localApi.upsert('alunos', [updatedAluno], arena.id);
+            await supabaseApi.upsert('alunos', [updatedAluno], arena.id);
             addToast({ message: `Conta de usuário encontrada e vinculada a ${internalAluno.name}!`, type: 'success' });
         } else {
             const newProfile: Omit<Profile, 'id' | 'created_at'> = {
@@ -303,7 +303,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
                 gender: internalAluno.gender,
             };
 
-            const { data: createdProfiles } = await localApi.upsert('profiles', [newProfile], 'all');
+            const { data: createdProfiles } = await supabaseApi.upsert('profiles', [newProfile], 'all');
             const createdProfile = createdProfiles[0];
 
             if (!createdProfile) {
@@ -311,7 +311,7 @@ const AlunoModal: React.FC<AlunoModalProps> = ({ isOpen, onClose, onSave, onDele
             }
 
             const updatedAluno = { ...internalAluno, profile_id: createdProfile.id };
-            await localApi.upsert('alunos', [updatedAluno], arena.id);
+            await supabaseApi.upsert('alunos', [updatedAluno], arena.id);
 
             addToast({ 
                 message: `Acesso criado para ${internalAluno.name}! O cliente pode agora entrar com o e-mail e criar uma senha.`, 

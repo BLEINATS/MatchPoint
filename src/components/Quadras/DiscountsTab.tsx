@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { DurationDiscount } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { Loader2, Plus, Trash2, Edit, Save, X, Percent, Clock, Tag } from 'lucide-react';
 import Button from '../Forms/Button';
 import Input from '../Forms/Input';
@@ -25,7 +25,7 @@ const DiscountsTab: React.FC<DiscountsTabProps> = ({ canEdit }) => {
     }
     setIsLoading(true);
     try {
-      const { data, error } = await localApi.select<DurationDiscount>('duration_discounts', arena.id);
+      const { data, error } = await supabaseApi.select<DurationDiscount>('duration_discounts', arena.id);
       if (error) throw error;
       setDiscounts((data || []).sort((a, b) => a.duration_hours - b.duration_hours));
     } catch (error: any) {
@@ -42,7 +42,7 @@ const DiscountsTab: React.FC<DiscountsTabProps> = ({ canEdit }) => {
   const handleSave = async (discount: Partial<DurationDiscount>) => {
     if (!arena) return;
     try {
-      await localApi.upsert('duration_discounts', [{ ...discount, arena_id: arena.id }], arena.id);
+      await supabaseApi.upsert('duration_discounts', [{ ...discount, arena_id: arena.id }], arena.id);
       addToast({ message: 'Promoção salva com sucesso!', type: 'success' });
       setIsEditing(null);
       await loadDiscounts();
@@ -55,7 +55,7 @@ const DiscountsTab: React.FC<DiscountsTabProps> = ({ canEdit }) => {
     if (window.confirm('Tem certeza que deseja excluir esta promoção?')) {
       if (!arena) return;
       try {
-        await localApi.delete('duration_discounts', [id], arena.id);
+        await supabaseApi.delete('duration_discounts', [id], arena.id);
         addToast({ message: 'Promoção excluída com sucesso.', type: 'success' });
         await loadDiscounts();
       } catch (error: any) {

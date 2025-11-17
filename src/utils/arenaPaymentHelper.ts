@@ -1,4 +1,4 @@
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import asaasProxyService from '../lib/asaasProxyService';
 import { Aluno, Arena, Profile } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -219,9 +219,9 @@ export const createArenaPayment = async (options: CreateArenaPaymentOptions): Pr
       const updatedCustomer = { ...customer, asaas_customer_id: asaasCustomerId };
       
       if ('cpf' in customer) {
-        await localApi.upsert('alunos', [updatedCustomer], arena.id);
+        await supabaseApi.upsert('alunos', [updatedCustomer], arena.id);
       } else {
-        await localApi.upsert('profiles', [updatedCustomer], 'all');
+        await supabaseApi.upsert('profiles', [updatedCustomer], 'all');
       }
     }
 
@@ -278,9 +278,9 @@ export const createArenaPayment = async (options: CreateArenaPaymentOptions): Pr
         };
         
         if ('cpf' in customer) {
-          await localApi.upsert('alunos', [updatedCustomer], arena.id);
+          await supabaseApi.upsert('alunos', [updatedCustomer], arena.id);
         } else {
-          await localApi.upsert('profiles', [updatedCustomer], 'all');
+          await supabaseApi.upsert('profiles', [updatedCustomer], 'all');
         }
       }
     }

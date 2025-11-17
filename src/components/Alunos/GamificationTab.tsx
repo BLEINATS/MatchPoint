@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Aluno, GamificationPointTransaction, GamificationLevel } from '../../types';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { useToast } from '../../context/ToastContext';
 import { Loader2, Plus, Minus, Star, Trophy, History } from 'lucide-react';
 import Button from '../Forms/Button';
@@ -26,10 +26,10 @@ const GamificationTab: React.FC<GamificationTabProps> = ({ aluno, onDataChange }
   const loadGamificationData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data: historyData } = await localApi.select<GamificationPointTransaction>('gamification_point_transactions', aluno.arena_id);
-      const { data: achievementsData } = await localApi.select<any>('aluno_achievements', aluno.arena_id);
-      const { data: levelsData } = await localApi.select<GamificationLevel>('gamification_levels', aluno.arena_id);
-      const { data: alunoData } = await localApi.select<Aluno>('alunos', aluno.arena_id);
+      const { data: historyData } = await supabaseApi.select<GamificationPointTransaction>('gamification_point_transactions', aluno.arena_id);
+      const { data: achievementsData } = await supabaseApi.select<any>('aluno_achievements', aluno.arena_id);
+      const { data: levelsData } = await supabaseApi.select<GamificationLevel>('gamification_levels', aluno.arena_id);
+      const { data: alunoData } = await supabaseApi.select<Aluno>('alunos', aluno.arena_id);
 
       const alunoHistory = historyData.filter(h => h.aluno_id === aluno.id).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       const alunoAchievements = achievementsData.filter(a => a.aluno_id === aluno.id);
@@ -66,7 +66,7 @@ const GamificationTab: React.FC<GamificationTabProps> = ({ aluno, onDataChange }
     setIsSubmitting(true);
     try {
       // 1. Fetch the most recent student data to avoid stale state
-      const { data: allAlunos } = await localApi.select<Aluno>('alunos', aluno.arena_id);
+      const { data: allAlunos } = await supabaseApi.select<Aluno>('alunos', aluno.arena_id);
       const currentAlunoState = allAlunos.find(a => a.id === aluno.id);
       if (!currentAlunoState) {
         throw new Error("Aluno não encontrado para atualizar os pontos.");
@@ -77,10 +77,10 @@ const GamificationTab: React.FC<GamificationTabProps> = ({ aluno, onDataChange }
       const updatedPoints = currentPoints + points;
 
       // 3. Update the student's record with the new point total
-      await localApi.upsert('alunos', [{ ...currentAlunoState, gamification_points: updatedPoints }], aluno.arena_id);
+      await supabaseApi.upsert('alunos', [{ ...currentAlunoState, gamification_points: updatedPoints }], aluno.arena_id);
       
       // 4. Create a transaction record for the history
-      await localApi.upsert('gamification_point_transactions', [{
+      await supabaseApi.upsert('gamification_point_transactions', [{
           aluno_id: aluno.id,
           arena_id: aluno.arena_id,
           points: points,

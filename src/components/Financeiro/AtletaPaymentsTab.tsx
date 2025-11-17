@@ -6,7 +6,7 @@ import { ptBR } from 'date-fns/locale';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import Button from '../Forms/Button';
 import { CheckCircle, Clock, DollarSign, User, Calendar, Banknote } from 'lucide-react';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmationModal from '../Shared/ConfirmationModal';
@@ -89,7 +89,7 @@ const AtletaPaymentsTab: React.FC<AtletaPaymentsTabProps> = ({ reservas, profiss
       if (!reservaToUpdate) throw new Error("Reserva não encontrada");
 
       const updatedReserva = { ...reservaToUpdate, atleta_payment_status: 'pago' as 'pago', atleta_paid_at: new Date().toISOString() };
-      await localApi.upsert('reservas', [updatedReserva], arena.id);
+      await supabaseApi.upsert('reservas', [updatedReserva], arena.id);
 
       // 2. Create expense transaction
       const expenseTransaction: Omit<FinanceTransaction, 'id' | 'created_at'> = {
@@ -100,7 +100,7 @@ const AtletaPaymentsTab: React.FC<AtletaPaymentsTabProps> = ({ reservas, profiss
         category: 'Pagamento de Profissionais',
         date: new Date().toISOString().split('T')[0],
       };
-      await localApi.upsert('finance_transactions', [expenseTransaction], arena.id);
+      await supabaseApi.upsert('finance_transactions', [expenseTransaction], arena.id);
       
       // 3. Notify professional
       const profissional = profissionais.find(p => p.id === paymentToConfirm.profissionalId);
@@ -115,7 +115,7 @@ const AtletaPaymentsTab: React.FC<AtletaPaymentsTabProps> = ({ reservas, profiss
           sender_name: profile.name,
           sender_avatar_url: profile.avatar_url,
         };
-        await localApi.upsert('notificacoes', [notification], arena.id);
+        await supabaseApi.upsert('notificacoes', [notification], arena.id);
       }
 
       addToast({ message: 'Pagamento registrado e profissional notificado!', type: 'success' });

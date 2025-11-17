@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { Profile, Friendship, Aluno } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import Input from '../Forms/Input';
@@ -28,9 +28,9 @@ const FriendsView: React.FC = () => {
     setIsLoading(true);
     try {
       const [allProfilesRes, friendshipsRes, arenaAlunosRes] = await Promise.all([
-        localApi.select<Profile>('profiles', 'all'),
-        localApi.select<Friendship>('friendships', 'all'),
-        localApi.select<Aluno>('alunos', selectedArenaContext.id),
+        supabaseApi.select<Profile>('profiles', 'all'),
+        supabaseApi.select<Friendship>('friendships', 'all'),
+        supabaseApi.select<Aluno>('alunos', selectedArenaContext.id),
       ]);
 
       const allProfiles = allProfilesRes.data || [];
@@ -110,19 +110,19 @@ const FriendsView: React.FC = () => {
     if (!profile || !selectedArenaContext) return;
     
     if (newStatus === 'declined') {
-        await localApi.delete('friendships', [friendship.id], 'all');
+        await supabaseApi.delete('friendships', [friendship.id], 'all');
     } else {
         const updatedFriendship = { ...friendship, status: 'accepted' as 'accepted' };
-        await localApi.upsert('friendships', [updatedFriendship], 'all');
+        await supabaseApi.upsert('friendships', [updatedFriendship], 'all');
         
         const originalRequesterId = friendship.requested_by;
-        const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+        const { data: allProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
         const originalRequesterProfile = allProfiles.find(p => p.id === originalRequesterId);
         
         if (originalRequesterProfile) {
             const wantsFriendRequests = originalRequesterProfile.notification_preferences?.friend_requests ?? true;
             if (wantsFriendRequests) {
-                await localApi.upsert('notificacoes', [{
+                await supabaseApi.upsert('notificacoes', [{
                     profile_id: originalRequesterId,
                     arena_id: selectedArenaContext.id,
                     message: `aceitou sua solicitação de amizade.`,
@@ -149,14 +149,14 @@ const FriendsView: React.FC = () => {
       requested_by: profile.id,
       created_at: new Date().toISOString(),
     };
-    await localApi.upsert('friendships', [newFriendship], 'all');
+    await supabaseApi.upsert('friendships', [newFriendship], 'all');
 
-    const { data: allProfiles } = await localApi.select<Profile>('profiles', 'all');
+    const { data: allProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
     const targetProfile = allProfiles.find(p => p.id === targetUserId);
     if (targetProfile) {
         const wantsFriendRequests = targetProfile.notification_preferences?.friend_requests ?? true;
         if (wantsFriendRequests) {
-            await localApi.upsert('notificacoes', [{
+            await supabaseApi.upsert('notificacoes', [{
                 profile_id: targetUserId,
                 arena_id: selectedArenaContext.id,
                 message: `enviou uma solicitação de amizade.`,
@@ -181,7 +181,7 @@ const FriendsView: React.FC = () => {
         (f.user2_id === profile.id && f.user1_id === friendId))
     );
     if (friendship) {
-        await localApi.delete('friendships', [friendship.id], 'all');
+        await supabaseApi.delete('friendships', [friendship.id], 'all');
         loadData();
         addToast({ message: 'Amigo removido.', type: 'info' });
     }
@@ -194,7 +194,7 @@ const FriendsView: React.FC = () => {
     }
 
     try {
-      await localApi.upsert('notificacoes', [{
+      await supabaseApi.upsert('notificacoes', [{
         profile_id: friendToMessage.id,
         arena_id: selectedArenaContext.id,
         message: message,

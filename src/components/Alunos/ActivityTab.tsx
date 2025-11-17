@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Aluno, Reserva, CreditTransaction, GamificationPointTransaction } from '../../types';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { useToast } from '../../context/ToastContext';
 import { Loader2, Calendar, DollarSign, Star, CheckCircle, XCircle } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -35,9 +35,9 @@ const ActivityTab: React.FC<ActivityTabProps> = ({ aluno }) => {
     
     try {
       const [reservasRes, creditsRes, pointsRes] = await Promise.all([
-        localApi.select<Reserva>('reservas', aluno.arena_id),
-        localApi.select<CreditTransaction>('credit_transactions', aluno.arena_id),
-        localApi.select<GamificationPointTransaction>('gamification_point_transactions', aluno.arena_id),
+        supabaseApi.select<Reserva>('reservas', aluno.arena_id),
+        supabaseApi.select<CreditTransaction>('credit_transactions', aluno.arena_id),
+        supabaseApi.select<GamificationPointTransaction>('gamification_point_transactions', aluno.arena_id),
       ]);
 
       const allActivities: ActivityItem[] = [];

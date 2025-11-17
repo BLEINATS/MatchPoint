@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { PlanoAula } from '../../types';
 import { Loader2, Plus, Edit, Trash2, Tag, Calendar, DollarSign, Hash } from 'lucide-react';
 import Button from '../../components/Forms/Button';
@@ -18,7 +18,7 @@ const seedDefaultPlanosAulas = async (arenaId: string) => {
     { name: 'Plano Semestral - 2x/semana', duration_type: 'semestral', price: 2500, description: 'Pacote de 6 meses com 8 aulas por mês. Desconto maior.', is_active: true, num_aulas: 48 },
     { name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, description: 'Acesso livre a todas as turmas compatíveis durante o ano.', is_active: false, num_aulas: null },
   ];
-  await localApi.upsert('planos_aulas', defaultPlanos, arenaId, true);
+  await supabaseApi.upsert('planos_aulas', defaultPlanos, arenaId, true);
 };
 
 const PlanosAulasTab: React.FC = () => {
@@ -41,7 +41,7 @@ const PlanosAulasTab: React.FC = () => {
         localStorage.setItem(seedKey, 'true');
       }
 
-      const { data, error } = await localApi.select<PlanoAula>('planos_aulas', arena.id);
+      const { data, error } = await supabaseApi.select<PlanoAula>('planos_aulas', arena.id);
       if (error) throw error;
       setPlanos(data || []);
     } catch (error: any) {
@@ -58,7 +58,7 @@ const PlanosAulasTab: React.FC = () => {
   const handleSave = async (planoData: Omit<PlanoAula, 'id' | 'arena_id' | 'created_at'> | PlanoAula) => {
     if (!arena) return;
     try {
-      await localApi.upsert('planos_aulas', [{ ...planoData, arena_id: arena.id }], arena.id);
+      await supabaseApi.upsert('planos_aulas', [{ ...planoData, arena_id: arena.id }], arena.id);
       addToast({ message: 'Plano salvo com sucesso!', type: 'success' });
       await loadPlanos();
       setIsModalOpen(false);
@@ -76,7 +76,7 @@ const PlanosAulasTab: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!planoToDelete || !arena) return;
     try {
-      await localApi.delete('planos_aulas', [planoToDelete.id], arena.id);
+      await supabaseApi.delete('planos_aulas', [planoToDelete.id], arena.id);
       addToast({ message: 'Plano excluído com sucesso.', type: 'success' });
       await loadPlanos();
     } catch (error: any) {

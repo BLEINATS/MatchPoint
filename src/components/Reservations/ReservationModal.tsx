@@ -22,7 +22,7 @@ import CreatableClientSelect from '../Forms/CreatableClientSelect';
 import { parseDateStringAsLocal } from '../../utils/dateUtils';
 import { maskPhone } from '../../utils/masks';
 import { hasTimeConflict, expandRecurringReservations } from '../../utils/reservationUtils';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { v4 as uuidv4 } from 'uuid';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
@@ -136,7 +136,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         
         if (reservation?.id && arenaId) {
           try {
-            const { data: allReservas } = await localApi.select<Reserva>('reservas', arenaId);
+            const { data: allReservas } = await supabaseApi.select<Reserva>('reservas', arenaId);
             reservationToUse = allReservas.find(r => r.id === reservation.id) || reservation;
           } catch {
             reservationToUse = reservation;
@@ -363,8 +363,8 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
       setIsLoading(true);
       try {
         const [discountsRes, itemsRes] = await Promise.all([
-          localApi.select<DurationDiscount>('duration_discounts', arenaId),
-          localApi.select<RentalItem>('rental_items', arenaId),
+          supabaseApi.select<DurationDiscount>('duration_discounts', arenaId),
+          supabaseApi.select<RentalItem>('rental_items', arenaId),
         ]);
         
         setDurationDiscounts(discountsRes.data || []);
@@ -689,13 +689,13 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     let finalAlunoId = selectedClientId;
     if (!finalAlunoId && formData.clientName && !isClientBooking) {
       try {
-        const { data: allAlunos } = await localApi.select<Aluno>('alunos', arenaId);
+        const { data: allAlunos } = await supabaseApi.select<Aluno>('alunos', arenaId);
         const existingAluno = allAlunos.find(a => a.name.toLowerCase() === formData.clientName.toLowerCase());
         
         if (existingAluno) {
             finalAlunoId = existingAluno.id;
         } else if (!isEditing) { // Only create new alunos for new reservations
-            const { data: newAlunos } = await localApi.upsert('alunos', [{
+            const { data: newAlunos } = await supabaseApi.upsert('alunos', [{
               arena_id: arenaId,
               name: formData.clientName,
               phone: formData.clientPhone || null,
@@ -752,7 +752,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         dataToSave.payment_deadline = null;
     } else if (!isEditing && dataToSave.payment_status === 'pendente' && (dataToSave.total_price || 0) > 0) {
         dataToSave.status = 'aguardando_pagamento';
-        const { data: arenas } = await localApi.select<Arena>('arenas', 'all');
+        const { data: arenas } = await supabaseApi.select<Arena>('arenas', 'all');
         const currentArena = arenas.find(a => a.id === arenaId);
         const paymentWindow = currentArena?.single_booking_payment_window_minutes || 30;
         dataToSave.payment_deadline = addMinutes(new Date(), paymentWindow).toISOString();

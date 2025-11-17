@@ -4,7 +4,7 @@ import { Star, Gift, Trophy, CheckCircle, History } from 'lucide-react';
 import Button from '../Forms/Button';
 import { format, addDays } from 'date-fns';
 import ConfirmationModal from '../Shared/ConfirmationModal';
-import { localApi } from '../../lib/localApi';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/formatters';
@@ -41,10 +41,10 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
 
     setIsRedeeming(true);
     try {
-      const { data: settingsData } = await localApi.select<GamificationSettings>('gamification_settings', arena.id);
+      const { data: settingsData } = await supabaseApi.select<GamificationSettings>('gamification_settings', arena.id);
       const settings = settingsData?.[0];
 
-      const { data: allAlunos } = await localApi.select<Aluno>('alunos', arena.id);
+      const { data: allAlunos } = await supabaseApi.select<Aluno>('alunos', arena.id);
       const currentAlunoState = allAlunos.find(a => a.id === aluno.id);
       if (!currentAlunoState) throw new Error("Aluno não encontrado para atualizar.");
 
@@ -60,7 +60,7 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
       };
       
       // 2. Create point transaction for deduction
-      await localApi.upsert('gamification_point_transactions', [{
+      await supabaseApi.upsert('gamification_point_transactions', [{
         aluno_id: aluno.id,
         arena_id: arena.id,
         points: -rewardToRedeem.points_cost,
@@ -83,7 +83,7 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
         
         if (creditValue > 0) {
           updatedAlunoData.credit_balance = (updatedAlunoData.credit_balance || 0) + creditValue;
-          await localApi.upsert('credit_transactions', [{
+          await supabaseApi.upsert('credit_transactions', [{
               aluno_id: aluno.id,
               arena_id: arena.id,
               amount: creditValue,
@@ -109,20 +109,20 @@ const RewardsTab: React.FC<RewardsTabProps> = ({ aluno, levels, rewards, achieve
           redeemed_at: null,
           expires_at: expires_at,
         };
-        await localApi.upsert('redeemed_vouchers', [newVoucher], arena.id);
+        await supabaseApi.upsert('redeemed_vouchers', [newVoucher], arena.id);
       }
       
       // Save updated student data (points and/or credit balance)
-      await localApi.upsert('alunos', [updatedAlunoData], arena.id);
+      await supabaseApi.upsert('alunos', [updatedAlunoData], arena.id);
 
       // 4. Update reward quantity if applicable
       if (rewardToRedeem.quantity !== null && rewardToRedeem.quantity > 0) {
-        await localApi.upsert('gamification_rewards', [{ ...rewardToRedeem, quantity: rewardToRedeem.quantity - 1 }], arena.id);
+        await supabaseApi.upsert('gamification_rewards', [{ ...rewardToRedeem, quantity: rewardToRedeem.quantity - 1 }], arena.id);
       }
 
       // 5. Send notification
       if (aluno.profile_id) {
-        await localApi.upsert('notificacoes', [{
+        await supabaseApi.upsert('notificacoes', [{
             profile_id: aluno.profile_id,
             arena_id: arena.id,
             message: `Você resgatou "${rewardToRedeem.title}"!`,

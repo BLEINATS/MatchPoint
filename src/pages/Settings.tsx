@@ -18,7 +18,6 @@ import NotificationSettingsTab from './Settings/NotificationSettingsTab';
 import SecurityTab from '../components/Settings/SecurityTab';
 import TeamSettingsTab from '../components/Settings/TeamSettingsTab';
 import FaturamentoTab from '../components/Settings/FaturamentoTab';
-import { localApi } from '../lib/localApi';
 import { supabaseApi } from '../lib/supabaseApi';
 import SupportTab from '../components/Settings/SupportTab';
 import NiveisAlunosTab from './Settings/NiveisAlunosTab';
@@ -96,7 +95,7 @@ const Settings: React.FC = () => {
       setArenaFormData(initialData);
 
       const loadLevels = async () => {
-        const { data } = await localApi.select<AlunoLevel>('aluno_levels', arena.id);
+        const { data } = await supabaseApi.select<AlunoLevel>('aluno_levels', arena.id);
         if (data && data.length > 0) {
           setAlunoLevels(data);
         } else {
@@ -106,7 +105,7 @@ const Settings: React.FC = () => {
             { name: 'Avançado', color: 'orange' },
             { name: 'Competição', color: 'red' },
           ];
-          const { data: seededData } = await localApi.upsert('aluno_levels', defaultLevels, arena.id, true);
+          const { data: seededData } = await supabaseApi.upsert('aluno_levels', defaultLevels, arena.id, true);
           setAlunoLevels(seededData || []);
         }
       };
@@ -141,7 +140,7 @@ const Settings: React.FC = () => {
           available_sports: (arenaFormData.available_sports || []).map(s => typeof s === 'string' ? s.trim() : '').filter(Boolean)
         };
         await updateArena(cleanedData);
-        await localApi.upsert('aluno_levels', alunoLevels, arena.id, true);
+        await supabaseApi.upsert('aluno_levels', alunoLevels, arena.id, true);
       } else {
         await updateProfile(profileFormData);
       }
