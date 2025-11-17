@@ -131,12 +131,25 @@ const SuperAdminPage: React.FC = () => {
 
   const handleSavePlan = async (plan: Plan) => {
     try {
-      await supabaseApi.upsert('plans', [plan], 'all');
+      console.log('[SuperAdmin] Salvando plano:', plan);
+      const result = await supabaseApi.upsert('plans', [plan], 'all');
+      
+      if (result.error) {
+        console.error('[SuperAdmin] Erro ao salvar plano:', result.error);
+        addToast({ 
+          message: `Erro ao salvar plano: ${result.error.message || JSON.stringify(result.error)}`, 
+          type: 'error' 
+        });
+        return;
+      }
+      
+      console.log('[SuperAdmin] Plano salvo com sucesso:', result.data);
       addToast({ message: 'Plano salvo com sucesso!', type: 'success' });
       await loadData();
       setIsPlanModalOpen(false);
       setEditingPlan(null);
     } catch (error: any) {
+      console.error('[SuperAdmin] Exceção ao salvar plano:', error);
       addToast({ message: `Erro ao salvar plano: ${error.message}`, type: 'error' });
     }
   };
@@ -192,7 +205,6 @@ const SuperAdminPage: React.FC = () => {
         addToast({ message: 'Plano da arena alterado com sucesso!', type: 'success' });
       } else {
         const currentSub = subscriptions.find(s => s.arena_id === arenaToChangePlan.id);
-        const startDate = currentSub ? new Date(currentSub.start_date) : new Date();
         
         let nextPaymentDate: Date | null = null;
         let endDate: Date | null = null;

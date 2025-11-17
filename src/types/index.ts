@@ -72,6 +72,7 @@ export interface Plan {
   max_team_members?: number | null;
   features: string[];
   is_active: boolean;
+  created_at?: string;
 }
 
 export interface Subscription {
