@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import Button from '../components/Forms/Button';
 import QuadraCard from '../components/Dashboard/QuadraCard';
@@ -12,6 +12,7 @@ import QuadraFormTabs from '../components/Forms/QuadraFormTabs';
 import { useSubscriptionStatus } from '../hooks/useSubscriptionStatus';
 import Alert from '../components/Shared/Alert';
 import DeleteQuadraConfirmationModal from '../components/Quadras/DeleteQuadraConfirmationModal';
+import { v4 as uuidv4 } from 'uuid';
 
 const Quadras: React.FC = () => {
   const { selectedArenaContext: arena, profile, refreshResourceCounts } = useAuth();
@@ -78,7 +79,9 @@ const Quadras: React.FC = () => {
       setIsLoading(true);
       
       const isEditing = !!(quadraData as Quadra).id;
-      const quadraId = (quadraData as Quadra).id || `quadra_${Date.now()}`;
+      const quadraId = (quadraData as Quadra).id || uuidv4();
+      
+      console.log('[Quadras] Salvando quadra:', { id: quadraId, name: quadraData.name, isEditing });
 
       let finalPhotoUrls = (quadraData as Quadra).photos || [];
 
@@ -101,8 +104,16 @@ const Quadras: React.FC = () => {
         pricing_rules: pricingRules
       };
       
-      await supabaseApi.upsert('quadras', [finalQuadraPayload], arena.id);
+      console.log('[Quadras] Payload final:', finalQuadraPayload);
+      const result = await supabaseApi.upsert('quadras', [finalQuadraPayload], arena.id);
       
+      if (result.error) {
+        console.error('[Quadras] Erro ao salvar no Supabase:', result.error);
+        addToast({ message: `Erro ao salvar quadra: ${result.error.message || 'Erro desconhecido'}`, type: 'error' });
+        return;
+      }
+      
+      console.log('[Quadras] Quadra salva com sucesso:', result.data);
       await refreshResourceCounts();
 
       addToast({ message: `Quadra ${isEditing ? 'atualizada' : 'criada'} com sucesso!`, type: 'success' });
@@ -110,7 +121,7 @@ const Quadras: React.FC = () => {
       fetchQuadras();
 
     } catch (error: any) {
-      console.error("Detailed error:", error);
+      console.error('[Quadras] Exceção ao salvar quadra:', error);
       addToast({ message: `Erro ao salvar quadra: ${error.message}`, type: 'error' });
     } finally {
       setIsLoading(false);
@@ -129,11 +140,18 @@ const Quadras: React.FC = () => {
       for (const photoUrl of quadraToDelete.photos) {
         await localDeletePhoto(photoUrl);
       }
-      await supabaseApi.delete('quadras', [quadraToDelete.id], arena.id);
+      console.log('[Quadras] Deletando quadra:', quadraToDelete.id);
+      const result = await supabaseApi.delete('quadras', [quadraToDelete.id]);
+      if (result.error) {
+        console.error('[Quadras] Erro ao deletar:', result.error);
+        addToast({ message: `Erro ao excluir quadra: ${result.error.message}`, type: 'error' });
+        return;
+      }
       await refreshResourceCounts();
       addToast({ message: 'Quadra excluída com sucesso.', type: 'success' });
       fetchQuadras();
     } catch (error: any) {
+      console.error('[Quadras] Exceção ao deletar:', error);
       addToast({ message: `Erro ao excluir quadra: ${error.message}`, type: 'error' });
     } finally {
       setIsLoading(false);
