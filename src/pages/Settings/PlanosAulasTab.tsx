@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { supabaseApi } from '../../lib/supabaseApi';
 import { PlanoAula } from '../../types';
-import { Loader2, Plus, Edit, Trash2, Tag, Calendar, DollarSign, Hash } from 'lucide-react';
+import { Loader2, Plus, Edit, Trash2, Calendar, DollarSign, Hash } from 'lucide-react';
 import Button from '../../components/Forms/Button';
 import ConfirmationModal from '../../components/Shared/ConfirmationModal';
 import PlanoAulaModal from '../../components/Settings/PlanoAulaModal';
@@ -18,7 +18,7 @@ const seedDefaultPlanosAulas = async (arenaId: string) => {
     { name: 'Plano Semestral - 2x/semana', duration_type: 'semestral', price: 2500, description: 'Pacote de 6 meses com 8 aulas por mês. Desconto maior.', is_active: true, num_aulas: 48 },
     { name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, description: 'Acesso livre a todas as turmas compatíveis durante o ano.', is_active: false, num_aulas: null },
   ];
-  await supabaseApi.upsert('planos_aulas', defaultPlanos, arenaId, true);
+  await supabaseApi.upsert('planos_aulas', defaultPlanos as any, arenaId, true);
 };
 
 const PlanosAulasTab: React.FC = () => {
@@ -60,7 +60,7 @@ const PlanosAulasTab: React.FC = () => {
   const handleSave = async (planoData: Omit<PlanoAula, 'id' | 'arena_id' | 'created_at'> | PlanoAula) => {
     if (!arena) return;
     try {
-      await supabaseApi.upsert('planos_aulas', [{ ...planoData, arena_id: arena.id }], arena.id);
+      await supabaseApi.upsert('planos_aulas', [{ ...planoData, arena_id: arena.id }] as any, arena.id);
       addToast({ message: 'Plano salvo com sucesso!', type: 'success' });
       await loadPlanos();
       setIsModalOpen(false);
@@ -78,7 +78,7 @@ const PlanosAulasTab: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!planoToDelete || !arena) return;
     try {
-      await supabaseApi.delete('planos_aulas', [planoToDelete.id], arena.id);
+      await supabaseApi.delete('planos_aulas', [planoToDelete.id]);
       addToast({ message: 'Plano excluído com sucesso.', type: 'success' });
       await loadPlanos();
     } catch (error: any) {
