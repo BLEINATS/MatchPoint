@@ -1,0 +1,29 @@
+❌ Erros encontrados:
+profiles: new row violates row-level security policy for table "profiles"
+arenas: new row violates row-level security policy for table "arenas"
+subscriptions: insert or update on table "subscriptions" violates foreign key constraint "subscriptions_arena_id_fkey"
+friendships: invalid input syntax for type uuid: "profile_vini_01"
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - quadras: new row violates row-level security policy for table "quadras"
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - reservas: new row violates row-level security policy for table "reservas"
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - alunos: new row violates row-level security policy for table "alunos"
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - professores: new row violates row-level security policy for table "professores"
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - turmas: Could not find the 'start_time' column of 'turmas' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - torneios: Could not find the 'max_participants' column of 'torneios' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - products: null value in column "stock" of relation "products" violates not-null constraint
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - gamification_settings: insert or update on table "gamification_settings" violates foreign key constraint "gamification_settings_arena_id_fkey"
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - gamification_levels: insert or update on table "gamification_levels" violates foreign key constraint "gamification_levels_arena_id_fkey"
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - gamification_rewards: insert or update on table "gamification_rewards" violates foreign key constraint "gamification_rewards_arena_id_fkey"
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - gamification_achievements: insert or update on table "gamification_achievements" violates foreign key constraint "gamification_achievements_arena_id_fkey"
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - quadras: Could not find the 'updated_at' column of 'quadras' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - reservas: Could not find the 'isRecurring' column of 'reservas' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - alunos: new row violates row-level security policy for table "alunos"
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - professores: new row violates row-level security policy for table "professores"
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - turmas: Could not find the 'start_time' column of 'turmas' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - torneios: Could not find the 'max_participants' column of 'torneios' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - products: null value in column "stock" of relation "products" violates not-null constraint
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - atletas_aluguel: insert or update on table "atletas_aluguel" violates foreign key constraint "atletas_aluguel_arena_id_fkey"
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - gamification_settings: insert or update on table "gamification_settings" violates foreign key constraint "gamification_settings_arena_id_fkey"
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - gamification_levels: insert or update on table "gamification_levels" violates foreign key constraint "gamification_levels_arena_id_fkey"
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - gamification_rewards: insert or update on table "gamification_rewards" violates foreign key constraint "gamification_rewards_arena_id_fkey"
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - gamification_achievements: insert or update on table "gamification_achievements" violates foreign key constraint "gamification_achievements_arena_id_fkey"
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - gamification_point_transactions: insert or update on table "gamification_point_transactions" violates foreign key constraint "gamification_point_transactions_arena_id_fkey"

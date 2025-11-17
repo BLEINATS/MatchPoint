@@ -25,17 +25,24 @@ function ensureUUID(id: string): string {
 function normalizeRecord(record: any): any {
   const normalized = { ...record };
   
-  if (normalized.id) normalized.id = ensureUUID(normalized.id);
-  if (normalized.arena_id) normalized.arena_id = ensureUUID(normalized.arena_id);
-  if (normalized.owner_id) normalized.owner_id = ensureUUID(normalized.owner_id);
-  if (normalized.user_id) normalized.user_id = ensureUUID(normalized.user_id);
-  if (normalized.profile_id) normalized.profile_id = ensureUUID(normalized.profile_id);
-  if (normalized.user_1_id) normalized.user_1_id = ensureUUID(normalized.user_1_id);
-  if (normalized.user_2_id) normalized.user_2_id = ensureUUID(normalized.user_2_id);
-  if (normalized.aluno_id) normalized.aluno_id = ensureUUID(normalized.aluno_id);
-  if (normalized.professor_id) normalized.professor_id = ensureUUID(normalized.professor_id);
-  if (normalized.quadra_id) normalized.quadra_id = ensureUUID(normalized.quadra_id);
-  if (normalized.plan_id) normalized.plan_id = ensureUUID(normalized.plan_id);
+  const uuidFields = [
+    'id', 'arena_id', 'owner_id', 'user_id', 'profile_id',
+    'user_1_id', 'user_2_id', 'aluno_id', 'professor_id',
+    'quadra_id', 'plan_id', 'torneio_id', 'evento_id',
+    'turma_id', 'product_id', 'rental_item_id',
+    'achievement_id', 'reward_id', 'level_id',
+    'card_id', 'customer_id', 'subscription_id'
+  ];
+  
+  for (const field of uuidFields) {
+    if (normalized[field] && typeof normalized[field] === 'string') {
+      normalized[field] = ensureUUID(normalized[field]);
+    }
+  }
+  
+  if (normalized.stock === undefined || normalized.stock === null) {
+    normalized.stock = 0;
+  }
   
   return normalized;
 }
