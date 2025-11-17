@@ -67,6 +67,15 @@ MatchPlay is a comprehensive SaaS platform designed for managing sports court re
    - **Flow**: Create subscription → Retry fetch payments → Validate status → Return real payment ID
    - **Result**: PaymentModal now correctly displays boleto barcode and PIX QR code
 
+9. **Super Admin Plan Change Flow**: Fixed "Trocar Plano" workflow (Nov 17, 2025 - 22:10)
+   - **Problem**: "Trocar Plano" button was saving subscriptions directly to Supabase without Asaas payment processing
+   - **Fix**: Modified `handleChangePlan` to detect paid plans and open PaymentModal for payment processing
+   - **Free Plans** (price=0): Continue direct Supabase save (no Asaas needed)
+   - **Paid Plans** (price>0): Open PaymentModal → Process via Asaas → Save with asaas_subscription_id
+   - **Arena Update**: `createAsaasSubscription` now updates both `subscriptions` table AND `arena.plan_id`
+   - **Badge Colors**: Arena status badges now correctly show green for active subscriptions, red for missing/inactive
+   - **Result**: Super Admin can now properly change arena plans with full Asaas integration
+
 ### ⚠️ Configuration Required
 - **Supabase Storage Bucket**: Bucket 'photos' must be created manually in Supabase dashboard with RLS policies. See `SUPABASE-STORAGE-SETUP.md` for step-by-step instructions.
 - **Deploy ↔ Development Sync**: If using different Supabase projects for deploy and development, data will NOT sync between them. See `SUPABASE-SYNC-GUIDE.md` for solutions.
