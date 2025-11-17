@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { supabaseApi } from '../../lib/supabaseApi';
 import { PlanoAula } from '../../types';
-import { Loader2, Plus, Edit, Trash2, Tag, Calendar, DollarSign } from 'lucide-react';
+import { Loader2, Plus, Edit, Trash2 } from 'lucide-react';
 import Button from '../Forms/Button';
 import ConfirmationModal from '../Shared/ConfirmationModal';
 import PlanoAulaModal from '../Settings/PlanoAulaModal';
