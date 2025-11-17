@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import { Plan, Subscription } from '../types';
 import { isBefore, addDays, add, Duration } from 'date-fns';
 import { parseDateStringAsLocal } from '../utils/dateUtils';
@@ -23,8 +23,8 @@ export const useSubscriptionStatus = () => {
       setIsLoading(true);
       try {
         const [subsRes, plansRes] = await Promise.all([
-          localApi.select<Subscription>('subscriptions', 'all'),
-          localApi.select<Plan>('plans', 'all'),
+          supabaseApi.select<Subscription>('subscriptions', 'all'),
+          supabaseApi.select<Plan>('plans', 'all'),
         ]);
 
         const currentSub = subsRes.data?.find(s => s.arena_id === arena.id);

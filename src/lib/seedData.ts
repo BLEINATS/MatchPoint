@@ -1,4 +1,5 @@
 import { localApi } from './localApi';
+import { supabaseApi } from './supabaseApi';
 import { Arena, Profile, Quadra, PricingRule, PlanoAula, Aluno, Friendship, Reserva, GamificationSettings, GamificationLevel, GamificationReward, GamificationAchievement, Professor, Turma, Plan, Subscription, Product, Torneio } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { subDays, format, addDays } from 'date-fns';
@@ -72,7 +73,7 @@ export const seedInitialData = async () => {
   const proPlan: Plan = { id: 'plan_pro_01', name: 'Pro', price: 99.90, billing_cycle: 'monthly', features: ['Quadras ilimitadas', 'Relatórios avançados', 'Gestão de clientes (CRM)', 'Gamificação', 'Suporte prioritário', 'Funcionários ilimitados'], is_active: true };
   const proAnualPlan: Plan = { id: 'plan_pro_anual_01', name: 'Pro Anual', price: 999.00, billing_cycle: 'annual', features: ['Tudo do plano Pro', 'Desconto de ~15%'], is_active: true };
   
-  await localApi.upsert('plans', [proPlan, basicPlan, proAnualPlan], 'all', true);
+  await supabaseApi.upsert('plans', [proPlan, basicPlan, proAnualPlan], 'all', true);
 
   // 3. Arena
   const arenaId = `arena_${uuidv4()}`;
@@ -101,7 +102,7 @@ export const seedInitialData = async () => {
     start_date: new Date().toISOString(),
     end_date: null,
   };
-  await localApi.upsert('subscriptions', [subscription], 'all', true);
+  await supabaseApi.upsert('subscriptions', [subscription], 'all', true);
 
   // 5. Quadra
   const quadraId = `quadra_${uuidv4()}`;

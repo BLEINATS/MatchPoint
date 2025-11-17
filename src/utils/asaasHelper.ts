@@ -1,4 +1,4 @@
-import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import asaasProxyService from '../lib/asaasProxyService';
 import { Arena, Plan, Subscription } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -136,8 +136,8 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
       }
     }
 
-    // Atualizar subscription local
-    const { data: existingSubs } = await localApi.select<Subscription>('subscriptions', 'all');
+    // Atualizar subscription no Supabase
+    const { data: existingSubs } = await supabaseApi.select<Subscription>('subscriptions', 'all');
     const existingSub = existingSubs?.find(s => s.arena_id === arena.id);
 
     const subscription: Subscription = {
@@ -152,7 +152,7 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
       next_payment_date: nextDueDate.toISOString(),
     };
 
-    await localApi.upsert('subscriptions', [subscription], 'all');
+    await supabaseApi.upsert('subscriptions', [subscription], 'all');
 
     return { success: true, payment };
   } catch (error: any) {
@@ -168,7 +168,7 @@ export const cancelAsaasSubscription = async (subscriptionId: string): Promise<{
       return { success: false, error: 'Asaas não configurado' };
     }
 
-    const { data: subs } = await localApi.select<Subscription>('subscriptions', 'all');
+    const { data: subs } = await supabaseApi.select<Subscription>('subscriptions', 'all');
     const subscription = subs?.find(s => s.id === subscriptionId);
 
     if (!subscription || !subscription.asaas_subscription_id) {
@@ -181,7 +181,7 @@ export const cancelAsaasSubscription = async (subscriptionId: string): Promise<{
       end_date: new Date().toISOString(),
     };
 
-    await localApi.upsert('subscriptions', [updatedSub], 'all');
+    await supabaseApi.upsert('subscriptions', [updatedSub], 'all');
 
     return { success: true };
   } catch (error: any) {

@@ -19,6 +19,7 @@ import SecurityTab from '../components/Settings/SecurityTab';
 import TeamSettingsTab from '../components/Settings/TeamSettingsTab';
 import FaturamentoTab from '../components/Settings/FaturamentoTab';
 import { localApi } from '../lib/localApi';
+import { supabaseApi } from '../lib/supabaseApi';
 import SupportTab from '../components/Settings/SupportTab';
 import NiveisAlunosTab from './Settings/NiveisAlunosTab';
 
@@ -118,8 +119,8 @@ const Settings: React.FC = () => {
       const loadSaasData = async () => {
         try {
           const [plansRes, subsRes] = await Promise.all([
-            localApi.select<Plan>('plans', 'all'),
-            localApi.select<Subscription>('subscriptions', 'all'),
+            supabaseApi.select<Plan>('plans', 'all'),
+            supabaseApi.select<Subscription>('subscriptions', 'all'),
           ]);
           setPlans(plansRes.data || []);
           setSubscriptions(subsRes.data || []);
