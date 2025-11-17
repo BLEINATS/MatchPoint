@@ -17,11 +17,14 @@ const Layout: React.FC<LayoutProps> = ({ children, showHeader = true }) => {
   const { isExpired, isLoading } = useSubscriptionStatus();
   const location = useLocation();
 
+  const publicRoutes = ['/', '/auth', '/arenas'];
+  const isPublicRoute = publicRoutes.includes(location.pathname) || location.pathname.startsWith('/arena/');
+  
   const isAdminOrStaff = profile?.role === 'admin_arena' || profile?.role === 'funcionario';
   
-  const showBanner = isAdminOrStaff && selectedArenaContext && profile && selectedArenaContext.status !== 'suspended';
-  const showLockOverlay = isAdminOrStaff && isExpired && location.pathname !== '/settings';
-  const showHelpChat = isAdminOrStaff;
+  const showBanner = !isPublicRoute && isAdminOrStaff && selectedArenaContext && profile && selectedArenaContext.status !== 'suspended';
+  const showLockOverlay = !isPublicRoute && isAdminOrStaff && isExpired && location.pathname !== '/settings';
+  const showHelpChat = !isPublicRoute && isAdminOrStaff;
 
   return (
     <div className="min-h-screen bg-brand-gray-50 dark:bg-brand-gray-950 flex flex-col">

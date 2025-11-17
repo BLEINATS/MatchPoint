@@ -5,19 +5,21 @@ const GLOBAL_TABLES = ['profiles', 'arenas', 'subscriptions', 'plans', 'friendsh
 export const supabaseApi = {
   select: async <T>(tableName: string, arenaId: string): Promise<{ data: T[], error: any }> => {
     try {
+      const orderColumn = tableName === 'subscriptions' ? 'start_date' : 'created_at';
+      
       if (arenaId === 'all') {
         if (GLOBAL_TABLES.includes(tableName)) {
           const { data, error } = await supabase
             .from(tableName)
             .select('*')
-            .order('created_at', { ascending: false });
+            .order(orderColumn, { ascending: false, nullsFirst: false });
           
           return { data: (data as T[]) || [], error };
         } else {
           const { data, error } = await supabase
             .from(tableName)
             .select('*')
-            .order('created_at', { ascending: false });
+            .order(orderColumn, { ascending: false, nullsFirst: false });
           
           return { data: (data as T[]) || [], error };
         }
@@ -27,7 +29,7 @@ export const supabaseApi = {
         const { data, error } = await supabase
           .from(tableName)
           .select('*')
-          .order('created_at', { ascending: false });
+          .order(orderColumn, { ascending: false, nullsFirst: false });
         
         return { data: (data as T[]) || [], error };
       }
@@ -36,7 +38,7 @@ export const supabaseApi = {
         .from(tableName)
         .select('*')
         .eq('arena_id', arenaId)
-        .order('created_at', { ascending: false });
+        .order(orderColumn, { ascending: false, nullsFirst: false });
       
       return { data: (data as T[]) || [], error };
     } catch (error) {
