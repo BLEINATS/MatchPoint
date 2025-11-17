@@ -208,3 +208,15 @@ export const insertInitialData = async () => {
     console.error('❌ Error seeding data:', error);
   }
 };
+
+export const localUploadPhoto = async (file: File): Promise<{ publicUrl: string }> => {
+    const blobUrl = URL.createObjectURL(file);
+    return Promise.resolve({ publicUrl: blobUrl });
+};
+
+export const localDeletePhoto = async (url: string): Promise<void> => {
+    if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+    }
+    return Promise.resolve();
+};

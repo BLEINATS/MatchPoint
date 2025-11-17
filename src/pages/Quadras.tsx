@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Quadra, PricingRule } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { localApi, localUploadPhoto, localDeletePhoto } from '../lib/supabaseApi';
+import { supabaseApi, localUploadPhoto, localDeletePhoto } from '../lib/supabaseApi';
 import QuadraFormTabs from '../components/Forms/QuadraFormTabs';
 import { useSubscriptionStatus } from '../hooks/useSubscriptionStatus';
 import Alert from '../components/Shared/Alert';
