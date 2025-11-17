@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Key, Check, AlertCircle } from 'lucide-react';
+import { X, Key, Check, AlertCircle, CheckCircle } from 'lucide-react';
 import asaasProxyService from '../../lib/asaasProxyService';
 import { useToast } from '../../context/ToastContext';
 import Button from '../Forms/Button';
@@ -15,6 +15,7 @@ export default function AsaasConfigModal({ isOpen, onClose, onSave }: AsaasConfi
   const [apiKey, setApiKey] = useState('');
   const [isProduction, setIsProduction] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [hasExistingConfig, setHasExistingConfig] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const { addToast } = useToast();
 
@@ -29,9 +30,13 @@ export default function AsaasConfigModal({ isOpen, onClose, onSave }: AsaasConfi
       const config = await asaasProxyService.getConfig();
       if (config.configured) {
         setIsProduction(!config.isSandbox);
+        setHasExistingConfig(true);
+      } else {
+        setHasExistingConfig(false);
       }
     } catch (error) {
       console.log('Nenhuma configuração salva');
+      setHasExistingConfig(false);
     }
   };
 
@@ -58,6 +63,14 @@ export default function AsaasConfigModal({ isOpen, onClose, onSave }: AsaasConfi
   };
 
   const handleSave = async () => {
+    // Se já existe config e nenhuma nova API Key foi inserida, apenas fecha
+    if (hasExistingConfig && !apiKey.trim()) {
+      addToast({ message: 'Configuração mantida', type: 'success' });
+      onClose();
+      return;
+    }
+
+    // Se inseriu uma nova API Key, precisa testar
     if (!testResult?.success) {
       addToast({ message: 'Por favor, teste a conexão antes de salvar', type: 'error' });
       return;
@@ -95,19 +108,39 @@ export default function AsaasConfigModal({ isOpen, onClose, onSave }: AsaasConfi
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Status da Configuração Existente */}
+          {hasExistingConfig && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-medium text-green-900 dark:text-green-100 mb-1">
+                    API Key já configurada!
+                  </h3>
+                  <p className="text-sm text-green-800 dark:text-green-200">
+                    Você já possui uma API Key salva no ambiente <strong>{isProduction ? 'Produção' : 'Sandbox (Testes)'}</strong>.
+                    Para alterá-la, insira uma nova chave abaixo.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Informações */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
-              Como obter sua API Key do Asaas:
-            </h3>
-            <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800 dark:text-blue-200">
-              <li>Acesse sua conta no Asaas (apenas via web, não pelo app)</li>
-              <li>Vá em "Minha Conta" → "Integração"</li>
-              <li>Clique em "Gerar API Key"</li>
-              <li>Copie a chave (ela será exibida apenas uma vez)</li>
-              <li>Cole a chave abaixo</li>
-            </ol>
-          </div>
+          {!hasExistingConfig && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                Como obter sua API Key do Asaas:
+              </h3>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800 dark:text-blue-200">
+                <li>Acesse sua conta no Asaas (apenas via web, não pelo app)</li>
+                <li>Vá em "Minha Conta" → "Integração"</li>
+                <li>Clique em "Gerar API Key"</li>
+                <li>Copie a chave (ela será exibida apenas uma vez)</li>
+                <li>Cole a chave abaixo</li>
+              </ol>
+            </div>
+          )}
 
           {/* Ambiente */}
           <div className="space-y-2">
@@ -152,11 +185,13 @@ export default function AsaasConfigModal({ isOpen, onClose, onSave }: AsaasConfi
                 setApiKey(e.target.value);
                 setTestResult(null);
               }}
-              placeholder="$aact_YTU5YTE0M2M2N2I4MTliNzk0YTI5N2U5MzdjNWZmNDQ..."
+              placeholder={hasExistingConfig ? "••••••••••••••••••••• (já configurada)" : "$aact_YTU5YTE0M2M2N2I4MTliNzk0YTI5N2U5MzdjNWZmNDQ..."}
               type="password"
             />
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Sua API Key será armazenada de forma segura e nunca será exibida novamente.
+              {hasExistingConfig 
+                ? 'Deixe vazio para manter a API Key atual, ou insira uma nova para substituir.'
+                : 'Sua API Key será armazenada de forma segura e nunca será exibida novamente.'}
             </p>
           </div>
 
@@ -198,8 +233,8 @@ export default function AsaasConfigModal({ isOpen, onClose, onSave }: AsaasConfi
           <Button onClick={onClose} variant="secondary">
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={!apiKey.trim()}>
-            Salvar Configuração
+          <Button onClick={handleSave} disabled={!hasExistingConfig && !apiKey.trim()}>
+            {hasExistingConfig && !apiKey.trim() ? 'OK' : 'Salvar Configuração'}
           </Button>
         </div>
       </div>
