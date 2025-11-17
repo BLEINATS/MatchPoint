@@ -13,6 +13,7 @@ import ConfirmationModal from '../components/Shared/ConfirmationModal';
 import PlanModal from '../components/SuperAdmin/PlanModal';
 import ChangePlanModal from '../components/SuperAdmin/ChangePlanModal';
 import AsaasConfigModal from '../components/SuperAdmin/AsaasConfigModal';
+import PaymentModal from '../components/SuperAdmin/PaymentModal';
 import SubscriptionsPanel from '../components/SuperAdmin/SubscriptionsPanel';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -63,6 +64,10 @@ const SuperAdminPage: React.FC = () => {
 
   const [isChangePlanModalOpen, setIsChangePlanModalOpen] = useState(false);
   const [arenaToChangePlan, setArenaToChangePlan] = useState<Arena | null>(null);
+  
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentArena, setPaymentArena] = useState<Arena | null>(null);
+  const [paymentPlan, setPaymentPlan] = useState<Plan | null>(null);
   
   const [isAsaasConfigOpen, setIsAsaasConfigOpen] = useState(false);
 
@@ -173,6 +178,16 @@ const SuperAdminPage: React.FC = () => {
       return;
     }
 
+    setIsChangePlanModalOpen(false);
+
+    if (newPlan.price > 0) {
+      setPaymentArena(arenaToChangePlan);
+      setPaymentPlan(newPlan);
+      setIsPaymentModalOpen(true);
+      setArenaToChangePlan(null);
+      return;
+    }
+
     const currentSub = subscriptions.find(s => s.arena_id === arenaToChangePlan.id);
     const startDate = new Date();
     
@@ -232,7 +247,6 @@ const SuperAdminPage: React.FC = () => {
 
     addToast({ message: 'Plano da arena alterado com sucesso!', type: 'success' });
     await loadData();
-    setIsChangePlanModalOpen(false);
     setArenaToChangePlan(null);
   };
   
@@ -489,6 +503,24 @@ const SuperAdminPage: React.FC = () => {
         plans={plans}
         currentSubscription={subscriptions.find(s => s.arena_id === arenaToChangePlan?.id) || null}
       />
+      {paymentArena && paymentPlan && (
+        <PaymentModal
+          isOpen={isPaymentModalOpen}
+          onClose={() => {
+            setIsPaymentModalOpen(false);
+            setPaymentArena(null);
+            setPaymentPlan(null);
+          }}
+          arena={paymentArena}
+          plan={paymentPlan}
+          onSuccess={async () => {
+            setIsPaymentModalOpen(false);
+            setPaymentArena(null);
+            setPaymentPlan(null);
+            await loadData();
+          }}
+        />
+      )}
     </Layout>
   );
 };

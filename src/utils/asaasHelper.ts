@@ -235,6 +235,11 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
     await supabaseApi.upsert('subscriptions', [subscription], 'all');
     console.log('[createAsaasSubscription] Subscription salva com sucesso');
 
+    // Atualizar arena com o novo plan_id
+    const updatedArena = { ...arena, plan_id: plan.id };
+    await supabaseApi.upsert('arenas', [updatedArena], 'all');
+    console.log('[createAsaasSubscription] Arena atualizada com novo plan_id');
+
     return { success: true, payment };
   } catch (error: any) {
     console.error('Erro ao criar assinatura Asaas:', error);
