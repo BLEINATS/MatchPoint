@@ -264,6 +264,23 @@ app.get('/api/asaas/subscriptions/:id', async (req, res) => {
   }
 });
 
+app.get('/api/asaas/subscriptions/:id/payments', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const baseUrl = getAsaasUrl(asaasConfig.isSandbox);
+    const data = await makeAsaasRequest(
+      `${baseUrl}/subscriptions/${id}/payments`,
+      'GET'
+    );
+
+    res.json(data);
+  } catch (error) {
+    console.error('Erro ao buscar pagamentos da assinatura:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/asaas/payments', async (req, res) => {
   try {
     const { paymentData } = req.body;

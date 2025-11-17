@@ -72,6 +72,15 @@ export class AsaasProxyService {
     }
   }
 
+  async getSubscriptionPayments(subscriptionId: string): Promise<any> {
+    try {
+      const response = await axios.get(`${PROXY_BASE_URL}/subscriptions/${subscriptionId}/payments`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.error || 'Erro ao buscar pagamentos da assinatura');
+    }
+  }
+
   async createPayment(paymentData: AsaasPayment): Promise<any> {
     try {
       const response = await axios.post(`${PROXY_BASE_URL}/payments`, {
