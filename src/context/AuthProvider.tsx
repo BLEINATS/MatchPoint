@@ -108,11 +108,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         const loggedInProfile: Profile = JSON.parse(loggedInUserStr);
-        const loggedInUser: User = { id: loggedInProfile.id, email: loggedInProfile.email, created_at: loggedInProfile.created_at };
+        
+        // Validate profile still exists in database
+        const { data: profilesData } = await supabaseApi.select<Profile>('profiles', 'all');
+        const currentProfile = profilesData?.find(p => p.id === loggedInProfile.id);
+        
+        if (!currentProfile) {
+          console.log('[AuthProvider] Profile not found in database, clearing localStorage');
+          localStorage.removeItem('loggedInUser');
+          setIsLoading(false);
+          return;
+        }
+
+        const loggedInUser: User = { id: currentProfile.id, email: currentProfile.email, created_at: currentProfile.created_at };
         
         setUser(loggedInUser);
-        setProfile(loggedInProfile);
-        await setupUserContext(loggedInProfile);
+        setProfile(currentProfile);
+        await setupUserContext(currentProfile);
 
       } catch (error) {
         console.error("Error during session initialization:", error);
