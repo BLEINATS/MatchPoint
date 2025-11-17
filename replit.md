@@ -3,18 +3,51 @@
 ## Overview
 MatchPlay is a comprehensive SaaS platform designed for managing sports court reservations. Built with React, TypeScript, and Vite, it offers a complete solution for court scheduling, financial management, tournament organization, event management, and client engagement. The platform aims to streamline operations for sports facilities, providing tools for student/player management, instructor management, and even an integrated store/shop functionality. It supports multi-arena operations and includes a robust payment system via Asaas for various transaction types.
 
+## Recent Changes (November 17, 2025)
+
+### ✅ Completed Migrations
+1. **Planos e Assinaturas**: Migrated from localStorage to Supabase
+   - SuperAdmin creates arenas/subscriptions → Saved to Supabase
+   - Arena Admin views subscription → Reads from Supabase
+   - Data now syncs properly between SuperAdmin and Arena Admin contexts
+   
+2. **Asaas API Key**: Migrated from file storage to Supabase  
+   - Created `asaas_config` table in Supabase
+   - API key persists permanently
+   - Modal shows visual indicators when API Key is configured
+
+3. **Free Trial Support**: Fixed planos grátis (7 days trial)
+   - Plans with `price: 0` or `trial_days > 0` no longer require Asaas payment
+   - Creates subscription locally without payment gateway
+   - No more "O campo value deve ser informado" error
+
+### ⚠️ Known Issues
+- **Deploy ↔ Development Sync**: If using different Supabase projects for deploy and development, data will NOT sync between them. See `SUPABASE-SYNC-GUIDE.md` for solutions.
+- **Partial Migration**: Most arena-specific data still in localStorage - does not sync across environments
+
 ## User Preferences
 - None specified yet
 
 ## System Architecture
 
-**Backend: Supabase PostgreSQL Database**
-The application now uses Supabase (PostgreSQL) as the primary database, replacing the previous localStorage implementation. The backend consists of:
-- **30+ PostgreSQL tables** hosted on Supabase
-- **Supabase Client** (`src/lib/supabaseClient.ts`) for direct database access from frontend
-- **Supabase API** (`src/lib/supabaseApi.ts`) wrapper providing CRUD operations compatible with the old localApi interface
+**Backend: Supabase PostgreSQL Database (Migração Parcial)**
+The application is migrating from localStorage to Supabase (PostgreSQL). Current status:
+
+**✅ MIGRATED TO SUPABASE (Sync across deploy/dev):**
+- Global tables: `plans`, `subscriptions`, `arenas`, `profiles`, `friendships`, `credit_cards`
+- **SuperAdmin system**: Fully integrated with Supabase
+- **Asaas Config**: API keys stored in Supabase (`asaas_config` table)
+- **Payment integration**: Supports FREE trials (7 days) without Asaas payment requirement
+
+**❌ STILL IN LOCALSTORAGE (No sync):**
+- Arena-specific tables: `quadras`, `reservas`, `alunos`, `professores`, `turmas`, `torneios`, `eventos`, `notificacoes`, `products`, `rental_items`, and 15+ other tables
+- **These do NOT sync between deploy and development**
+
+**Infrastructure:**
+- **Supabase Client** (`src/lib/supabaseClient.ts`) for direct database access
+- **Supabase API** (`src/lib/supabaseApi.ts`) wrapper for Supabase operations  
+- **Local API** (`src/lib/localApi.ts`) for localStorage operations (being phased out)
 - **Row Level Security (RLS)** policies for data access control
-- **Supabase Auth** for user authentication
 
 **Frontend**
 Built with React 18, TypeScript, and Vite, utilizing Tailwind CSS for styling, React Router v6 for routing, Framer Motion for animations, ECharts for data visualization, and Lucide React for icons.
