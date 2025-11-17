@@ -118,15 +118,7 @@ export const validateCustomerCPF = (customer: Aluno | Profile): { valid: boolean
     cpf = String(customer.cpf_cnpj).replace(/\D/g, '');
   }
   
-  console.log('🔍 Validando CPF do cliente:', {
-    customerName: customer.name,
-    cpfOriginal: 'cpf' in customer ? customer.cpf : ('cpf_cnpj' in customer ? customer.cpf_cnpj : 'não encontrado'),
-    cpfNormalizado: cpf,
-    comprimento: cpf.length
-  });
-  
   if (!cpf || cpf.length === 0) {
-    console.error('❌ CPF não cadastrado');
     return {
       valid: false,
       error: 'CPF não cadastrado. Por favor, cadastre seu CPF antes de realizar o pagamento.'
@@ -134,7 +126,6 @@ export const validateCustomerCPF = (customer: Aluno | Profile): { valid: boolean
   }
   
   if (cpf.length !== 11 && cpf.length !== 14) {
-    console.error('❌ CPF com comprimento inválido:', cpf.length);
     return {
       valid: false,
       error: 'CPF/CNPJ inválido. Verifique o cadastro.'
@@ -142,22 +133,14 @@ export const validateCustomerCPF = (customer: Aluno | Profile): { valid: boolean
   }
   
   if (cpf.length === 11) {
-    const checksumValid = validateCPFChecksum(cpf);
-    console.log('🔍 Validação checksum CPF:', checksumValid);
-    
-    if (!checksumValid) {
-      console.error('❌ CPF com checksum inválido:', cpf);
+    if (!validateCPFChecksum(cpf)) {
       return {
         valid: false,
         error: 'CPF inválido (dígitos verificadores incorretos). Por favor, verifique o CPF cadastrado.'
       };
     }
   } else if (cpf.length === 14) {
-    const checksumValid = validateCNPJChecksum(cpf);
-    console.log('🔍 Validação checksum CNPJ:', checksumValid);
-    
-    if (!checksumValid) {
-      console.error('❌ CNPJ com checksum inválido:', cpf);
+    if (!validateCNPJChecksum(cpf)) {
       return {
         valid: false,
         error: 'CNPJ inválido (dígitos verificadores incorretos). Por favor, verifique o CNPJ cadastrado.'
@@ -165,7 +148,6 @@ export const validateCustomerCPF = (customer: Aluno | Profile): { valid: boolean
     }
   }
   
-  console.log('✅ CPF válido:', cpf);
   return { valid: true, cpf };
 };
 

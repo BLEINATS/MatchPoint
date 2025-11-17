@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
   resolve: {
     alias: {
@@ -18,12 +18,17 @@ export default defineConfig({
       clientPort: 443,
       protocol: 'wss',
     },
-    proxy: {
+    proxy: command === 'serve' ? {
       '/api/asaas': {
         target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,
       },
-    },
+    } : undefined,
   },
-});
+  preview: {
+    host: '0.0.0.0',
+    port: 5000,
+    strictPort: true,
+  },
+}));
