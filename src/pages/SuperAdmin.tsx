@@ -224,12 +224,12 @@ const SuperAdminPage: React.FC = () => {
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-brand-gray-900 dark:text-white">Painel Super Admin</h1>
-              <p className="text-brand-gray-600 dark:text-brand-gray-400 mt-2">Gerenciamento de todas as arenas da plataforma MatchPlay.</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-brand-gray-900 dark:text-white">Painel Super Admin</h1>
+              <p className="text-sm sm:text-base text-brand-gray-600 dark:text-brand-gray-400 mt-2">Gerenciamento de todas as arenas da plataforma MatchPlay.</p>
             </div>
-            <Button onClick={() => setIsAsaasConfigOpen(true)} variant="outline">
+            <Button onClick={() => setIsAsaasConfigOpen(true)} variant="outline" className="w-full sm:w-auto">
               <Settings className="w-4 h-4 mr-2" />
               Configurar Asaas
             </Button>
@@ -277,8 +277,10 @@ const SuperAdminPage: React.FC = () => {
 
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
               <div className="xl:col-span-2 bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 overflow-hidden">
-                <h3 className="text-xl font-semibold p-6">Arenas Cadastradas</h3>
-                <div className="overflow-x-auto">
+                <h3 className="text-lg sm:text-xl font-semibold p-4 sm:p-6">Arenas Cadastradas</h3>
+                
+                {/* Desktop Table */}
+                <div className="hidden lg:block overflow-x-auto">
                   <table className="min-w-full divide-y divide-brand-gray-200 dark:divide-brand-gray-700">
                     <thead className="bg-brand-gray-50 dark:bg-brand-gray-700/50">
                       <tr>
@@ -327,6 +329,50 @@ const SuperAdminPage: React.FC = () => {
                       })}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile Cards */}
+                <div className="lg:hidden p-4 space-y-4">
+                  {arenas.map(arena => {
+                    const sub = subscriptions.find(s => s.arena_id === arena.id);
+                    const plan = plans.find(p => p.id === sub?.plan_id);
+                    const nextBillingDate = sub && plan ? calculateNextBillingDate(sub, plan) : null;
+                    const nextBillingDateStr = nextBillingDate ? format(nextBillingDate, 'dd/MM/yyyy') : '--';
+
+                    return (
+                      <div key={arena.id} className="border border-brand-gray-200 dark:border-brand-gray-700 rounded-lg p-4 space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="text-sm font-bold text-brand-gray-900 dark:text-white">{arena.name}</h4>
+                            <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Cadastro: {format(new Date(arena.created_at), 'dd/MM/yy')}</p>
+                          </div>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            arena.status === 'active' && sub?.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                            sub?.status === 'past_due' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
+                            'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+                          }`}>
+                            {sub?.status === 'past_due' ? 'Pendente' : arena.status === 'active' ? 'Ativa' : 'Suspensa'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Plano</p>
+                            <p className="font-medium text-brand-gray-900 dark:text-white">{plan?.name || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-brand-gray-500 dark:text-brand-gray-400">Próx. Cobrança</p>
+                            <p className="font-medium text-brand-gray-900 dark:text-white">{nextBillingDateStr}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                          <Button size="sm" variant="outline" onClick={() => handleOpenChangePlanModal(arena)} className="flex-1">Trocar Plano</Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setArenaToToggle(arena); setIsToggleConfirmOpen(true); }} className="flex-1">
+                            {arena.status === 'active' ? 'Suspender' : 'Ativar'}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <div className="xl:col-span-1 bg-white dark:bg-brand-gray-800 rounded-xl shadow-lg border border-brand-gray-200 dark:border-brand-gray-700 p-6">

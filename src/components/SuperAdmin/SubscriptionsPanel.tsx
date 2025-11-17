@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { CreditCard, DollarSign, AlertCircle, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { supabaseApi } from '../../lib/supabaseApi';
 import { Subscription, Arena, Plan } from '../../types';
@@ -212,7 +212,8 @@ export default function SubscriptionsPanel() {
 
       {/* Subscriptions List */}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop Table */}
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-900">
               <tr>
@@ -291,6 +292,62 @@ export default function SubscriptionsPanel() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Cards */}
+        <div className="lg:hidden p-4 space-y-4">
+          {filteredSubscriptions.length === 0 ? (
+            <div className="py-12 text-center text-gray-500 dark:text-gray-400">
+              Nenhuma assinatura encontrada
+            </div>
+          ) : (
+            filteredSubscriptions.map((sub) => (
+              <div key={sub.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-white">{sub.arena.name}</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{sub.arena.city}, {sub.arena.state}</p>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(sub.status)}`}>
+                    {getStatusIcon(sub.status)}
+                    {getStatusText(sub.status)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Plano</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{sub.plan.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {sub.plan.billing_cycle === 'monthly' && 'Mensal'}
+                      {sub.plan.billing_cycle === 'quarterly' && 'Trimestral'}
+                      {sub.plan.billing_cycle === 'semiannual' && 'Semestral'}
+                      {sub.plan.billing_cycle === 'annual' && 'Anual'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Valor</p>
+                    <p className="font-medium text-gray-900 dark:text-white">R$ {sub.plan.price.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Início</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {format(new Date(sub.start_date), "dd/MM/yyyy")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Próximo Pagamento</p>
+                    <p className="font-medium text-gray-900 dark:text-white text-xs">
+                      {sub.next_payment_date
+                        ? format(new Date(sub.next_payment_date), "dd/MM/yyyy")
+                        : sub.asaas_subscription_id
+                        ? 'Asaas'
+                        : 'N/C'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

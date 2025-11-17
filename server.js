@@ -1,8 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import fs from 'fs/promises';
-import path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -14,26 +13,90 @@ app.use(express.json());
 
 const ASAAS_SANDBOX_URL = 'https://sandbox.asaas.com/api/v3';
 const ASAAS_PRODUCTION_URL = 'https://api.asaas.com/v3';
-const CONFIG_FILE_PATH = path.resolve('.asaas-config.json');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.warn('⚠️  Supabase não configurado - configuração Asaas não será persistida');
+}
+
+const supabase = supabaseUrl && supabaseKey 
+  ? createClient(supabaseUrl, supabaseKey)
+  : null;
 
 let asaasConfig = { apiKey: '', isSandbox: true };
 
 async function loadConfig() {
   try {
-    const data = await fs.readFile(CONFIG_FILE_PATH, 'utf-8');
-    asaasConfig = JSON.parse(data);
-    console.log('✅ Configuração Asaas carregada');
+    if (!supabase) {
+      console.log('ℹ️  Supabase não disponível - usando configuração em memória');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('asaas_config')
+      .select('api_key, is_sandbox')
+      .single();
+
+    if (error) {
+      console.log('ℹ️  Nenhuma configuração Asaas encontrada no Supabase');
+      return;
+    }
+
+    if (data && data.api_key) {
+      asaasConfig = { 
+        apiKey: data.api_key, 
+        isSandbox: data.is_sandbox 
+      };
+      console.log('✅ Configuração Asaas carregada do Supabase');
+    }
   } catch (error) {
-    console.log('ℹ️  Nenhuma configuração Asaas encontrada');
+    console.error('❌ Erro ao carregar configuração do Supabase:', error);
   }
 }
 
 async function saveConfig() {
   try {
-    await fs.writeFile(CONFIG_FILE_PATH, JSON.stringify(asaasConfig, null, 2), 'utf-8');
-    console.log('✅ Configuração Asaas salva com sucesso');
+    if (!supabase) {
+      console.log('⚠️  Supabase não disponível - configuração apenas em memória');
+      return;
+    }
+
+    // Buscar ID existente (se houver) - maybeSingle() não lança erro se vazio
+    const { data: existing } = await supabase
+      .from('asaas_config')
+      .select('id')
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      // Atualizar registro existente
+      const { error } = await supabase
+        .from('asaas_config')
+        .update({ 
+          api_key: asaasConfig.apiKey, 
+          is_sandbox: asaasConfig.isSandbox,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id);
+
+      if (error) throw error;
+    } else {
+      // Inserir novo registro
+      const { error } = await supabase
+        .from('asaas_config')
+        .insert({ 
+          api_key: asaasConfig.apiKey, 
+          is_sandbox: asaasConfig.isSandbox
+        });
+
+      if (error) throw error;
+    }
+    
+    console.log('✅ Configuração Asaas salva no Supabase');
   } catch (error) {
-    console.error('❌ Erro ao salvar configuração:', error);
+    console.error('❌ Erro ao salvar configuração no Supabase:', error);
     throw error;
   }
 }

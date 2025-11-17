@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout/Layout';
 import AnalyticsDashboard from '../components/Dashboard/AnalyticsDashboard';
@@ -8,8 +9,15 @@ import OnboardingModal from '../components/Onboarding/OnboardingModal';
 import { AnimatePresence } from 'framer-motion';
 
 const Dashboard: React.FC = () => {
+    const navigate = useNavigate();
     const { profile, isLoading, selectedArenaContext: arena } = useAuth();
     const [showOnboarding, setShowOnboarding] = useState(false);
+
+    useEffect(() => {
+        if (profile?.role === 'super_admin') {
+            navigate('/superadmin', { replace: true });
+        }
+    }, [profile, navigate]);
 
     useEffect(() => {
         if (!arena || profile?.role !== 'admin_arena') return;
@@ -31,7 +39,7 @@ const Dashboard: React.FC = () => {
         setShowOnboarding(true);
     };
 
-    if (isLoading) {
+    if (isLoading || profile?.role === 'super_admin') {
         return (
             <Layout>
                 <div className="flex justify-center items-center h-screen">
