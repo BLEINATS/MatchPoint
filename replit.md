@@ -58,6 +58,15 @@ MatchPlay is a comprehensive SaaS platform designed for managing sports court re
    - **Plan Creation**: `createAsaasSubscription` saves correctly to Supabase for free and paid plans
    - All data persists correctly in `subscriptions` table with proper dates
 
+8. **Asaas Payment Flow Fix**: Complete payment integration for boleto/PIX (Nov 17, 2025 - 21:53)
+   - **Backend Endpoint**: Added `GET /api/asaas/subscriptions/:id/payments` to fetch subscription payments
+   - **Retry Logic**: `createAsaasSubscription` tries 2 times with 2s delay to fetch payment (Asaas propagation delay)
+   - **No Fake Data**: Removed fallback that returned subscription ID as payment ID (caused modal failures)
+   - **Credit Card Validation**: Checks `PAYMENT_LIMIT_EXCEEDED` status and returns specific error
+   - **Clear Error Messages**: If payment not found after retries, shows actionable error to user
+   - **Flow**: Create subscription → Retry fetch payments → Validate status → Return real payment ID
+   - **Result**: PaymentModal now correctly displays boleto barcode and PIX QR code
+
 ### ⚠️ Configuration Required
 - **Supabase Storage Bucket**: Bucket 'photos' must be created manually in Supabase dashboard with RLS policies. See `SUPABASE-STORAGE-SETUP.md` for step-by-step instructions.
 - **Deploy ↔ Development Sync**: If using different Supabase projects for deploy and development, data will NOT sync between them. See `SUPABASE-SYNC-GUIDE.md` for solutions.
