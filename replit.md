@@ -28,7 +28,15 @@ MatchPlay is a comprehensive SaaS platform designed for managing sports court re
    - Replaced `localApi` with `supabaseApi` across entire codebase
    - Data now persists permanently and syncs across deploy/dev (if using same Supabase project)
 
-### ⚠️ Known Issues
+5. **Supabase Storage Integration**: Real photo upload/delete implemented
+   - Created `supabaseStorage.ts` with uploadPhoto/deletePhoto functions
+   - Photos save to Supabase Storage bucket 'photos' (requires manual setup)
+   - Automatic fallback to blob URLs if Storage not configured
+   - Supports: arena logos, court photos, student avatars, product images
+   - See `SUPABASE-STORAGE-SETUP.md` for configuration instructions
+
+### ⚠️ Configuration Required
+- **Supabase Storage Bucket**: Bucket 'photos' must be created manually in Supabase dashboard with RLS policies. See `SUPABASE-STORAGE-SETUP.md` for step-by-step instructions.
 - **Deploy ↔ Development Sync**: If using different Supabase projects for deploy and development, data will NOT sync between them. See `SUPABASE-SYNC-GUIDE.md` for solutions.
 
 ## User Preferences
@@ -56,6 +64,7 @@ The application now uses Supabase (PostgreSQL) as the **ONLY** database backend.
 **Infrastructure:**
 - **Supabase Client** (`src/lib/supabaseClient.ts`) for direct database access
 - **Supabase API** (`src/lib/supabaseApi.ts`) CRUD wrapper used throughout the app
+- **Supabase Storage** (`src/lib/supabaseStorage.ts`) for photo uploads/storage
 - **localStorage REMOVED** - All data now persists in PostgreSQL database
 - **Row Level Security (RLS)** policies for data access control
 
@@ -87,7 +96,7 @@ Key features include:
 ## External Dependencies
 
 **Database & Backend:**
-- **Supabase**: PostgreSQL database hosting with real-time capabilities, Row Level Security, and authentication
+- **Supabase**: PostgreSQL database hosting with real-time capabilities, Row Level Security, authentication, and Storage for photos
 - **Asaas Payment Gateway**: Integrated for processing payments (boleto, PIX, credit card), managing subscriptions, and handling customer data
 - **Express.js**: Node.js framework used for the backend proxy server (Asaas API)
 
