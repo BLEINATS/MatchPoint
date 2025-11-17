@@ -125,7 +125,7 @@ export async function migrateLocalStorageToSupabase() {
   }
 }
 
-export async function testSupabaseConnection() {
+export async function testSupabaseConnection(): Promise<boolean> {
   console.log('🔌 Testando conexão com Supabase...');
   
   try {

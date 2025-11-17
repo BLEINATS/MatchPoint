@@ -116,7 +116,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'migration',
-        element: <MigrationPage />,
+        element: <ProtectedRoute><MigrationPage /></ProtectedRoute>,
       },
       { path: ':slug', element: <ArenaPublic /> },
     ],
