@@ -1,0 +1,30 @@
+❌ Erros encontrados:
+profiles: invalid input syntax for type uuid: "profile_admin_01"
+arenas: invalid input syntax for type uuid: "arena_55ba955e-55f8-464b-b073-34546b09321c"
+subscriptions: invalid input syntax for type uuid: "arena_55ba955e-55f8-464b-b073-34546b09321c"
+plans: invalid input syntax for type uuid: "plan_pro_01"
+friendships: invalid input syntax for type uuid: "profile_vini_01"
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - quadras: invalid input syntax for type uuid: "arena_55ba955e-55f8-464b-b073-34546b09321c"
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - reservas: Could not find the 'clientPhone' column of 'reservas' in the schema cache
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - alunos: invalid input syntax for type uuid: "arena_55ba955e-55f8-464b-b073-34546b09321c"
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - professores: invalid input syntax for type uuid: "arena_55ba955e-55f8-464b-b073-34546b09321c"
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - turmas: Could not find the 'end_time' column of 'turmas' in the schema cache
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - torneios: Could not find the 'end_time' column of 'torneios' in the schema cache
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - notificacoes: invalid input syntax for type uuid: "arena_55ba955e-55f8-464b-b073-34546b09321c"
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - products: invalid input syntax for type uuid: "arena_55ba955e-55f8-464b-b073-34546b09321c"
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - credit_transactions: invalid input syntax for type uuid: "arena_55ba955e-55f8-464b-b073-34546b09321c"
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - gamification_settings: Could not find the 'id' column of 'gamification_settings' in the schema cache
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - gamification_levels: invalid input syntax for type uuid: "arena_55ba955e-55f8-464b-b073-34546b09321c"
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - gamification_rewards: invalid input syntax for type uuid: "arena_55ba955e-55f8-464b-b073-34546b09321c"
+Arena arena_55ba955e-55f8-464b-b073-34546b09321c - gamification_achievements: invalid input syntax for type uuid: "arena_55ba955e-55f8-464b-b073-34546b09321c"
+Arena arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e - quadras: invalid input syntax for type uuid: "arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e"
+Arena arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e - reservas: invalid input syntax for type uuid: "arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e"
+Arena arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e - alunos: invalid input syntax for type uuid: "arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e"
+Arena arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e - professores: invalid input syntax for type uuid: "arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e"
+Arena arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e - turmas: Could not find the 'end_time' column of 'turmas' in the schema cache
+Arena arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e - torneios: Could not find the 'end_time' column of 'torneios' in the schema cache
+Arena arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e - products: invalid input syntax for type uuid: "arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e"
+Arena arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e - gamification_settings: Could not find the 'id' column of 'gamification_settings' in the schema cache
+Arena arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e - gamification_levels: invalid input syntax for type uuid: "arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e"
+Arena arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e - gamification_rewards: invalid input syntax for type uuid: "arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e"
+Arena arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e - gamification_achievements: invalid input syntax for type uuid: "arena_b9faf59a-a76b-40f1-9eb4-f6c5bff3783e"

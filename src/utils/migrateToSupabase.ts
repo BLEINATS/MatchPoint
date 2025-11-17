@@ -1,7 +1,50 @@
 import { supabaseApi } from '../lib/supabaseApi';
+import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
+
+const UUID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+const idMapping = new Map<string, string>();
+
+function ensureUUID(id: string): string {
+  if (!id) return uuidv4();
+  
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(id)) {
+    return id;
+  }
+  
+  if (idMapping.has(id)) {
+    return idMapping.get(id)!;
+  }
+  
+  const newUuid = uuidv5(id, UUID_NAMESPACE);
+  idMapping.set(id, newUuid);
+  console.log(`🔄 Convertendo ID customizado: ${id} → ${newUuid}`);
+  return newUuid;
+}
+
+function normalizeRecord(record: any): any {
+  const normalized = { ...record };
+  
+  if (normalized.id) normalized.id = ensureUUID(normalized.id);
+  if (normalized.arena_id) normalized.arena_id = ensureUUID(normalized.arena_id);
+  if (normalized.owner_id) normalized.owner_id = ensureUUID(normalized.owner_id);
+  if (normalized.user_id) normalized.user_id = ensureUUID(normalized.user_id);
+  if (normalized.profile_id) normalized.profile_id = ensureUUID(normalized.profile_id);
+  if (normalized.user_1_id) normalized.user_1_id = ensureUUID(normalized.user_1_id);
+  if (normalized.user_2_id) normalized.user_2_id = ensureUUID(normalized.user_2_id);
+  if (normalized.aluno_id) normalized.aluno_id = ensureUUID(normalized.aluno_id);
+  if (normalized.professor_id) normalized.professor_id = ensureUUID(normalized.professor_id);
+  if (normalized.quadra_id) normalized.quadra_id = ensureUUID(normalized.quadra_id);
+  if (normalized.plan_id) normalized.plan_id = ensureUUID(normalized.plan_id);
+  
+  return normalized;
+}
 
 export async function migrateLocalStorageToSupabase() {
   console.log('🚀 Iniciando migração de dados do localStorage para Supabase...');
+  console.log('🔄 Conversão automática de IDs customizados para UUIDs ativada');
+  
+  idMapping.clear();
   
   const results = {
     success: [] as string[],
@@ -35,8 +78,9 @@ export async function migrateLocalStorageToSupabase() {
           continue;
         }
 
-        console.log(`📦 Migrando ${tableName}: ${data.length} registros...`);
-        const { error } = await supabaseApi.upsert(tableName, data, 'all');
+        const normalizedData = data.map(normalizeRecord);
+        console.log(`📦 Migrando ${tableName}: ${normalizedData.length} registros...`);
+        const { error } = await supabaseApi.upsert(tableName, normalizedData, 'all');
 
         if (error) {
           results.errors.push(`${tableName}: ${error.message}`);
@@ -63,7 +107,8 @@ export async function migrateLocalStorageToSupabase() {
     console.log(`🏟️ Encontradas ${arenaIds.length} arenas para migrar`);
 
     for (const arenaId of arenaIds) {
-      console.log(`\n📍 Migrando dados da arena: ${arenaId}`);
+      const normalizedArenaId = ensureUUID(arenaId);
+      console.log(`\n📍 Migrando dados da arena: ${arenaId} → ${normalizedArenaId}`);
       
       const arenaDataStr = localStorage.getItem(`db_arena_${arenaId}`);
       if (!arenaDataStr) continue;
@@ -78,9 +123,10 @@ export async function migrateLocalStorageToSupabase() {
 
           try {
             const data = arenaData[tableName];
-            console.log(`  📦 Migrando ${tableName}: ${data.length} registros...`);
+            const normalizedData = data.map(normalizeRecord);
+            console.log(`  📦 Migrando ${tableName}: ${normalizedData.length} registros...`);
 
-            const { error } = await supabaseApi.upsert(tableName, data, arenaId);
+            const { error } = await supabaseApi.upsert(tableName, normalizedData, ensureUUID(arenaId));
 
             if (error) {
               results.errors.push(`Arena ${arenaId} - ${tableName}: ${error.message}`);
