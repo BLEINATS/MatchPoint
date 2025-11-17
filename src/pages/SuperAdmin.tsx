@@ -15,6 +15,7 @@ import ChangePlanModal from '../components/SuperAdmin/ChangePlanModal';
 import AsaasConfigModal from '../components/SuperAdmin/AsaasConfigModal';
 import SubscriptionsPanel from '../components/SuperAdmin/SubscriptionsPanel';
 import { v4 as uuidv4 } from 'uuid';
+import { createAsaasSubscription } from '../utils/asaasHelper';
 
 const calculateNextBillingDate = (sub: Subscription, plan: Plan): Date | null => {
     if (!sub || !plan) return null;
@@ -176,64 +177,80 @@ const SuperAdminPage: React.FC = () => {
     setIsChangePlanModalOpen(false);
 
     try {
-      const currentSub = subscriptions.find(s => s.arena_id === arenaToChangePlan.id);
-      const startDate = currentSub ? new Date(currentSub.start_date) : new Date();
-      
-      let nextPaymentDate: Date | null = null;
-      let endDate: Date | null = null;
-
-      if (newPlan.trial_days || newPlan.duration_days) {
-        const duration = newPlan.trial_days || newPlan.duration_days || 7;
-        endDate = addDays(new Date(), duration);
-        nextPaymentDate = endDate;
-      } else {
-        const baseDate = currentSub ? new Date(currentSub.next_payment_date || currentSub.start_date) : new Date();
-        switch(newPlan.billing_cycle) {
-          case 'monthly':
-            nextPaymentDate = addMonths(baseDate, 1);
-            break;
-          case 'quarterly':
-            nextPaymentDate = addMonths(baseDate, 3);
-            break;
-          case 'semiannual':
-            nextPaymentDate = addMonths(baseDate, 6);
-            break;
-          case 'annual':
-            nextPaymentDate = addYears(baseDate, 1);
-            break;
-          default:
-            nextPaymentDate = addMonths(baseDate, 1);
+      if (newPlan.price > 0) {
+        const result = await createAsaasSubscription({
+          arena: arenaToChangePlan,
+          plan: newPlan,
+          billingType: 'BOLETO'
+        });
+        
+        if (result.error) {
+          addToast({ message: result.error, type: 'error' });
+          return;
         }
-      }
-      
-      if (currentSub) {
-        const updatedSub: Subscription = { 
-          ...currentSub, 
-          plan_id: newPlanId, 
-          end_date: endDate?.toISOString() || null,
-          next_payment_date: nextPaymentDate?.toISOString() || null,
-          status: 'active'
-        };
-        await supabaseApi.upsert('subscriptions', [updatedSub], 'all');
+        
+        addToast({ message: 'Plano da arena alterado com sucesso!', type: 'success' });
       } else {
-        const newSub: Subscription = {
-          id: `sub_${uuidv4()}`,
-          arena_id: arenaToChangePlan.id,
-          plan_id: newPlanId,
-          status: 'active',
-          start_date: new Date().toISOString(),
-          end_date: endDate?.toISOString() || null,
-          next_payment_date: nextPaymentDate?.toISOString() || null,
-          asaas_subscription_id: null,
-          asaas_customer_id: null,
-        };
-        await supabaseApi.upsert('subscriptions', [newSub], 'all');
+        const currentSub = subscriptions.find(s => s.arena_id === arenaToChangePlan.id);
+        const startDate = currentSub ? new Date(currentSub.start_date) : new Date();
+        
+        let nextPaymentDate: Date | null = null;
+        let endDate: Date | null = null;
+
+        if (newPlan.trial_days || newPlan.duration_days) {
+          const duration = newPlan.trial_days || newPlan.duration_days || 7;
+          endDate = addDays(new Date(), duration);
+          nextPaymentDate = endDate;
+        } else {
+          const baseDate = currentSub ? new Date(currentSub.next_payment_date || currentSub.start_date) : new Date();
+          switch(newPlan.billing_cycle) {
+            case 'monthly':
+              nextPaymentDate = addMonths(baseDate, 1);
+              break;
+            case 'quarterly':
+              nextPaymentDate = addMonths(baseDate, 3);
+              break;
+            case 'semiannual':
+              nextPaymentDate = addMonths(baseDate, 6);
+              break;
+            case 'annual':
+              nextPaymentDate = addYears(baseDate, 1);
+              break;
+            default:
+              nextPaymentDate = addMonths(baseDate, 1);
+          }
+        }
+        
+        if (currentSub) {
+          const updatedSub: Subscription = { 
+            ...currentSub, 
+            plan_id: newPlanId, 
+            end_date: endDate?.toISOString() || null,
+            next_payment_date: nextPaymentDate?.toISOString() || null,
+            status: 'active'
+          };
+          await supabaseApi.upsert('subscriptions', [updatedSub], 'all');
+        } else {
+          const newSub: Subscription = {
+            id: `sub_${uuidv4()}`,
+            arena_id: arenaToChangePlan.id,
+            plan_id: newPlanId,
+            status: 'active',
+            start_date: new Date().toISOString(),
+            end_date: endDate?.toISOString() || null,
+            next_payment_date: nextPaymentDate?.toISOString() || null,
+            asaas_subscription_id: null,
+            asaas_customer_id: null,
+          };
+          await supabaseApi.upsert('subscriptions', [newSub], 'all');
+        }
+        
+        const updatedArena = { ...arenaToChangePlan, plan_id: newPlanId };
+        await supabaseApi.upsert('arenas', [updatedArena], 'all');
+
+        addToast({ message: 'Plano da arena alterado com sucesso!', type: 'success' });
       }
       
-      const updatedArena = { ...arenaToChangePlan, plan_id: newPlanId };
-      await supabaseApi.upsert('arenas', [updatedArena], 'all');
-
-      addToast({ message: 'Plano da arena alterado com sucesso!', type: 'success' });
       await loadData();
     } catch (error: any) {
       addToast({ message: `Erro ao alterar plano: ${error.message}`, type: 'error' });
