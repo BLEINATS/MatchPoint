@@ -35,12 +35,49 @@ export const checkAsaasConfig = async (): Promise<boolean> => {
 
 export const createAsaasSubscription = async (options: CreateSubscriptionOptions): Promise<{ success: boolean; payment?: any; error?: string }> => {
   try {
+    const { arena, plan, billingType, creditCard, creditCardHolderInfo } = options;
+
+    // PLANO GRÁTIS (Trial): Não criar pagamento no Asaas, apenas subscription local
+    const isFreePlan = plan.price === 0 || (plan.trial_days && plan.trial_days > 0);
+    
+    if (isFreePlan) {
+      // Para planos grátis, criar apenas subscription local sem Asaas
+      const { data: existingSubs } = await supabaseApi.select<Subscription>('subscriptions', 'all');
+      const existingSub = existingSubs?.find(s => s.arena_id === arena.id);
+
+      const trialDuration = plan.trial_days || plan.duration_days || 7;
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + trialDuration);
+
+      const subscription: Subscription = {
+        id: existingSub?.id || `sub_${uuidv4()}`,
+        arena_id: arena.id,
+        plan_id: plan.id,
+        status: 'active',
+        start_date: new Date().toISOString(),
+        end_date: endDate.toISOString(),
+        asaas_subscription_id: null,
+        asaas_customer_id: null,
+        next_payment_date: null,
+      };
+
+      await supabaseApi.upsert('subscriptions', [subscription], 'all');
+
+      return { 
+        success: true, 
+        payment: { 
+          status: 'CONFIRMED',
+          value: 0,
+          description: `Plano ${plan.name} - Período de ${trialDuration} dias grátis`
+        }
+      };
+    }
+
+    // PLANOS PAGOS: Criar no Asaas
     const configured = await checkAsaasConfig();
     if (!configured) {
       return { success: false, error: 'Asaas não configurado. Configure a API key primeiro.' };
     }
-
-    const { arena, plan, billingType, creditCard, creditCardHolderInfo } = options;
 
     // Buscar ou criar cliente no Asaas
     let asaasCustomerId = arena.asaas_customer_id;
@@ -58,9 +95,9 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
       const customer = await asaasProxyService.createCustomer(customerData);
       asaasCustomerId = customer.id!;
 
-      // Atualizar arena com customer ID
+      // Atualizar arena com customer ID no Supabase
       const updatedArena = { ...arena, asaas_customer_id: asaasCustomerId };
-      await localApi.upsert('arenas', [updatedArena], 'all');
+      await supabaseApi.upsert('arenas', [updatedArena], 'all');
     }
 
     // Determinar ciclo de cobrança
