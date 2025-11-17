@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { AuthProvider } from './context/AuthProvider';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
+import { createStorageBucket } from './lib/supabaseApi';
 
 function App() {
+  useEffect(() => {
+    createStorageBucket();
+  }, []);
+
   return (
     <ThemeProvider>
       <ToastProvider>

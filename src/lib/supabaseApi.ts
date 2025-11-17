@@ -209,14 +209,4 @@ export const insertInitialData = async () => {
   }
 };
 
-export const localUploadPhoto = async (file: File): Promise<{ publicUrl: string }> => {
-    const blobUrl = URL.createObjectURL(file);
-    return Promise.resolve({ publicUrl: blobUrl });
-};
-
-export const localDeletePhoto = async (url: string): Promise<void> => {
-    if (url.startsWith('blob:')) {
-        URL.revokeObjectURL(url);
-    }
-    return Promise.resolve();
-};
+export { uploadPhoto as localUploadPhoto, deletePhoto as localDeletePhoto, createStorageBucket } from './supabaseStorage';
