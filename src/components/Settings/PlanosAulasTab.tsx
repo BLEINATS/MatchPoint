@@ -17,7 +17,7 @@ const seedDefaultPlanosAulas = async (arenaId: string) => {
     { name: 'Plano Trimestral - 2x/semana', duration_type: 'trimestral', price: 1350, description: 'Pacote de 3 meses com 8 aulas por mês. Desconto aplicado.', is_active: true, num_aulas: 24 },
     { name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, description: 'Acesso livre a todas as turmas compatíveis durante o ano.', is_active: false, num_aulas: null },
   ];
-  await supabaseApi.upsert('planos_aula', defaultPlanos, arenaId, true);
+  await supabaseApi.upsert('planos_aula', defaultPlanos as any, arenaId, true);
 };
 
 const PlanosAulasTab: React.FC = () => {
@@ -57,7 +57,7 @@ const PlanosAulasTab: React.FC = () => {
   const handleSave = async (planoData: Omit<PlanoAula, 'id' | 'arena_id' | 'created_at'> | PlanoAula) => {
     if (!arena) return;
     try {
-      await supabaseApi.upsert('planos_aula', [{ ...planoData, arena_id: arena.id }], arena.id);
+      await supabaseApi.upsert('planos_aula', [{ ...planoData, arena_id: arena.id }] as any, arena.id);
       addToast({ message: 'Plano salvo com sucesso!', type: 'success' });
       await loadPlanos();
       setIsModalOpen(false);

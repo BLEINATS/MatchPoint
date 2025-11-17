@@ -59,3 +59,27 @@ Configured for deployment on Replit using a Reserved VM (Web Server) target. Bot
 -   **Framer Motion**: Animation library.
 -   **ECharts**: Data visualization.
 -   **Lucide React**: Icon library.
+
+## Recent Changes
+
+### Class Plans Table Name Fix (Nov 17, 2025 - 23:30)
+**Problem**: Error "Could not find the table 'public.planos_aulas' in the schema cache" when accessing Settings > Planos de Aulas
+**Root Cause**: Code referenced `planos_aulas` (plural) but Supabase table is `planos_aula` (singular)
+**Files Fixed** (6 total):
+- `src/components/Settings/PlanosAulasTab.tsx` - 4 references corrected
+- `src/pages/Settings/PlanosAulasTab.tsx` - 4 references corrected  
+- `src/lib/seedData.ts` - Table name + invalid UUID prefixes `plano_${uuidv4()}`
+- `src/pages/Alunos.tsx` - 1 reference corrected
+- `src/pages/ClientDashboard.tsx` - 1 reference corrected
+- `src/components/Client/ClientDashboard.tsx` - 1 reference corrected
+**Result**: Class plans now load correctly for all clients, seed data creates default plans properly
+
+### Arena Admin Courts Fix (Nov 17, 2025 - 23:06)
+**Problem**: UUID errors when creating courts, data not persisting
+**Root Cause**: Invalid UUID generation `quadra_${Date.now()}` rejected by PostgreSQL
+**Corrections**:
+- Fixed UUID generation: `quadra_${Date.now()}` → `uuidv4()`
+- Added error handling after `supabaseApi.upsert`
+- Corrected `delete` function signature (removed invalid 3rd parameter)
+- Added `[Quadras]` diagnostic logs
+**Result**: Courts save correctly with valid UUIDs, photos persist to Supabase Storage
