@@ -7,7 +7,9 @@ import { createStorageBucket } from './lib/supabaseApi';
 
 function App() {
   useEffect(() => {
-    createStorageBucket();
+    createStorageBucket().catch(err => {
+      console.warn('⚠️ Storage bucket setup required. See SUPABASE-STORAGE-SETUP.md');
+    });
   }, []);
 
   return (
