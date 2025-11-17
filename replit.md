@@ -80,19 +80,28 @@ MatchPlay is a comprehensive SaaS platform designed for managing sports court re
    - **Badge Colors**: Arena status badges show green for active subscriptions, red for missing/inactive
    - **Result**: Super Admin changes plans seamlessly with full Asaas integration but no payment UI
 
-10. **SuperAdmin Plan Creation & Change Fix**: Fixed false success messages (Nov 17, 2025 - 22:40)
-   - **Problem**: Sistema mostrava "Plano salvo com sucesso!" mesmo quando havia erro no Supabase
-   - **Root Cause**: Funções não verificavam o retorno de `supabaseApi.upsert` antes de mostrar sucesso
+10. **SuperAdmin Plan Creation & Change Fix**: Fixed UUID validation errors and UI update issues (Nov 17, 2025 - 22:52)
+   - **Problems Identified**:
+     - Sistema gerava UUIDs com prefixos inválidos: `plan_${uuid}`, `sub_${uuid}`
+     - PostgreSQL rejeitava: `invalid input syntax for type uuid`
+     - UI não atualizava após trocar plano (mostrava "N/A" e data em branco)
+     - Mensagens de sucesso mesmo com erros no Supabase
+   - **Root Causes**:
+     - Funções não verificavam retorno de `supabaseApi.upsert` antes de mostrar sucesso
+     - UUIDs sendo gerados com prefixos string em 3 arquivos críticos
    - **Corrections Made**:
-     - **handleSavePlan**: Agora verifica `result.error` antes de mostrar toast de sucesso
-     - **handleChangePlan**: Verifica erros em TODAS as operações (subscription update/create, arena update)
-     - **Plan Type**: Campo `created_at` adicionado à interface Plan para compatibilidade com schema
-     - **Error Logging**: Console logs adicionados com tag `[SuperAdmin]` para diagnóstico
+     - **PlanModal.tsx**: Removido prefixo `plan_` de `uuidv4()`
+     - **SuperAdmin.tsx**: Removido prefixo `sub_` de `uuidv4()` 
+     - **asaasHelper.ts**: Removido prefixo `sub_` de `uuidv4()` em 2 locais (free e paid plans)
+     - **Error Handling**: Verificação de `result.error` em handleSavePlan e handleChangePlan
+     - **UI Refresh**: `loadData()` chamado após todas operações de troca de plano
+     - **Console Logs**: Tags `[SuperAdmin]` adicionadas para diagnóstico
    - **Behavior Now**:
-     - Error found → Shows specific error message + logs details + stops execution
-     - Success → Only shows success if Supabase actually saved the data
-     - All operations traced in browser console for debugging
-   - **Tested**: SQL direct insert confirmed table accepts data without RLS issues
+     - UUIDs gerados sem prefixos → Aceitos pelo PostgreSQL
+     - Error found → Shows specific error message + stops execution
+     - Success → Only shows toast if Supabase saved successfully
+     - UI updates → Arena plan and next billing date refresh after plan change
+   - **Architect Review**: ✅ Aprovado - Todos prefixos removidos, error handling correto, loadData() apropriado
    - **See**: `TESTE_PLANOS.md` for testing guide and validation steps
 
 ### ⚠️ Configuration Required
