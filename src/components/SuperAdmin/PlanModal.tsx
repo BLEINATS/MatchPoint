@@ -72,7 +72,7 @@ const PlanModal: React.FC<PlanModalProps> = ({ isOpen, onClose, onSave, initialD
 
   const handleSave = () => {
     const dataToSave: Plan = {
-      id: initialData?.id || `plan_${uuidv4()}`,
+      id: initialData?.id || uuidv4(),
       name: formData.name,
       price: parseFloat(formData.price.replace(',', '.')) || 0,
       billing_cycle: formData.billing_cycle,

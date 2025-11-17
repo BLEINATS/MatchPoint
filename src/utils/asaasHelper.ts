@@ -54,7 +54,7 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
       endDate.setDate(endDate.getDate() + trialDuration);
 
       const subscription: Subscription = {
-        id: existingSub?.id || `sub_${uuidv4()}`,
+        id: existingSub?.id || uuidv4(),
         arena_id: arena.id,
         plan_id: plan.id,
         status: 'active',
@@ -221,7 +221,7 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
     const existingSub = existingSubs?.find(s => s.arena_id === arena.id);
 
     const subscription: Subscription = {
-      id: existingSub?.id || `sub_${uuidv4()}`,
+      id: existingSub?.id || uuidv4(),
       arena_id: arena.id,
       plan_id: plan.id,
       status: 'active',

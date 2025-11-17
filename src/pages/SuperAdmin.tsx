@@ -250,7 +250,7 @@ const SuperAdminPage: React.FC = () => {
           }
         } else {
           const newSub: Subscription = {
-            id: `sub_${uuidv4()}`,
+            id: uuidv4(),
             arena_id: arenaToChangePlan.id,
             plan_id: newPlanId,
             status: 'active',
