@@ -35,15 +35,17 @@ const PlanosAulasTab: React.FC = () => {
     if (!arena) return;
     setIsLoading(true);
     try {
-      const seedKey = `planos_aulas_seeded_v3_${arena.id}`;
-      if (!localStorage.getItem(seedKey)) {
-        await seedDefaultPlanosAulas(arena.id);
-        localStorage.setItem(seedKey, 'true');
-      }
-
       const { data, error } = await supabaseApi.select<PlanoAula>('planos_aulas', arena.id);
       if (error) throw error;
-      setPlanos(data || []);
+      
+      if (!data || data.length === 0) {
+        await seedDefaultPlanosAulas(arena.id);
+        const { data: newData, error: newError } = await supabaseApi.select<PlanoAula>('planos_aulas', arena.id);
+        if (newError) throw newError;
+        setPlanos(newData || []);
+      } else {
+        setPlanos(data);
+      }
     } catch (error: any) {
       addToast({ message: `Erro ao carregar planos: ${error.message}`, type: 'error' });
     } finally {
