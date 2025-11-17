@@ -134,3 +134,31 @@ dist
 
 # Asaas API configuration (contains sensitive API keys)
 .asaas-config.json
+
+# Alpha Dualite - Arquivos grandes
+node_modules/
+dist/
+dist-ssr/
+*.local
+.cache/
+package-lock.json
+
+# Build outputs
+build/
+.vite/
+
+# Replit
+.replit
+.config/
+.upm/
+.cache/
+
+# Logs e temporários
+/tmp/
+*.log
+*.tmp
+
+# Assets grandes
+attached_assets/*.png
+attached_assets/*.jpg
+attached_assets/*.gif
