@@ -23,7 +23,7 @@ Built with React 18, TypeScript, and Vite, utilizing Tailwind CSS for styling, R
 A Node.js/Express backend proxy server runs on port 3001, primarily to handle Asaas payment gateway integrations and bypass CORS issues. This proxy is active in both development and production. In development, a Vite proxy redirects `/api/asaas` requests to `http://localhost:3001`. In production, the frontend directly calls `http://localhost:3001/api/asaas`.
 
 **Deployment Configuration**
-The application is configured for deployment on Replit using a VM target, ensuring both the frontend (Vite preview on port 5000, mapped to external port 80) and the backend (Express server on port 3001) run continuously.
+The application is configured for deployment on Replit using a **Reserved VM (Web Server)** target, ensuring both the frontend (Vite preview on port 5000) and the backend (Express server on port 3001, exposed on external port 80) run continuously. Health check endpoints (/ and /health) on the backend ensure fast deployment health checks.
 
 **Migration Tool**
 A migration utility (`/migration` route) allows transferring existing localStorage data to Supabase. The system maintains backward compatibility during the transition period.

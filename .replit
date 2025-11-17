@@ -58,10 +58,10 @@ localPort = 5001
 externalPort = 3000
 
 [[ports]]
-localPort = 33007
+localPort = 33867
 externalPort = 3002
 
 [deployment]
 deploymentTarget = "vm"
-run = ["bash", "start-production.sh"]
+run = ["bash", "-c", "ASAAS_PORT=3001 node server.js & npx vite preview --host 0.0.0.0 --port 5000 --strictPort & wait"]
 build = ["npm", "run", "build"]

@@ -40,6 +40,19 @@ async function saveConfig() {
 
 await loadConfig();
 
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    service: 'MatchPlay API',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy' });
+});
+
 function getAsaasUrl(isSandbox) {
   return isSandbox ? ASAAS_SANDBOX_URL : ASAAS_PRODUCTION_URL;
 }
