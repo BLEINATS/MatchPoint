@@ -18,7 +18,7 @@ const seedDefaultPlanosAulas = async (arenaId: string) => {
     { name: 'Plano Semestral - 2x/semana', duration_type: 'semestral', price: 2500, description: 'Pacote de 6 meses com 8 aulas por mês. Desconto maior.', is_active: true, num_aulas: 48 },
     { name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, description: 'Acesso livre a todas as turmas compatíveis durante o ano.', is_active: false, num_aulas: null },
   ];
-  await supabaseApi.upsert('planos_aulas', defaultPlanos as any, arenaId, true);
+  await supabaseApi.upsert('planos_aula', defaultPlanos as any, arenaId, true);
 };
 
 const PlanosAulasTab: React.FC = () => {
@@ -35,12 +35,12 @@ const PlanosAulasTab: React.FC = () => {
     if (!arena) return;
     setIsLoading(true);
     try {
-      const { data, error } = await supabaseApi.select<PlanoAula>('planos_aulas', arena.id);
+      const { data, error } = await supabaseApi.select<PlanoAula>('planos_aula', arena.id);
       if (error) throw error;
       
       if (!data || data.length === 0) {
         await seedDefaultPlanosAulas(arena.id);
-        const { data: newData, error: newError } = await supabaseApi.select<PlanoAula>('planos_aulas', arena.id);
+        const { data: newData, error: newError } = await supabaseApi.select<PlanoAula>('planos_aula', arena.id);
         if (newError) throw newError;
         setPlanos(newData || []);
       } else {
@@ -60,7 +60,7 @@ const PlanosAulasTab: React.FC = () => {
   const handleSave = async (planoData: Omit<PlanoAula, 'id' | 'arena_id' | 'created_at'> | PlanoAula) => {
     if (!arena) return;
     try {
-      await supabaseApi.upsert('planos_aulas', [{ ...planoData, arena_id: arena.id }] as any, arena.id);
+      await supabaseApi.upsert('planos_aula', [{ ...planoData, arena_id: arena.id }] as any, arena.id);
       addToast({ message: 'Plano salvo com sucesso!', type: 'success' });
       await loadPlanos();
       setIsModalOpen(false);
@@ -78,7 +78,7 @@ const PlanosAulasTab: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!planoToDelete || !arena) return;
     try {
-      await supabaseApi.delete('planos_aulas', [planoToDelete.id]);
+      await supabaseApi.delete('planos_aula', [planoToDelete.id]);
       addToast({ message: 'Plano excluído com sucesso.', type: 'success' });
       await loadPlanos();
     } catch (error: any) {

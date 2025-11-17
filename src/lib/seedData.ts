@@ -157,11 +157,11 @@ export const seedInitialData = async () => {
   await supabaseApi.upsert('turmas', [turma], arenaId, true);
 
   // 8. Planos de Aula
-  const planoMensal1x: PlanoAula = { id: `plano_${uuidv4()}`, arena_id: arenaId, name: 'Plano Mensal - 1x/semana', duration_type: 'mensal', price: 280, num_aulas: 4, description: 'Pacote com 4 aulas no mês.', is_active: true, created_at: new Date().toISOString() };
-  const planoMensal2x: PlanoAula = { id: `plano_${uuidv4()}`, arena_id: arenaId, name: 'Plano Mensal - 2x/semana', duration_type: 'mensal', price: 480, num_aulas: 8, description: 'Pacote com 8 aulas no mês.', is_active: true, created_at: new Date().toISOString() };
-  const planoAnualLivre: PlanoAula = { id: `plano_${uuidv4()}`, arena_id: arenaId, name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, num_aulas: null, description: 'Acesso livre a todas as turmas compatíveis durante o ano.', is_active: true, created_at: new Date().toISOString() };
+  const planoMensal1x: PlanoAula = { id: uuidv4(), arena_id: arenaId, name: 'Plano Mensal - 1x/semana', duration_type: 'mensal', price: 280, num_aulas: 4, description: 'Pacote com 4 aulas no mês.', is_active: true, created_at: new Date().toISOString() };
+  const planoMensal2x: PlanoAula = { id: uuidv4(), arena_id: arenaId, name: 'Plano Mensal - 2x/semana', duration_type: 'mensal', price: 480, num_aulas: 8, description: 'Pacote com 8 aulas no mês.', is_active: true, created_at: new Date().toISOString() };
+  const planoAnualLivre: PlanoAula = { id: uuidv4(), arena_id: arenaId, name: 'Plano Anual - Livre', duration_type: 'anual', price: 5000, num_aulas: null, description: 'Acesso livre a todas as turmas compatíveis durante o ano.', is_active: true, created_at: new Date().toISOString() };
   
-  await supabaseApi.upsert('planos_aulas', [planoMensal1x, planoMensal2x, planoAnualLivre], arenaId, true);
+  await supabaseApi.upsert('planos_aula', [planoMensal1x, planoMensal2x, planoAnualLivre], arenaId, true);
 
   // 9. Alunos e Clientes
   const alunos: Omit<Aluno, 'id' | 'created_at'>[] = [
