@@ -37,11 +37,11 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
   try {
     const { arena, plan, billingType, creditCard, creditCardHolderInfo } = options;
 
-    // PLANO GRÁTIS (Trial): Não criar pagamento no Asaas, apenas subscription local
-    const isFreePlan = plan.price === 0 || (plan.trial_days && plan.trial_days > 0);
+    // PLANO 100% GRÁTIS: Sem cobrança, apenas subscription local
+    const isFreePlan = plan.price === 0;
     
     if (isFreePlan) {
-      // Para planos grátis, criar apenas subscription local sem Asaas
+      // Para planos totalmente grátis, criar apenas subscription local sem Asaas
       const { data: existingSubs } = await supabaseApi.select<Subscription>('subscriptions', 'all');
       const existingSub = existingSubs?.find(s => s.arena_id === arena.id);
 
@@ -68,7 +68,7 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
         payment: { 
           status: 'CONFIRMED',
           value: 0,
-          description: `Plano ${plan.name} - Período de ${trialDuration} dias grátis`
+          description: `Plano ${plan.name} - ${trialDuration} dias grátis (sem cobrança)`
         }
       };
     }
@@ -119,9 +119,10 @@ export const createAsaasSubscription = async (options: CreateSubscriptionOptions
         cycle = 'MONTHLY';
     }
 
-    // Calcular próxima data de vencimento
+    // Calcular próxima data de vencimento (considerar período trial se houver)
     const nextDueDate = new Date();
-    nextDueDate.setDate(nextDueDate.getDate() + 7); // 7 dias a partir de hoje
+    const daysUntilFirstCharge = plan.trial_days || 7;
+    nextDueDate.setDate(nextDueDate.getDate() + daysUntilFirstCharge);
 
     // Criar assinatura no Asaas
     const subscriptionData = {

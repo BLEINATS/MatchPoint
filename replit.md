@@ -16,9 +16,10 @@ MatchPlay is a comprehensive SaaS platform designed for managing sports court re
    - API key persists permanently
    - Modal shows visual indicators when API Key is configured
 
-3. **Free Trial Support**: Fixed planos grátis (7 days trial)
-   - Plans with `price: 0` or `trial_days > 0` no longer require Asaas payment
-   - Creates subscription locally without payment gateway
+3. **Free Trial Support**: Fixed payment logic for different plan types
+   - **Free plans** (price=0): Create local subscription without Asaas payment
+   - **Paid plans WITHOUT trial**: Create Asaas subscription, first charge in 7 days
+   - **Paid plans WITH trial** (price>0, trial_days>0): Create Asaas subscription, first charge AFTER trial period
    - No more "O campo value deve ser informado" error
 
 ### ⚠️ Known Issues
