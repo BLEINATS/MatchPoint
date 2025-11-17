@@ -241,7 +241,13 @@ const SuperAdminPage: React.FC = () => {
             next_payment_date: nextPaymentDate?.toISOString() || null,
             status: 'active'
           };
-          await supabaseApi.upsert('subscriptions', [updatedSub], 'all');
+          console.log('[SuperAdmin] Atualizando subscription:', updatedSub);
+          const subResult = await supabaseApi.upsert('subscriptions', [updatedSub], 'all');
+          if (subResult.error) {
+            console.error('[SuperAdmin] Erro ao atualizar subscription:', subResult.error);
+            addToast({ message: `Erro ao atualizar assinatura: ${subResult.error.message}`, type: 'error' });
+            return;
+          }
         } else {
           const newSub: Subscription = {
             id: `sub_${uuidv4()}`,
@@ -254,12 +260,25 @@ const SuperAdminPage: React.FC = () => {
             asaas_subscription_id: null,
             asaas_customer_id: null,
           };
-          await supabaseApi.upsert('subscriptions', [newSub], 'all');
+          console.log('[SuperAdmin] Criando nova subscription:', newSub);
+          const subResult = await supabaseApi.upsert('subscriptions', [newSub], 'all');
+          if (subResult.error) {
+            console.error('[SuperAdmin] Erro ao criar subscription:', subResult.error);
+            addToast({ message: `Erro ao criar assinatura: ${subResult.error.message}`, type: 'error' });
+            return;
+          }
         }
         
         const updatedArena = { ...arenaToChangePlan, plan_id: newPlanId };
-        await supabaseApi.upsert('arenas', [updatedArena], 'all');
+        console.log('[SuperAdmin] Atualizando arena:', updatedArena);
+        const arenaResult = await supabaseApi.upsert('arenas', [updatedArena], 'all');
+        if (arenaResult.error) {
+          console.error('[SuperAdmin] Erro ao atualizar arena:', arenaResult.error);
+          addToast({ message: `Erro ao atualizar arena: ${arenaResult.error.message}`, type: 'error' });
+          return;
+        }
 
+        console.log('[SuperAdmin] Plano alterado com sucesso!');
         addToast({ message: 'Plano da arena alterado com sucesso!', type: 'success' });
       }
       
