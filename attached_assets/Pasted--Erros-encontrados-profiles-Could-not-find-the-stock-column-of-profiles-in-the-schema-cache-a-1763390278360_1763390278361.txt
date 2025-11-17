@@ -1,0 +1,30 @@
+❌ Erros encontrados:
+profiles: Could not find the 'stock' column of 'profiles' in the schema cache
+arenas: Could not find the 'stock' column of 'arenas' in the schema cache
+subscriptions: Could not find the 'stock' column of 'subscriptions' in the schema cache
+plans: Could not find the 'stock' column of 'plans' in the schema cache
+friendships: Could not find the 'stock' column of 'friendships' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - quadras: Could not find the 'stock' column of 'quadras' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - reservas: Could not find the 'originalCreditUsed' column of 'reservas' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - alunos: Could not find the 'stock' column of 'alunos' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - professores: Could not find the 'stock' column of 'professores' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - turmas: Could not find the 'stock' column of 'turmas' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - torneios: Could not find the 'quadras_ids' column of 'torneios' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - products: insert or update on table "products" violates foreign key constraint "products_arena_id_fkey"
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - atletas_aluguel: Could not find the 'stock' column of 'atletas_aluguel' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - gamification_settings: Could not find the 'stock' column of 'gamification_settings' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - gamification_levels: Could not find the 'stock' column of 'gamification_levels' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - gamification_rewards: Could not find the 'stock' column of 'gamification_rewards' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - gamification_achievements: Could not find the 'stock' column of 'gamification_achievements' in the schema cache
+Arena arena_3308e382-da08-4fa5-9f4f-71389cbd1464 - gamification_point_transactions: Could not find the 'stock' column of 'gamification_point_transactions' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - quadras: Could not find the 'stock' column of 'quadras' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - reservas: Could not find the 'stock' column of 'reservas' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - alunos: Could not find the 'stock' column of 'alunos' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - professores: Could not find the 'stock' column of 'professores' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - turmas: Could not find the 'stock' column of 'turmas' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - torneios: Could not find the 'quadras_ids' column of 'torneios' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - products: insert or update on table "products" violates foreign key constraint "products_arena_id_fkey"
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - gamification_settings: Could not find the 'stock' column of 'gamification_settings' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - gamification_levels: Could not find the 'stock' column of 'gamification_levels' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - gamification_rewards: Could not find the 'stock' column of 'gamification_rewards' in the schema cache
+Arena arena_371e2635-e775-42ad-9d73-d5b336b025ad - gamification_achievements: Could not find the 'stock' column of 'gamification_achievements' in the schema cache

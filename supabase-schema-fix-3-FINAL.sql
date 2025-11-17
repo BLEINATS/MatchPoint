@@ -59,3 +59,9 @@ ALTER TABLE products ALTER COLUMN stock DROP NOT NULL;
 -- ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE arenas ENABLE ROW LEVEL SECURITY;
 -- ... (faça isso depois de confirmar que a migração funcionou)
+
+-- Colunas adicionais que estavam faltando
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS "originalCreditUsed" NUMERIC DEFAULT 0;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS original_credit_used NUMERIC DEFAULT 0;
+
+ALTER TABLE torneios ADD COLUMN IF NOT EXISTS quadras_ids JSONB DEFAULT '[]'::jsonb;

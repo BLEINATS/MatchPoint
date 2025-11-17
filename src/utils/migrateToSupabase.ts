@@ -22,7 +22,7 @@ function ensureUUID(id: string): string {
   return newUuid;
 }
 
-function normalizeRecord(record: any): any {
+function normalizeRecord(record: any, tableName?: string): any {
   const normalized = { ...record };
   
   const uuidFields = [
@@ -40,7 +40,7 @@ function normalizeRecord(record: any): any {
     }
   }
   
-  if (normalized.stock === undefined || normalized.stock === null) {
+  if (tableName === 'products' && (normalized.stock === undefined || normalized.stock === null)) {
     normalized.stock = 0;
   }
   
@@ -85,7 +85,7 @@ export async function migrateLocalStorageToSupabase() {
           continue;
         }
 
-        const normalizedData = data.map(normalizeRecord);
+        const normalizedData = data.map((r: any) => normalizeRecord(r, tableName));
         console.log(`📦 Migrando ${tableName}: ${normalizedData.length} registros...`);
         const { error } = await supabaseApi.upsert(tableName, normalizedData, 'all');
 
@@ -130,7 +130,7 @@ export async function migrateLocalStorageToSupabase() {
 
           try {
             const data = arenaData[tableName];
-            const normalizedData = data.map(normalizeRecord);
+            const normalizedData = data.map((r: any) => normalizeRecord(r, tableName));
             console.log(`  📦 Migrando ${tableName}: ${normalizedData.length} registros...`);
 
             const { error } = await supabaseApi.upsert(tableName, normalizedData, ensureUUID(arenaId));
