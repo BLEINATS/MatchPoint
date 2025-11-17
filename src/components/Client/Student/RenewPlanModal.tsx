@@ -6,7 +6,7 @@ import Button from '../../Forms/Button';
 import { formatCurrency } from '../../../utils/formatters';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
-import { supabaseApi } from '../../../lib/localApi';
+import { supabaseApi } from '../../../lib/supabaseApi';
 import { format } from 'date-fns';
 
 interface RenewPlanModalProps {

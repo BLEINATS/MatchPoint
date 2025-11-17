@@ -11,7 +11,7 @@ import RenewPlanModal from './RenewPlanModal';
 import Button from '../../Forms/Button';
 import ConfirmationModal from '../../Shared/ConfirmationModal';
 import { useToast } from '../../../context/ToastContext';
-import { supabaseApi } from '../../../lib/localApi';
+import { supabaseApi } from '../../../lib/supabaseApi';
 import Alert from '../../Shared/Alert';
 import { useAuth } from '../../../context/AuthContext';
 

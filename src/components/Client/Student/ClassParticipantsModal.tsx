@@ -7,7 +7,7 @@ import { ptBR } from 'date-fns/locale';
 import Button from '../../Forms/Button';
 import ConfirmationModal from '../../Shared/ConfirmationModal';
 import { useToast } from '../../../context/ToastContext';
-import { supabaseApi } from '../../../lib/localApi';
+import { supabaseApi } from '../../../lib/supabaseApi';
 import { useAuth } from '../../../context/AuthContext';
 import { parseDateStringAsLocal } from '../../../utils/dateUtils';
 
