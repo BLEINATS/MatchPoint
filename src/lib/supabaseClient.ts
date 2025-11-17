@@ -1,58 +1,75 @@
-// ATENÇÃO: O CLIENTE SUPABASE FOI DESATIVADO.
-// A aplicação está operando em modo local utilizando 'src/lib/localApi.ts'.
-// Não adicione código a este arquivo. As chamadas estão sendo interceptadas
-// e redirecionadas para a API local para garantir a persistência dos dados no navegador.
+import { createClient } from '@supabase/supabase-js';
 
-// Mock channel para evitar crashes em modo local
-const mockChannel = {
-  on: () => mockChannel,
-  subscribe: (callback?: (status: string) => void) => {
-    if (callback) {
-      // Simula uma subscrição bem-sucedida, se necessário.
-      // callback('SUBSCRIBED');
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('⚠️ Missing Supabase credentials. Set SUPABASE_URL and SUPABASE_ANON_KEY in environment.');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  },
+  global: {
+    headers: {
+      'x-application-name': 'MatchPlay'
     }
-    return mockChannel;
-  },
+  }
+});
+
+export const getUser = async () => {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) {
+    console.error('Error getting user:', error);
+    return null;
+  }
+  return user;
 };
 
-// Mock do cliente Supabase para modo local
-export const supabase = {
-  from: (tableName: string) => {
-    console.warn(`[MOCK] supabase.from('${tableName}') called directly. Use localApi instead.`);
-    return {
-      select: () => Promise.resolve({ data: [], error: null }),
-      insert: () => Promise.resolve({ data: [], error: null }),
-      update: () => Promise.resolve({ data: [], error: null }),
-      delete: () => Promise.resolve({ data: [], error: null }),
-      rpc: () => Promise.resolve({ data: null, error: null }),
-      eq: () => Promise.resolve({ data: [], error: null }),
-      in: () => Promise.resolve({ data: [], error: null }),
-      order: () => Promise.resolve({ data: [], error: null }),
-      limit: () => Promise.resolve({ data: [], error: null }),
-      single: () => Promise.resolve({ data: null, error: null }),
-    };
-  },
-  channel: (name: string) => {
-    console.warn(`[MOCK] supabase.channel('${name}') called in local mode. Real-time features are disabled.`);
-    return mockChannel;
-  },
-  removeChannel: (channel: any) => {
-    console.warn(`[MOCK] supabase.removeChannel() called in local mode.`);
-  },
-  rpc: async (name: string, params: any) => {
-    console.warn(`[MOCK] supabase.rpc('${name}') called directly. Use localApi instead.`);
-    return { data: null, error: null };
-  },
-  storage: {
-    from: (bucket: string) => ({
-      upload: () => Promise.resolve({ data: null, error: { message: 'Upload desativado em modo local' } }),
-      remove: () => Promise.resolve({ data: null, error: { message: 'Remoção desativada em modo local' } }),
-      getPublicUrl: (path: string) => ({ data: { publicUrl: path } }),
-    }),
-  },
+export const signIn = async (email: string, password: string) => {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password
+  });
+  return { data, error };
 };
 
-export const supabaseWithRetry = async (operation: () => Promise<any>) => {
-  console.warn("[MOCK] supabaseWithRetry was called, but is disabled in local mode.");
-  return operation();
+export const signUp = async (email: string, password: string, userData: any) => {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: userData
+    }
+  });
+  return { data, error };
+};
+
+export const signOut = async () => {
+  const { error } = await supabase.auth.signOut();
+  return { error };
+};
+
+export const getCurrentSession = async () => {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  return { session, error };
+};
+
+export const supabaseWithRetry = async <T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> => {
+  let lastError;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      console.warn(`Supabase operation failed (attempt ${i + 1}/${maxRetries}):`, error);
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+      }
+    }
+  }
+  throw lastError;
 };
