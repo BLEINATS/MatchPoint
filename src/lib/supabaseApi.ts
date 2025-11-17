@@ -45,6 +45,31 @@ export const supabaseApi = {
     }
   },
 
+  insert: async <T>(
+    tableName: string,
+    items: T[],
+    arenaId: string
+  ): Promise<{ data: T[], error: any }> => {
+    try {
+      const itemsWithArenaId = items.map(item => {
+        if (!GLOBAL_TABLES.includes(tableName) && arenaId !== 'all') {
+          return { ...item, arena_id: arenaId };
+        }
+        return item;
+      });
+
+      const { data, error } = await supabase
+        .from(tableName)
+        .insert(itemsWithArenaId)
+        .select();
+
+      return { data: (data as T[]) || [], error };
+    } catch (error) {
+      console.error(`[SupabaseAPI] Error inserting to ${tableName}:`, error);
+      return { data: [], error };
+    }
+  },
+
   upsert: async <T extends { id?: string }>(
     tableName: string,
     items: T[],

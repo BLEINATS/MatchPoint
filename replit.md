@@ -35,6 +35,15 @@ MatchPlay is a comprehensive SaaS platform designed for managing sports court re
    - Supports: arena logos, court photos, student avatars, product images
    - See `SUPABASE-STORAGE-SETUP.md` for configuration instructions
 
+6. **User Registration System**: Fully implemented and integrated with Supabase (Nov 17, 2025 - 20:53)
+   - Fixed empty signUp() function that prevented user registration
+   - Supabase auto-generates UUIDs for profiles and arenas (gen_random_uuid())
+   - Email uniqueness enforced by database UNIQUE constraint
+   - Duplicate email detection with proper error messages
+   - Rollback mechanism: if arena creation fails, profile is deleted
+   - Supports registration for: Admin Arena (creates profile + arena), Cliente/Aluno (creates profile only)
+   - See `SISTEMA-CADASTRO-USUARIOS.md` for complete documentation
+
 ### ⚠️ Configuration Required
 - **Supabase Storage Bucket**: Bucket 'photos' must be created manually in Supabase dashboard with RLS policies. See `SUPABASE-STORAGE-SETUP.md` for step-by-step instructions.
 - **Deploy ↔ Development Sync**: If using different Supabase projects for deploy and development, data will NOT sync between them. See `SUPABASE-SYNC-GUIDE.md` for solutions.

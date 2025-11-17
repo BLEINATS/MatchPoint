@@ -232,28 +232,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signUp = async (email: string, password: string, name?: string, role: 'cliente' | 'admin_arena' = 'cliente') => {
     try {
-      // 1. Check if email already exists
-      const { data: existingProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
-      const emailExists = (existingProfiles || []).some(p => p.email.toLowerCase() === email.toLowerCase());
-      
-      if (emailExists) {
-        throw new Error('Este e-mail já está cadastrado. Tente fazer login.');
-      }
+      const emailLower = email.toLowerCase().trim();
+      const displayName = name?.trim() || emailLower.split('@')[0];
 
-      // 2. Create profile
-      const newProfileId = `profile_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      const newProfile: Profile = {
-        id: newProfileId,
-        name: name || email.split('@')[0],
-        email: email.toLowerCase(),
+      // 1. Create profile - let Supabase generate UUID and handle email uniqueness
+      const newProfile = {
+        name: displayName,
+        email: emailLower,
         role: role,
         avatar_url: null,
-        created_at: new Date().toISOString(),
       };
 
-      await supabaseApi.upsert('profiles', [newProfile], 'all');
+      const { data: insertedProfiles, error: profileError } = await supabaseApi.insert('profiles', [newProfile], 'all');
 
-      // 3. If admin_arena, create the arena
+      if (profileError) {
+        // Check for duplicate email error
+        if (profileError.message?.includes('duplicate') || profileError.message?.includes('unique')) {
+          throw new Error('Este e-mail já está cadastrado. Tente fazer login.');
+        }
+        throw new Error(profileError.message || 'Erro ao criar perfil.');
+      }
+
+      if (!insertedProfiles || insertedProfiles.length === 0) {
+        throw new Error('Erro ao criar perfil - nenhum dado retornado.');
+      }
+
+      const createdProfile = insertedProfiles[0];
+
+      // 2. If admin_arena, create the arena
       if (role === 'admin_arena' && name) {
         const slug = name
           .toLowerCase()
@@ -262,19 +268,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-+|-+$/g, '');
 
-        const newArena: Arena = {
-          id: `arena_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-          owner_id: newProfileId,
+        const newArena = {
+          owner_id: createdProfile.id,
           name: name,
           slug: slug,
           logo_url: null,
           city: 'Não informado',
           state: 'SP',
           status: 'active',
-          created_at: new Date().toISOString(),
         };
 
-        await supabaseApi.upsert('arenas', [newArena], 'all');
+        const { error: arenaError } = await supabaseApi.insert('arenas', [newArena], 'all');
+
+        if (arenaError) {
+          // Rollback: delete the profile if arena creation fails
+          console.error('[AuthProvider] Arena creation failed, rolling back profile:', arenaError);
+          const { error: rollbackError } = await supabaseApi.delete('profiles', [createdProfile.id]);
+          if (rollbackError) {
+            console.error('[AuthProvider] Rollback failed:', rollbackError);
+          }
+          throw new Error(`Erro ao criar arena: ${arenaError.message}`);
+        }
+
         addToast({ message: `Arena "${name}" criada com sucesso! Faça login para continuar.`, type: 'success' });
       } else {
         addToast({ message: 'Conta criada com sucesso! Faça login para continuar.', type: 'success' });
