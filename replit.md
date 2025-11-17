@@ -67,14 +67,18 @@ MatchPlay is a comprehensive SaaS platform designed for managing sports court re
    - **Flow**: Create subscription → Retry fetch payments → Validate status → Return real payment ID
    - **Result**: PaymentModal now correctly displays boleto barcode and PIX QR code
 
-9. **Super Admin Plan Change Flow**: Fixed "Trocar Plano" workflow (Nov 17, 2025 - 22:10)
-   - **Problem**: "Trocar Plano" button was saving subscriptions directly to Supabase without Asaas payment processing
-   - **Fix**: Modified `handleChangePlan` to detect paid plans and open PaymentModal for payment processing
-   - **Free Plans** (price=0): Continue direct Supabase save (no Asaas needed)
-   - **Paid Plans** (price>0): Open PaymentModal → Process via Asaas → Save with asaas_subscription_id
-   - **Arena Update**: `createAsaasSubscription` now updates both `subscriptions` table AND `arena.plan_id`
-   - **Badge Colors**: Arena status badges now correctly show green for active subscriptions, red for missing/inactive
-   - **Result**: Super Admin can now properly change arena plans with full Asaas integration
+9. **Super Admin Plan Change Flow**: Simplified "Trocar Plano" workflow (Nov 17, 2025 - 23:15)
+   - **Context**: Super Admin manages client arenas without seeing payment UI
+   - **Free Plans** (price=0): Direct Supabase save (no Asaas needed)
+   - **Paid Plans** (price>0): Automatic Asaas subscription creation in background
+     - Calls `createAsaasSubscription` with billingType='BOLETO'
+     - Creates customer + subscription in Asaas
+     - Saves subscription with asaas_subscription_id to Supabase
+     - Updates arena.plan_id automatically
+     - No PaymentModal shown to Super Admin
+   - **UX**: Super Admin selects plan → System processes in background → Toast confirmation
+   - **Badge Colors**: Arena status badges show green for active subscriptions, red for missing/inactive
+   - **Result**: Super Admin changes plans seamlessly with full Asaas integration but no payment UI
 
 ### ⚠️ Configuration Required
 - **Supabase Storage Bucket**: Bucket 'photos' must be created manually in Supabase dashboard with RLS policies. See `SUPABASE-STORAGE-SETUP.md` for step-by-step instructions.
