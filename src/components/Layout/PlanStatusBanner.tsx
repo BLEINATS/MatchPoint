@@ -13,7 +13,7 @@ interface PlanStatusBannerProps {
 }
 
 const PlanStatusBanner: React.FC<PlanStatusBannerProps> = ({ arena, profile }) => {
-  const { plan, subscription, isExpired, isPastDue, isActive, nextBillingDate, isTrial, isLoading } = useSubscriptionStatus();
+  const { plan, subscription, isExpired, isPastDue, isActive, nextBillingDate, isTrial, isLoading, error } = useSubscriptionStatus();
 
   if (isLoading) {
     return null;
@@ -21,7 +21,14 @@ const PlanStatusBanner: React.FC<PlanStatusBannerProps> = ({ arena, profile }) =
 
   let config: { icon: React.ElementType, bgColor: string, textColor: string, message: string } | null = null;
   
-  if (!subscription || !plan) {
+  if (error) {
+    config = {
+      icon: AlertTriangle,
+      bgColor: 'bg-gray-600',
+      textColor: 'text-white',
+      message: 'Erro ao carregar informações do plano. Tente recarregar a página.',
+    };
+  } else if (!subscription || !plan) {
     config = {
       icon: AlertTriangle,
       bgColor: 'bg-orange-600',

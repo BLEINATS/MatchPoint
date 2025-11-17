@@ -44,6 +44,20 @@ MatchPlay is a comprehensive SaaS platform designed for managing sports court re
    - Supports registration for: Admin Arena (creates profile + arena), Cliente/Aluno (creates profile only)
    - See `SISTEMA-CADASTRO-USUARIOS.md` for complete documentation
 
+7. **Plan Status Banner & Renewals System**: Fully functional plan management (Nov 17, 2025 - 21:16)
+   - **PlanStatusBanner** displays at top of dashboard for all arena admins/staff
+   - **5 States Supported**:
+     - Loading: hidden (prevents visual flash during data fetch)
+     - Error: gray banner with reload message (Supabase connection errors)
+     - No Plan: orange banner with CTA to contract plan
+     - Active: blue banner showing plan name and next billing date
+     - Past Due: yellow banner warning about pending payment
+     - Expired: red banner with renewal CTA
+   - **Error Handling**: Added `error` flag to `useSubscriptionStatus` hook
+   - **Plan Changes**: `handleChangePlan` in SuperAdmin correctly calculates next_payment_date
+   - **Plan Creation**: `createAsaasSubscription` saves correctly to Supabase for free and paid plans
+   - All data persists correctly in `subscriptions` table with proper dates
+
 ### ⚠️ Configuration Required
 - **Supabase Storage Bucket**: Bucket 'photos' must be created manually in Supabase dashboard with RLS policies. See `SUPABASE-STORAGE-SETUP.md` for step-by-step instructions.
 - **Deploy ↔ Development Sync**: If using different Supabase projects for deploy and development, data will NOT sync between them. See `SUPABASE-SYNC-GUIDE.md` for solutions.

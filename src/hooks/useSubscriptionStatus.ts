@@ -10,6 +10,7 @@ export const useSubscriptionStatus = () => {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -17,15 +18,26 @@ export const useSubscriptionStatus = () => {
         setPlan(null);
         setSubscription(null);
         setIsLoading(false);
+        setError(null);
         return;
       }
       
       setIsLoading(true);
+      setError(null);
       try {
         const [subsRes, plansRes] = await Promise.all([
           supabaseApi.select<Subscription>('subscriptions', 'all'),
           supabaseApi.select<Plan>('plans', 'all'),
         ]);
+
+        if (subsRes.error || plansRes.error) {
+          const errorMsg = subsRes.error || plansRes.error;
+          console.error("Failed to fetch subscription status:", errorMsg);
+          setError(errorMsg?.message || 'Erro ao carregar dados do plano');
+          setPlan(null);
+          setSubscription(null);
+          return;
+        }
 
         const currentSub = subsRes.data?.find(s => s.arena_id === arena.id);
         setSubscription(currentSub || null);
@@ -36,8 +48,11 @@ export const useSubscriptionStatus = () => {
         } else {
           setPlan(null);
         }
-      } catch (error) {
-        console.error("Failed to fetch subscription status", error);
+      } catch (err: any) {
+        console.error("Failed to fetch subscription status", err);
+        setError(err.message || 'Erro ao carregar dados do plano');
+        setPlan(null);
+        setSubscription(null);
       } finally {
         setIsLoading(false);
       }
@@ -121,6 +136,7 @@ export const useSubscriptionStatus = () => {
       plan,
       subscription,
       isLoading,
+      error,
       isActive: effectiveIsActive,
       isSuspended,
       isPastDue,
@@ -135,7 +151,7 @@ export const useSubscriptionStatus = () => {
       nextBillingDate,
       isTrial,
     };
-  }, [plan, subscription, isLoading, quadraCount, teamMemberCount, arena?.status, nextBillingDate, isExpired]);
+  }, [plan, subscription, isLoading, error, quadraCount, teamMemberCount, arena?.status, nextBillingDate, isExpired]);
 
   return status;
 };
