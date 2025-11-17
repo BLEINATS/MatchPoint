@@ -77,8 +77,7 @@ export const supabaseApi = {
 
   delete: async (
     tableName: string,
-    ids: string[],
-    arenaId: string
+    ids: string[]
   ): Promise<{ data: null, error: any }> => {
     try {
       const { error } = await supabase

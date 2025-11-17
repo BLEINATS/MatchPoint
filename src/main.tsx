@@ -29,6 +29,7 @@ import Notificacoes from './pages/Notificacoes.tsx';
 import Loja from './pages/Loja.tsx';
 import AtletaProfilePage from './pages/AtletaProfilePage.tsx';
 import FinanceiroProfissional from './pages/FinanceiroProfissional.tsx';
+import MigrationPage from './pages/MigrationPage.tsx';
 
 import React from 'react';
 
@@ -112,6 +113,10 @@ const router = createBrowserRouter([
       {
         path: 'loja',
         element: <ProtectedRoute><Loja /></ProtectedRoute>,
+      },
+      {
+        path: 'migration',
+        element: <MigrationPage />,
       },
       { path: ':slug', element: <ArenaPublic /> },
     ],
