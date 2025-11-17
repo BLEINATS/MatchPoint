@@ -231,7 +231,60 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [processCompletedReservations, profile]);
 
   const signUp = async (email: string, password: string, name?: string, role: 'cliente' | 'admin_arena' = 'cliente') => {
-    return Promise.resolve();
+    try {
+      // 1. Check if email already exists
+      const { data: existingProfiles } = await supabaseApi.select<Profile>('profiles', 'all');
+      const emailExists = (existingProfiles || []).some(p => p.email.toLowerCase() === email.toLowerCase());
+      
+      if (emailExists) {
+        throw new Error('Este e-mail já está cadastrado. Tente fazer login.');
+      }
+
+      // 2. Create profile
+      const newProfileId = `profile_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const newProfile: Profile = {
+        id: newProfileId,
+        name: name || email.split('@')[0],
+        email: email.toLowerCase(),
+        role: role,
+        avatar_url: null,
+        created_at: new Date().toISOString(),
+      };
+
+      await supabaseApi.upsert('profiles', [newProfile], 'all');
+
+      // 3. If admin_arena, create the arena
+      if (role === 'admin_arena' && name) {
+        const slug = name
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
+        const newArena: Arena = {
+          id: `arena_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          owner_id: newProfileId,
+          name: name,
+          slug: slug,
+          logo_url: null,
+          city: 'Não informado',
+          state: 'SP',
+          status: 'active',
+          created_at: new Date().toISOString(),
+        };
+
+        await supabaseApi.upsert('arenas', [newArena], 'all');
+        addToast({ message: `Arena "${name}" criada com sucesso! Faça login para continuar.`, type: 'success' });
+      } else {
+        addToast({ message: 'Conta criada com sucesso! Faça login para continuar.', type: 'success' });
+      }
+
+      return Promise.resolve();
+    } catch (error: any) {
+      console.error('[AuthProvider] signUp error:', error);
+      throw new Error(error.message || 'Erro ao criar conta. Tente novamente.');
+    }
   };
 
   const signIn = async (email: string, password: string): Promise<Profile | null> => {
