@@ -89,7 +89,7 @@ const Alunos: React.FC = () => {
         supabaseApi.select<Turma>('turmas', arena.id),
         supabaseApi.select<Quadra>('quadras', arena.id),
         supabaseApi.select<AtletaAluguel>('atletas_aluguel', arena.id),
-        supabaseApi.select<PlanoAula>('planos_aulas', arena.id),
+        supabaseApi.select<PlanoAula>('planos_aula', arena.id),
         supabaseApi.select<Reserva>('reservas', arena.id),
         supabaseApi.select<GamificationPointTransaction>('gamification_point_transactions', arena.id),
         supabaseApi.select<AlunoLevel>('aluno_levels', arena.id),

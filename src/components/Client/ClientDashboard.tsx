@@ -881,7 +881,7 @@ const ClientDashboard: React.FC = () => {
             supabaseApi.select<GamificationReward>('gamification_rewards', selectedArenaContext.id),
             supabaseApi.select<GamificationAchievement>('gamification_achievements', selectedArenaContext.id),
             alunoProfileForSelectedArena ? supabaseApi.select<AlunoAchievement>('aluno_achievements', selectedArenaContext.id) : Promise.resolve({ data: [] }),
-            supabaseApi.select<PlanoAula>('planos_aulas', selectedArenaContext.id),
+            supabaseApi.select<PlanoAula>('planos_aula', selectedArenaContext.id),
             supabaseApi.select<Aluno>('alunos', selectedArenaContext.id),
             supabaseApi.select<Friendship>('friendships', 'all'),
             supabaseApi.select<Profile>('profiles', 'all'),
