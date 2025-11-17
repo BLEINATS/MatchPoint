@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Deployment - MatchPlay</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #0f172a;
+            color: #fff;
+        }
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 20px 0;
+            border: 2px solid #334155;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        .success { background: #10b981; color: white; }
+        .error { background: #ef4444; color: white; }
+        .warning { background: #f59e0b; color: white; }
+        h1 { color: #60a5fa; }
+        h2 { color: #34d399; margin-top: 0; }
+        code {
+            background: #0f172a;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .info {
+            background: #1e40af;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .timestamp {
+            color: #94a3b8;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🔍 Teste de Deployment - MatchPlay</h1>
+        <div class="timestamp">Página gerada em: <span id="timestamp"></span></div>
+    </div>
+
+    <div class="card">
+        <h2>Status das Variáveis de Ambiente</h2>
+        <div id="env-status"></div>
+    </div>
+
+    <div class="card">
+        <h2>Informações do Build</h2>
+        <div id="build-info"></div>
+    </div>
+
+    <div class="card">
+        <h2>Testes de Conectividade</h2>
+        <button onclick="testSupabase()">Testar Conexão Supabase</button>
+        <button onclick="testBackend()">Testar Backend API</button>
+        <div id="test-results"></div>
+    </div>
+
+    <div class="info">
+        <strong>ℹ️ Como usar:</strong><br>
+        1. Se você vê "❌ VARIÁVEIS AUSENTES", precisa adicionar VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no painel de deployment<br>
+        2. Se você vê "✅ VARIÁVEIS CONFIGURADAS", o deployment está correto<br>
+        3. Use os botões acima para testar conectividade
+    </div>
+
+    <script type="module">
+        // Exibir timestamp
+        document.getElementById('timestamp').textContent = new Date().toLocaleString('pt-BR');
+
+        // Verificar variáveis de ambiente
+        const envStatus = document.getElementById('env-status');
+        
+        // Estas variáveis são compiladas durante o build
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const hasAnonKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        let statusHTML = '';
+
+        if (supabaseUrl && hasAnonKey) {
+            statusHTML = `
+                <div class="status success">
+                    ✅ VARIÁVEIS CONFIGURADAS CORRETAMENTE
+                </div>
+                <div style="margin-top: 15px;">
+                    <strong>Supabase URL:</strong><br>
+                    <code>${supabaseUrl}</code>
+                </div>
+                <div style="margin-top: 15px;">
+                    <strong>Anon Key:</strong> ✅ Configurada (${import.meta.env.VITE_SUPABASE_ANON_KEY?.substring(0, 20)}...)
+                </div>
+            `;
+        } else {
+            statusHTML = `
+                <div class="status error">
+                    ❌ VARIÁVEIS AUSENTES - DEPLOYMENT NÃO VAI FUNCIONAR
+                </div>
+                <div style="margin-top: 15px;">
+                    <strong>Problema detectado:</strong><br>
+                    ${!supabaseUrl ? '❌ VITE_SUPABASE_URL não configurada<br>' : ''}
+                    ${!hasAnonKey ? '❌ VITE_SUPABASE_ANON_KEY não configurada<br>' : ''}
+                </div>
+                <div class="status warning" style="margin-top: 15px;">
+                    ⚠️ AÇÃO NECESSÁRIA:<br>
+                    1. Abra: Deploy → Configuration → Environment Variables<br>
+                    2. Adicione: VITE_SUPABASE_URL com sua URL do Supabase<br>
+                    3. Adicione: VITE_SUPABASE_ANON_KEY com sua chave anônima<br>
+                    4. Clique em "Rebuild & Deploy"<br>
+                    5. Aguarde 5 minutos e recarregue esta página
+                </div>
+            `;
+        }
+
+        envStatus.innerHTML = statusHTML;
+
+        // Informações do build
+        const buildInfo = document.getElementById('build-info');
+        buildInfo.innerHTML = `
+            <div style="margin: 10px 0;">
+                <strong>Modo:</strong> ${import.meta.env.MODE}<br>
+                <strong>Dev:</strong> ${import.meta.env.DEV ? 'Sim' : 'Não'}<br>
+                <strong>Prod:</strong> ${import.meta.env.PROD ? 'Sim' : 'Não'}<br>
+                <strong>Base URL:</strong> ${import.meta.env.BASE_URL}
+            </div>
+        `;
+
+        // Função de teste Supabase
+        window.testSupabase = async () => {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<div class="status warning">🔄 Testando conexão com Supabase...</div>';
+
+            try {
+                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+                const supabase = createClient(
+                    import.meta.env.VITE_SUPABASE_URL || '',
+                    import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+                );
+
+                const { data, error } = await supabase.from('plans').select('count');
+                
+                if (error) throw error;
+
+                results.innerHTML = `
+                    <div class="status success">
+                        ✅ CONEXÃO COM SUPABASE FUNCIONANDO!<br>
+                        Deployment está configurado corretamente.
+                    </div>
+                `;
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="status error">
+                        ❌ ERRO AO CONECTAR COM SUPABASE<br>
+                        ${error.message}<br><br>
+                        Verifique se as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY estão configuradas no deployment.
+                    </div>
+                `;
+            }
+        };
+
+        // Função de teste Backend
+        window.testBackend = async () => {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<div class="status warning">🔄 Testando conexão com backend...</div>';
+
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+
+                if (response.ok) {
+                    results.innerHTML = `
+                        <div class="status success">
+                            ✅ BACKEND FUNCIONANDO!<br>
+                            Status: ${data.status}
+                        </div>
+                    `;
+                } else {
+                    throw new Error('Backend retornou erro');
+                }
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="status error">
+                        ❌ ERRO AO CONECTAR COM BACKEND<br>
+                        ${error.message}<br><br>
+                        Verifique se o servidor está rodando.
+                    </div>
+                `;
+            }
+        };
+    </script>
+</body>
+</html>
