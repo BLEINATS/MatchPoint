@@ -96,11 +96,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const initializeSession = async () => {
       setIsLoading(true);
       try {
-        const seedKey = 'initial_data_seeded_v15_persistent';
-        if (!localStorage.getItem(seedKey)) {
-          await seedInitialData();
-          localStorage.setItem(seedKey, 'true');
-        }
+        // Seeding desabilitado - dados agora no Supabase
+        // const seedKey = 'initial_data_seeded_v15_persistent';
+        // if (!localStorage.getItem(seedKey)) {
+        //   await seedInitialData();
+        //   localStorage.setItem(seedKey, 'true');
+        // }
 
         const loggedInUserStr = localStorage.getItem('loggedInUser');
         if (!loggedInUserStr) {
