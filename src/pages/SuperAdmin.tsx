@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Building, User, CheckCircle, XCircle, Loader2, DollarSign, Users, BarChart2, Plus, Edit, Trash2, Settings } from 'lucide-react';
+import { Building, CheckCircle, Loader2, DollarSign, Users, Plus, Edit, Trash2, Settings } from 'lucide-react';
 import Layout from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { localApi } from '../lib/localApi';
-import { Arena, Profile, Plan, Subscription } from '../types';
+import { supabaseApi } from '../lib/supabaseApi';
+import { Arena, Plan, Subscription } from '../types';
 import Button from '../components/Forms/Button';
 import { format, addMonths, isBefore, addDays, addYears } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '../utils/formatters';
 import ConfirmationModal from '../components/Shared/ConfirmationModal';
 import PlanModal from '../components/SuperAdmin/PlanModal';
@@ -48,7 +46,6 @@ const SuperAdminPage: React.FC = () => {
   const { profile } = useAuth();
   const { addToast } = useToast();
   const [arenas, setArenas] = useState<Arena[]>([]);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,14 +68,12 @@ const SuperAdminPage: React.FC = () => {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [arenasRes, profilesRes, plansRes, subsRes] = await Promise.all([
-        localApi.select<Arena>('arenas', 'all'),
-        localApi.select<Profile>('profiles', 'all'),
-        localApi.select<Plan>('plans', 'all'),
-        localApi.select<Subscription>('subscriptions', 'all'),
+      const [arenasRes, plansRes, subsRes] = await Promise.all([
+        supabaseApi.select<Arena>('arenas', 'all'),
+        supabaseApi.select<Plan>('plans', 'all'),
+        supabaseApi.select<Subscription>('subscriptions', 'all'),
       ]);
       setArenas(arenasRes.data || []);
-      setProfiles(profilesRes.data || []);
       setPlans(plansRes.data || []);
       setSubscriptions(subsRes.data || []);
     } catch (error: any) {
@@ -121,7 +116,7 @@ const SuperAdminPage: React.FC = () => {
     const newStatus = arenaToToggle.status === 'active' ? 'suspended' : 'active';
     const updatedArena = { ...arenaToToggle, status: newStatus };
     try {
-      await localApi.upsert('arenas', [updatedArena], 'all');
+      await supabaseApi.upsert('arenas', [updatedArena], 'all');
       addToast({ message: `Status da arena "${arenaToToggle.name}" atualizado.`, type: 'success' });
       await loadData();
     } catch (error: any) {
@@ -134,7 +129,7 @@ const SuperAdminPage: React.FC = () => {
 
   const handleSavePlan = async (plan: Plan) => {
     try {
-      await localApi.upsert('plans', [plan], 'all');
+      await supabaseApi.upsert('plans', [plan], 'all');
       addToast({ message: 'Plano salvo com sucesso!', type: 'success' });
       await loadData();
       setIsPlanModalOpen(false);
@@ -152,7 +147,7 @@ const SuperAdminPage: React.FC = () => {
   const handleConfirmDeletePlan = async () => {
     if (!planToDelete) return;
     try {
-      await localApi.delete('plans', [planToDelete.id], 'all');
+      await supabaseApi.delete('plans', [planToDelete.id]);
       addToast({ message: 'Plano excluído com sucesso.', type: 'success' });
       await loadData();
     } catch (error: any) {
@@ -175,7 +170,7 @@ const SuperAdminPage: React.FC = () => {
     
     if (currentSub) {
       const updatedSub = { ...currentSub, plan_id: newPlanId, start_date: new Date().toISOString() };
-      await localApi.upsert('subscriptions', [updatedSub], 'all');
+      await supabaseApi.upsert('subscriptions', [updatedSub], 'all');
     } else {
       const newSub: Subscription = {
         id: `sub_${uuidv4()}`,
@@ -185,11 +180,11 @@ const SuperAdminPage: React.FC = () => {
         start_date: new Date().toISOString(),
         end_date: null,
       };
-      await localApi.upsert('subscriptions', [newSub], 'all');
+      await supabaseApi.upsert('subscriptions', [newSub], 'all');
     }
     
     const updatedArena = { ...arenaToChangePlan, plan_id: newPlanId };
-    await localApi.upsert('arenas', [updatedArena], 'all');
+    await supabaseApi.upsert('arenas', [updatedArena], 'all');
 
     addToast({ message: 'Plano da arena alterado com sucesso!', type: 'success' });
     await loadData();

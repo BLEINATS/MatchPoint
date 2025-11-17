@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Calendar, DollarSign, AlertCircle, CheckCircle, XCircle, Clock } from 'lucide-react';
-import { localApi } from '../../lib/localApi';
+import { CreditCard, DollarSign, AlertCircle, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { supabaseApi } from '../../lib/supabaseApi';
 import { Subscription, Arena, Plan } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -22,9 +22,9 @@ export default function SubscriptionsPanel() {
   const loadSubscriptions = async () => {
     try {
       const [subsRes, arenasRes, plansRes] = await Promise.all([
-        localApi.select<Subscription>('subscriptions', 'all'),
-        localApi.select<Arena>('arenas', 'all'),
-        localApi.select<Plan>('plans', 'all'),
+        supabaseApi.select<Subscription>('subscriptions', 'all'),
+        supabaseApi.select<Arena>('arenas', 'all'),
+        supabaseApi.select<Plan>('plans', 'all'),
       ]);
 
       const subs = subsRes.data || [];
